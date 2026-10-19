@@ -111,11 +111,49 @@ test('the CJK fallback faces ship, are WOFF2, and stay inside the subset budget'
   assert.equal(serif.file, 'NotoSerifSC-Shifted-330.woff2')
 })
 
-test('package.json ships the fonts directory', function () {
+/**
+ * The package ships the faces ONE way, and this test pins which way.
+ *
+ * IT USED TO ASSERT `files.includes('fonts')`, with the reason "or an installed
+ * plugin loses the faces". That reason was correct when the fallback could be
+ * reached — but the fallback is unreachable in the shipped artifact, and the
+ * directory was pure duplication:
+ *
+ *   client/client.js   5.05 MB   ← 8 faces already inlined as base64 (4.85 MB)
+ *   fonts/             3.0 MB    ← the same 8 woff2 files, a second copy
+ *
+ *   published tarball  7.5 MB    → 3.9 MB once the directory was dropped
+ *
+ * WHY DROPPING IT IS SAFE, verified rather than argued: the shipped bundle was
+ * loaded through its own `window.__ModuleLoader__` entry and its `fontCss()` was
+ * called. All 8 `@font-face` rules came back with a `data:font/woff2` src, zero
+ * `file://` and zero `local()`. `fontSourcesFor()` returns the inline data URL
+ * before it ever looks at the Host-injected `file://` base, so the fonts
+ * directory is not read at runtime. `fonts/` stays in the REPOSITORY because the
+ * build imports it.
+ *
+ * THE INVARIANT THIS MUST PROTECT is therefore not "fonts/ is packed" but
+ * "every face is inlined". If a build ever stops inlining a face, that face
+ * silently falls back to a `file://` URL that points inside a package that no
+ * longer carries the file — broken fonts in the app, with nothing thrown. So
+ * this test asserts BOTH halves: the manifest does not pack the second copy,
+ * AND the bundle carries a data URL for every single face.
+ */
+test('the package ships the faces inlined, not as a duplicate fonts directory', function () {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
   assert.ok(Array.isArray(manifest.files), 'package.json must declare files')
-  assert.ok(manifest.files.includes('fonts'),
-    'fonts/ must be in package.json "files" or an installed plugin loses the faces')
+  assert.ok(!manifest.files.includes('fonts'),
+    'fonts/ must NOT be packed: the faces are already inlined in client/client.js, '
+    + 'and packing both costs ~3 MB of duplication')
+
+  // The half that actually protects the user: every face is inlined in the
+  // committed artifact. A bundle that lost an inline URL would fall back to
+  // `file://<pkg>/fonts/<file>` — a directory that is no longer shipped.
+  const artifact = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  const inlined = (artifact.match(/data:font\/woff2;base64,/g) || []).length
+  assert.equal(inlined, FONT_FACES.length + CJK_FACES.length,
+    'every face must be a data: URL in the committed bundle, or it resolves '
+    + 'against a fonts/ directory that the package does not ship')
 })
 
 // --------------------------------------------------------- @font-face

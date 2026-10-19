@@ -57,7 +57,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/fonts.test.mjs && node test/host.test.mjs && node test/cordis.test.mjs",
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/fonts.test.mjs && node test/host.test.mjs && node test/cordis.test.mjs",
     "verify": "node tools/verify.mjs",
     "integration": "node tools/integration.mjs"
   },

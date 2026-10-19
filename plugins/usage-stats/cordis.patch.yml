@@ -1,4 +1,9 @@
 # dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# `name` MUST equal the package's own `name` field. This was left as the old
+# unscoped name when the package was renamed to @hwfee/dsh-usage-stats, so the
+# loader could not resolve this row to a package and the plugin silently failed
+# to mount — the usage panel disappeared with no error surfaced anywhere.
 - insert:
     - id: dsh-usage-stats
-      name: 'dsh-usage-stats'
+      name: '@hwfee/dsh-usage-stats'
