@@ -6,7 +6,11 @@
   "main": "lib/index.js",
   "icon": "./icon.svg",
   "license": "MIT",
-  "private": true,
+  "author": "HwFee <1744567281@qq.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"
   },
