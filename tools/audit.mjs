@@ -87,7 +87,6 @@ const BUDGETS = {
   // measurement is in docs/perf-audit.md F4. 88 KB keeps the same ~9 KB of
   // headroom over the current file that the 80 KB ceiling had over 76.4 KB.
   'usage-stats': 90_000,       //   78.8 KB now
-  'reasoning-effort': 50_000,  //   38.5 KB now
 }
 
 // ------------------------------------------------------------------ utils

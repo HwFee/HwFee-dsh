@@ -29,9 +29,8 @@ DeepSeek Harness（DSH）的插件集合。每个插件是 `plugins/` 下的独�
 | `dsh-cds-theme` | [`plugins/cds-theme`](plugins/cds-theme) | Claude Design System 主题：把宿主 `--dsw-*` 令牌整体重映射到 CDS 的暖灰表面、陶土橙强调色、双环焦点与有机动效；组件级细化输入框、侧栏、消息行、代码块与 Markdown 正文；首页衬线问候语；空白会话的代码字形背景与点击波纹；长文本粘贴转文件引用；「主题定制」设置页。 |
 | `dsh-system-fonts` | [`plugins/system-fonts`](plugins/system-fonts) | 字体插件：内容字体 / 代码字体 / 终端字体各一槽，可选字重、行距、字距。只改排印，不动配色。 |
 | `dsh-usage-stats` | [`plugins/usage-stats`](plugins/usage-stats) | 用量统计：会话数、消息数、token 总量、活跃天数、高峰时段与热力图，范围可选全部 / 30 天 / 7 天。 |
-| `dsh-reasoning-effort` | [`plugins/reasoning-effort`](plugins/reasoning-effort) | 思考强度滑块：档位数量**由提供商实际声明决定**，未声明则不出现整行。 |
 
-四个插件互不依赖，可分别启用。装在一起也安全 —— 各自只碰自己的令牌与槽位，没有重叠的所有权。
+这三个插件互不依赖，可分别启用。装在一起也安全 —— 各自只碰自己的令牌与槽位，没有重叠的所有权。
 
 ## 安装
 
@@ -87,7 +86,6 @@ plugins/
     tools/           构建与验证脚本
   system-fonts/      ... 同上结构
   usage-stats/
-  reasoning-effort/
 docs/
   cds-spec.md                    CDS 设计系统规范（从参考仓库逐行取证）
   host-hooks.md                  宿主 DOM/CSS 可覆写点勘察
