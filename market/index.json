@@ -62,8 +62,10 @@
           "version": "0.1.0",
           "publishTimestamp": 1792395730,
           "source": {
-            "type": "npm",
-            "registry": "https://registry.npmjs.org/"
+            "type": "git",
+            "url": "https://github.com/HwFee/HwFee-dsh.git",
+            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
+            "path": "/plugins/cds-theme"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
@@ -104,8 +106,10 @@
           "version": "0.1.0",
           "publishTimestamp": 1792395730,
           "source": {
-            "type": "npm",
-            "registry": "https://registry.npmjs.org/"
+            "type": "git",
+            "url": "https://github.com/HwFee/HwFee-dsh.git",
+            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
+            "path": "/plugins/system-fonts"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
@@ -147,8 +151,10 @@
           "version": "0.1.0",
           "publishTimestamp": 1792395730,
           "source": {
-            "type": "npm",
-            "registry": "https://registry.npmjs.org/"
+            "type": "git",
+            "url": "https://github.com/HwFee/HwFee-dsh.git",
+            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
+            "path": "/plugins/usage-stats"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
