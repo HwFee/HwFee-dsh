@@ -1,0 +1,26 @@
+# Normalise line endings in the working tree.
+#
+# WHY THIS FILE EXISTS. `plugins/cds-theme` commits a BUILD ARTIFACT
+# (`client/client.js`) and `npm test` starts with a freshness check that rebuilds
+# the artifact and compares it byte for byte. With git's Windows default
+# (`core.autocrlf=true`) a fresh clone checks the sources out with CRLF endings,
+# esbuild then emits those CRLF sequences into string literals in the bundle, and
+# the committed artifact — built with LF — no longer matches. The check fails for
+# every Windows clone even though nothing is actually stale: measured at 83 extra
+# bytes, exactly one per line ending that reached the bundle.
+#
+# Pinning `eol=lf` in the repository makes the working tree identical on every
+# platform, so the artifact rebuilt from a clean checkout is byte-identical to the
+# committed one. It also keeps the diff of a re-built artifact meaningful instead
+# of "every line changed".
+* text=auto eol=lf
+
+# Binary assets: never touch their bytes, never diff them.
+*.woff2 binary
+*.woff binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
