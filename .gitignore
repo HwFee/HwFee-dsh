@@ -21,3 +21,8 @@
 # Scratch and tooling
 node_modules/
 *.log
+
+# Screenshot tool output pasted into the repo root by accident. Real screenshots
+# live under assets/ and are referenced by name from the README.
+SnowShot_*.png
+
