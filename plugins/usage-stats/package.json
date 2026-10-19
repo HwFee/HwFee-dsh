@@ -49,7 +49,7 @@
   },
   "files": [
     "lib",
-    "client",
+    "client/client.js",
     "locale",
     "cordis.patch.yml",
     "icon.svg",

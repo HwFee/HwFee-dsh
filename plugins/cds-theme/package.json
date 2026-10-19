@@ -50,7 +50,7 @@
   },
   "files": [
     "lib",
-    "client",
+    "client/client.js",
     "fonts",
     "locale",
     "assets",
