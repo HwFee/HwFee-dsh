@@ -1,0 +1,143 @@
+{
+  "name": "dsh-plugin-guide",
+  "version": "0.3.26",
+  "description": "The dsh-plugin-guide knowledge base plus the dsh-plugin-dev CLI toolchain: official docs, Cordis primer, community deep-dives, and battle-tested pitfalls registered as an on-demand agent skill, with a scaffolder, static checker, and pack verifier for building DSH plugins.",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "dsh-plugin-dev": "./bin/dsh-plugin-dev.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "bin",
+    "dist",
+    "templates",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "SKILL.md",
+    "guide",
+    "references",
+    "scripts",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "cordis",
+    "agent-skill",
+    "plugin-development",
+    "knowledge-base",
+    "cli",
+    "scaffold",
+    "checker"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PerryLink/dsh-plugin-guide.git"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "typecheck:ci": "tsc --noEmit --pretty false",
+    "typecheck:checkout": "tsc -p tsconfig.checkout.json --noEmit",
+    "test": "vitest run",
+    "check:readmes": "node scripts/check-readme-sync.mjs",
+    "build:llms": "node scripts/build-llms-full.mjs",
+    "check:kit": "pwsh -File scripts/verify-kit.ps1",
+    "verify:artifacts": "node scripts/verify-artifacts.mjs",
+    "verify:self-contained": "pnpm run build && node dist/dsh-plugin-dev.js verify",
+    "prepare": "tsdown",
+    "prepack": "tsdown"
+  },
+  "dependencies": {
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-attachment": "0.2.1-alpha.1",
+    "@types/node": "^22.20.1",
+    "@types/semver": "^7.8.0",
+    "semver": "^7.8.5",
+    "vitest": "^3.2.7"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.1.2-rc.1 <0.2.0 || >=0.1.5-alpha.1 <0.2.0 || >=0.1.6-0 <0.2.0 || >=0.1.7-0 <0.2.0 || >=0.2.0-0 <0.3.0 || >=0.2.1-0 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-profile",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "filesystem:read"
+    ],
+    "compatibility": {
+      "dshVersions": [
+        "0.1.2-rc.1",
+        "0.1.5-rc.2",
+        "0.1.7-alpha.2",
+        "0.1.7-rc.1",
+        "0.1.7-rc.2",
+        "0.2.0-rc.2",
+        "0.2.1-alpha.1"
+      ]
+    },
+    "capability": {
+      "id": "dsh-plugin-guide",
+      "kind": "service",
+      "invocation": "ctx.skills.get('dsh-plugin-guide') resolves a complete SkillDefinition",
+      "expected": "session skill catalog lists dsh-plugin-guide and the loaded body carries the SKILL.md workflow with a directory resourceBase"
+    },
+    "evidence": {
+      "install": null,
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
+    }
+  },
+  "funding": {
+    "type": "individual",
+    "url": "https://github.com/sponsors/PerryLink"
+  }
+}

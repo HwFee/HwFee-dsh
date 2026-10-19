@@ -1,0 +1,19 @@
+{
+  "$comment": [
+    "Known defects in plugins the auditor was NOT allowed to edit.",
+    "",
+    "`tools/audit.mjs` exits 0 when every failure it finds is listed here, and",
+    "exits 1 for anything new. A baselined entry is PRINTED on every run under",
+    "'BASELINED (known, unfixed)' so it stays visible instead of becoming a",
+    "silent allowlist, and the audit fails if an entry stops failing — that is",
+    "how a fixed defect gets its entry deleted rather than lingering forever.",
+    "",
+    "Remove an entry only after the underlying bug is fixed and re-verified.",
+    "",
+    "2026-10-18: emptied. The single entry (reasoning-effort/locale-disposer) was",
+    "fixed by the Lead once that plugin's writer finished — the disposer is now",
+    "returned — and the audit's reverse check proved the exemption no longer",
+    "reproduces, which is what forced this deletion."
+  ],
+  "entries": []
+}

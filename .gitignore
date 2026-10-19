@@ -1,0 +1,23 @@
+# Ignore reference and recon material
+
+# The reference project is a read-only upstream clone (MIT), used only as a
+# design-system source. It is not part of the build.
+.reference/
+
+# Local recon artifacts: extracted bundles, pretty-printed CSS, screenshots and
+# the asar extraction helpers. Regenerable, never shipped.
+.repro/
+
+# Scratch workbench: font-calibration probes, one-off scan scripts, extracted
+# client bundles, probe logs. Same category as .repro/ — local, regenerable, and
+# in places a verbatim copy of host code, which must not be redistributed.
+.work/
+
+# Runtime output of the theme's long-paste feature: the plugin writes each
+# converted paste here as a real file in the workspace, so the composer can
+# reference it as @path. Per-user content, never committed.
+.dsh-paste/
+
+# Scratch and tooling
+node_modules/
+*.log

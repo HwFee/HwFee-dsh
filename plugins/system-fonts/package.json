@@ -1,0 +1,63 @@
+{
+  "name": "dsh-system-fonts",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 的纯字体插件：把内容/代码/终端三个系统字体选择器放进通用设置里宿主可折叠的字体区（分别紧跟官方族名行，折叠时一并收起），按字体族枚举 Windows 已装字体，另带行距与字距；字重与字号归宿主主题，文案随宿主语言切换。只改字体，不动配色与版式。 / Pure font plugin for DeepSeek Harness: seats text/code/terminal system-font pickers inside the host's collapsible font region in General settings (each after the official family row it replaces, collapsing with it), enumerating installed Windows fonts, plus line-height and letter-spacing; weights and sizes stay with the host theme and copy follows the host language. Fonts only — no colors, no layout.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "font",
+    "fonts",
+    "typography",
+    "appearance",
+    "windows"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/fonts.test.mjs && node test/host.test.mjs && node test/cordis.test.mjs",
+    "verify": "node tools/verify.mjs",
+    "integration": "node tools/integration.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

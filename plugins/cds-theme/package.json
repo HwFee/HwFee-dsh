@@ -1,0 +1,66 @@
+{
+  "name": "dsh-cds-theme",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 的 Claude Design System 主题插件：把宿主的 --dsw-* 令牌整体重映射到 CDS 的暖灰表面阶梯、陶土橙品牌色、双环焦点与有机动效，并对输入框、侧栏、消息行、代码块做组件级细化。明暗两套配色，配色/圆角/阴影走 ctx.theme.overrideTokens，组件细化走插件自有样式表。 / Claude Design System theme for DeepSeek Harness: remaps the host's --dsw-* tokens onto CDS warm-gray surfaces, clay brand accent, dual-ring focus and organic motion, then refines the composer, sidebar, message rows and code blocks at the component level.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "theme",
+    "claude",
+    "design-system",
+    "cds",
+    "appearance"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "fonts",
+    "locale",
+    "assets",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/tokens.test.mjs && node test/css.test.mjs && node test/bridge.test.mjs && node test/fonts.test.mjs && node test/typography.test.mjs && node test/hero.test.mjs && node test/markdown.test.mjs && node test/locale.test.mjs && node test/section.test.mjs && node test/thememode.test.mjs && node test/navicon.test.mjs && node test/host.test.mjs && node test/styles.test.mjs && node test/master-switch.test.mjs && node test/paste.test.mjs && node test/new-session-layout.test.mjs && node test/prefer-cjk.test.mjs && node test/ripple.test.mjs",
+    "verify": "node tools/verify.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

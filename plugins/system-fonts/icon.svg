@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" role="img" aria-label="System fonts">
+  <title>System fonts</title>
+  <!-- A capital A on its baseline: the type specimen mark. -->
+  <path d="M10.5 26.5 17.5 9.5 24.5 26.5" stroke="#d97757" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M13.6 20.4h7.8" stroke="#d97757" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+  <path d="M5.5 31h25" stroke="#8f8880" stroke-opacity="0.55" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

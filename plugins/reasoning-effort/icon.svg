@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" role="img" aria-label="Thinking effort">
+  <title>Thinking effort</title>
+  <!-- One track, one knob: an effort level, read as a silhouette at 36px. -->
+  <rect x="4.5" y="16.4" width="27" height="3.2" rx="1.6" fill="#8f8880" fill-opacity="0.5"/>
+  <rect x="4.5" y="16.4" width="15" height="3.2" rx="1.6" fill="#d97757"/>
+  <circle cx="19.5" cy="18" r="6.2" fill="#d97757"/>
+  <circle cx="19.5" cy="18" r="2.3" fill="#ffffff" fill-opacity="0.9"/>
+</svg>

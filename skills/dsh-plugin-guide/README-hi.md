@@ -1,0 +1,290 @@
+<div align="center">
+
+# 🐳 dsh-plugin-guide
+- **1024 स्टोर चैनल**: एक बार `npm i -g dsh1024`, फिर `dsh1024 plugin --profile web add dsh-plugin-guide` ([deepseek1024.com](https://deepseek1024.com) इंस्टॉल रैंकिंग में गिना जाता है)।
+
+**[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) प्लगइन बनाने के लिए आपकी ज़रूरत की हर चीज़।**
+
+*आधिकारिक दस्तावेज़ संग्रह · Cordis प्राइमर · सामुदायिक गहन-विश्लेषण · युद्ध-परीक्षित नुकसान · agent skill · CLI टूलचेन*
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Gitee](https://img.shields.io/badge/Gitee-mirror-c71d23?logo=gitee)](https://gitee.com/perrylink/dsh-plugin-guide)
+[![DSH plugin](https://img.shields.io/badge/dsh--plugin-✅-green)](https://github.com/topics/dsh-plugin)
+[![dsh-doctor](https://raw.githubusercontent.com/PerryLink/dsh-plugin-doctor/main/badges/PerryLink__dsh-plugin-guide.svg)](https://github.com/PerryLink/dsh-plugin-doctor#verified-徽章)
+[![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-top-rated.svg)](https://dsh.market/)
+[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-brightgreen.svg)](#)
+[![CI](https://img.shields.io/github/actions/workflow/status/PerryLink/dsh-plugin-guide/verify.yml?branch=main&label=CI)](https://github.com/PerryLink/dsh-plugin-guide/actions)
+[![Version](https://img.shields.io/github/v/tag/PerryLink/dsh-plugin-guide?label=version)](https://github.com/PerryLink/dsh-plugin-guide/releases)
+[![npm version](https://img.shields.io/npm/v/dsh-plugin-guide)](https://www.npmjs.com/package/dsh-plugin-guide)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-plugin-guide)](https://www.npmjs.com/package/dsh-plugin-guide)
+[![dshfind](https://dshfind.com/api/badge/PerryLink/dsh-plugin-guide?metric=downloads&lang=hi)](https://dshfind.com/hi/plugins/PerryLink/dsh-plugin-guide?ref=badge)
+
+[English](README.md) · [简体中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+
+</div>
+
+---
+
+**📖 इसे वेबसाइट के रूप में पढ़ना चाहें?** [perrylink.github.io/dsh-plugin-guide](https://perrylink.github.io/dsh-plugin-guide/) — हर अध्याय अपने पृष्ठ पर, साथ ही असिस्टेंट के लिए मशीन-पठनीय [llms.txt](https://perrylink.github.io/dsh-plugin-guide/llms.txt)।
+
+<!-- star-cta -->
+## ⭐ 如果它帮到了你
+
+यह प्लगइन [DSH प्लगइन परिवार](https://github.com/PerryLink) का हिस्सा है (40+ प्लगइन, सभी Apache-2.0)। अगर यह उपयोगी लगे, तो **एक स्टार दें** — इससे कोई सुविधा अनलॉक नहीं होती, पर अगला व्यक्ति इसे खोज में आसानी से पा लेता है।
+
+*English:* part of a 40+ plugin family for DeepSeek Harness. If it is useful, **a star helps the next person find it** — nothing is gated behind it.
+
+## Compatibility
+
+| Surface | Status |
+|---|---|
+| Harness | DeepSeek Harness `dsh-v0.2.1-alpha.1` (`5badb15009`, master का सबसे नया tag, 2026-10-03); npm `latest` = `0.2.0-rc.2`, `alpha` = `0.2.1-alpha.1`। 2026-10-06 को उसी checkout के विरुद्ध पुनः सत्यापित (gate chain + profile install smoke)। नॉलेज बेस, आधिकारिक-docs मिरर और [guide/migration-0.2.md](guide/migration-0.2.md) इसी बेसलाइन पर हैं। |
+| Node | `^22.19.0 || >=24.0.0` (DeepSeek Harness रनटाइम) |
+| Platforms | सभी (सादा ESM बंडल; कोई नेटिव कोड नहीं, कोई नेटवर्क नहीं) |
+| Model | कोई भी (कोई मॉडल अंतःक्रिया नहीं) |
+
+## What you get
+
+`dsh-plugin-guide` DSH प्लगइन-विकास ज्ञान-आधार है, जो एक इंस्टॉल-योग्य बंडल के रूप में पैक किया गया है और पूरी सामग्री को `dsh-plugin-guide` agent skill के रूप में पंजीकृत करता है। यह skill हर सत्र कैटलॉग में दृश्य रहती है और अपने वर्कफ़्लो चरण, आधिकारिक दस्तावेज़ और सामुदायिक गहन-विश्लेषण माँग पर लोड करती है।
+
+- **प्लगइन अनुबंध और कठोर नियम** — effects/disposers, waterfall `next()`, मॉडल-दृश्य ⟺ लॉग किया गया, Schemastery विन्यास।
+- **आधिकारिक दस्तावेज़ संग्रह** — आधिकारिक रेपो दस्तावेज़ों की शब्दशः प्रति (EN + ZH), अंतिम सत्यापित स्नैपशॉट पर अपस्ट्रीम से बाइट-समान।
+- **Cordis प्राइमर** — पाँच अवधारणाएँ और तंत्र समयरेखा (repository-plugin 0809 को जोड़ा, 0811 को हटाया; दो इंस्टॉल चैनल)।
+- **20+ वास्तविक-दुनिया नुकसान** मूल कारण + समाधान सहित (cordis दोहरी प्रतियाँ, tsconfig त्रयी, बहु-फ़्रेम zstd सत्र, Windows junction, पुराना npm `latest`, …)।
+- **सामुदायिक गहन-विश्लेषण** — 114 सामुदायिक रिपॉज़िटरी संग्रहीत (15 गहन-विश्लेषित), साथ ही पूर्ण स्रोत सूची जहाँ हर तथ्य अपने मूल से जुड़ा है।
+- **CLI टूलचेन** — `dsh-plugin-dev new / check / verify`: DSH प्लगइन स्कैफ़ोल्ड करना, स्थैतिक जाँच और पैक-सत्यापन; हर जाँच उस skill अनुभाग से जुड़ती है जिसे वह लागू करती है।
+
+## Knowledge base
+
+| Path | यह क्या है |
+|---|---|
+| `SKILL.md` | `dsh-plugin-guide` agent skill: कठोर नियम + कार्य-आधारित विकास पथ |
+| `package.json` · `cordis.patch.yml` · `index.js` | इंस्टॉल-योग्य DSH बंडल: `dsh.bundle.patch` मैनिफ़ेस्ट + skill पंजीकृत करने वाला प्रवेश बिंदु |
+| `guide/plugin-dev-guide.md` | पूर्ण विकास मार्गदर्शिका (10 अध्याय) |
+| `guide/quick-reference.md` | एक-पृष्ठ चीट शीट (5 भाषाएँ) |
+| `guide/links.md` | संकलित URL सूची: आधिकारिक विकास दस्तावेज़ (साइट ↔ स्थानीय प्रतियाँ) + सामुदायिक दस्तावेज़ लिंक |
+| `guide/when-to-retire-a-plugin.md` | प्लगइन रिटायर और फ़्रीज़ करना: पोर्टफ़ोलियो ऑडिट के मानदंड और मापे गए आँकड़े (EN + ZH) |
+| `guide/choosing-a-plugin.md` | प्लगइन चुनना: हर क्षमता में कौन आगे है, मापे गए आँकड़ों और सत्यापन चेतावनियों के साथ (EN + ZH) |
+| `references/official-docs/` | आधिकारिक रेपो दस्तावेज़ों की शब्दशः प्रति (EN + ZH) |
+| `references/*.md` | शोध रिपोर्ट: रेपो दस्तावेज़, वेबसाइट, Cordis, पेपर, सामुदायिक पारिस्थितिकी, 114-रेपो संग्रह (15 गहन-विश्लेषित) |
+| `scripts/` | इडेम्पोटेंट डाउनलोड स्क्रिप्ट + अखंडता जाँचकर्ता + विषय स्नैपशॉट जनरेटर |
+| `bin/` · `src/cli/` · `dist/` | `dsh-plugin-dev` CLI: स्कैफ़ोल्डर, जाँचकर्ता, सत्यापक (TypeScript, tsdown-बंडल) |
+| `templates/` | TS + JS स्कैफ़ोल्ड कंकाल: अनुबंध टेम्प्लेट, Config, टेस्ट, cordis.patch.yml, पाँच-भाषा README |
+| `downloads/` | कच्चे स्नैपशॉट — `scripts/` से उत्पन्न, कमिट नहीं |
+
+## CLI toolchain
+
+बंडल शून्य-रनटाइम-निर्भरता `dsh-plugin-dev` CLI लेकर आता है (`bin/` → tsdown-बंडल `dist/dsh-plugin-dev.js`). हर जाँच उस skill अनुभाग को उद्धृत करती है जिसे वह लागू करती है, ताकि एजेंट मैन्युअल ऑडिट जारी रख सके।
+
+```sh
+dsh-plugin-dev new <name> [--lang ts|js] [--dir <path>] [--force] [--git]
+dsh-plugin-dev check [--cwd <dir>] [--json] [--strict]
+dsh-plugin-dev verify [--cwd <dir>] [--dsh <bin>] [--pnpm <bin>]
+```
+
+| उप-कमांड | क्या करता है |
+|---|---|
+| `new <name>` | TS या JS प्लगइन रेपो स्कैफ़ोल्ड करता है: `src/index.ts` अनुबंध टेम्प्लेट, Schemastery Config, टेस्ट, tsdown/vitest, टिप्पणी-युक्त `cordis.patch.yml`, पाँच-भाषा README। इडेम्पोटेंट; `--force` के बिना गैर-खाली लक्ष्य को अस्वीकार करता है। |
+| `check` | स्थैतिक जाँच: `cordis.patch.yml` वैधता, `package.json` मेटाडेटा (`dsh.bundle.patch` पॉइंटर, peer deps, engines, files श्वेतसूची), पाँच-भाषा README संगति, इंजीनियरिंग रेड-लाइन पैटर्न। CI-उपभोज्य JSON उत्सर्जित करता है। |
+| `verify` | `pnpm pack`, फिर साफ़ mkdtemp `DSH_HOME` प्रोफ़ाइल में बंडल को इंस्टॉल/स्टार्ट/अनइंस्टॉल स्मोक (आधिकारिक `verify:self-contained` से संरेखित)। विफलता लॉग टेल + सुझाव देती है। |
+
+### CLI configuration
+
+CLI में कोई हार्डकोडेड ट्यूनेबल नहीं — हर एक flag या पर्यावरण चर है।
+
+| ट्यूनेबल | Flag | Env | डिफ़ॉल्ट |
+|---|---|---|---|
+| टेम्प्लेट निर्देशिका | — | `DSH_PLUGIN_DEV_TEMPLATES` | `<package>/templates` |
+| dsh बाइनरी | `--dsh` | `DSH_PLUGIN_DEV_DSH` | `dsh` |
+| pnpm बाइनरी | `--pnpm` | `DSH_PLUGIN_DEV_PNPM` | `pnpm` |
+| इंस्टॉल/पैक टाइमआउट | `--timeout` | `DSH_PLUGIN_DEV_TIMEOUT` | `300000` ms |
+| हेडलेस स्मोक टाइमआउट | `--smoke-timeout` | `DSH_PLUGIN_DEV_SMOKE_TIMEOUT` | `120000` ms |
+
+### Upstream roadmap
+
+`dsh-plugin-dev` आधिकारिक प्लगइन-विकास CLI (नियोजित आइटम C12) का अपस्ट्रीम उम्मीदवार है: स्कैफ़ोल्डर/जाँचकर्ता/सत्यापक यांत्रिक परतें हैं, जबकि `SKILL.md` + `guide/` संज्ञानात्मक परत बने रहते हैं।
+
+## Quick start
+
+```sh
+# 1. install the bundle into your profile
+dsh plugin --profile web add "github:PerryLink/dsh-plugin-guide#main"
+
+# or from npm (published releases)
+dsh plugin --profile web add dsh-plugin-guide
+
+# 2. restart and verify the row
+dsh --profile web --dump-config | grep -A3 'id: dsh-plugin-guide'
+```
+
+फिर बस अपने एजेंट से पूछें: *"मुझे … प्लगइन बनाने के लिए dsh-plugin-guide skill का उपयोग करो।"*
+
+या सीधे CLI चलाएँ:
+
+```sh
+npx dsh-plugin-guide new hello-plugin            # TS प्लगइन रेपो स्कैफ़ोल्ड करें
+npx dsh-plugin-guide check --json                # स्थैतिक जाँच
+npx dsh-plugin-guide verify                      # पैक + साफ़ प्रोफ़ाइल स्मोक
+```
+
+## Install & uninstall
+
+- **git चैनल** (नवीनतम `main`): `dsh plugin --profile web add github:PerryLink/dsh-plugin-guide#<sha>` — पुनरुत्पादन के लिए एक कमिट पिन करें; प्रवेश बिंदु सादा ESM JS है, कोई बिल्ड चरण नहीं।
+- **npm चैनल** (प्रकाशित रिलीज़): `dsh plugin --profile web add dsh-plugin-guide`.
+- **tarball चैनल**: इस रेपो में `pnpm pack`, फिर `dsh plugin --profile web add ./dsh-plugin-guide-<version>.tgz`.
+- **uninstall**: `dsh plugin --profile web remove dsh-plugin-guide`.
+
+## Copy as a plain agent skill
+
+आप पूरे फ़ोल्डर को अपने एजेंट की skill निर्देशिका में भी कॉपी कर सकते हैं (सापेक्ष पथ बरकरार रहते हैं):
+
+```powershell
+# Windows (PowerShell)
+pwsh -File scripts/install-skill.ps1 `
+  -Target "$env:USERPROFILE\.deepseek\skills\dsh-plugin-guide"   # या <project>\.agents\skills\dsh-plugin-guide
+```
+
+```bash
+# macOS / Linux
+pwsh -File scripts/install-skill.ps1 -Target ~/.deepseek/skills/dsh-plugin-guide   # या <project>/.agents/skills/dsh-plugin-guide
+```
+
+इंस्टॉलर `downloads/` (उत्पन्न) और `.github/` को छोड़ता है, फिर हर कॉपी की गई फ़ाइल को बाइट-दर-बाइट सत्यापित करता है। पूरे फ़ोल्डर की मैन्युअल `Copy-Item -Recurse` भी काम करती है।
+
+## Configuration
+
+skill बंडल कोई Schemastery `Config` उजागर नहीं करता — यह ज्ञान-आधार को बिना किसी ट्यूनेबल कुंजी के एक agent skill के रूप में पंजीकृत करता है। `dsh-plugin-dev` CLI अपने ट्यूनेबल flags और `DSH_PLUGIN_DEV_*` पर्यावरण चरों से पढ़ता है ([CLI toolchain](#cli-toolchain) देखें)।
+
+## Tools & surfaces
+
+| Surface | Kind | Notes |
+|---|---|---|
+| `dsh-plugin-guide` | skill | `ctx.skills` से पंजीकृत; माँग पर `SKILL.md` + `./guide/` + `./references/` लोड करता है |
+| `dsh-plugin-dev` | bin (CLI) | `new` / `check` / `verify` उप-कमांड; DSH प्लगइन पंक्ति नहीं |
+
+## Permissions & data
+
+- **Permissions**: workshop मैनिफ़ेस्ट में `filesystem:read` घोषित करता है।
+- **Data**: केवल-पठन — अपनी पैक की गई `guide/` और `references/` फ़ाइलें पढ़ता है। कोई नेटवर्क अनुरोध नहीं, कोई लेखन नहीं, कोई मॉडल कॉल नहीं।
+
+## Security boundaries
+
+- **केवल-पठन ज्ञान-आधार।** बंडल केवल अपनी फ़ाइलें पढ़ता है; कभी लिखता नहीं, कभी नेटवर्क उपयोग नहीं करता, और कभी मॉडल नहीं बुलाता।
+- **आधिकारिक दस्तावेज़ शब्दशः प्रतियाँ हैं।** `references/official-docs/` यहाँ कभी संपादित नहीं होता; समस्याएँ अपस्ट्रीम को रिपोर्ट करें और केवल `scripts/sync-official-docs.ps1` से पुनः-सिंक करें।
+- **वितरण सीमाएँ।** पैक की गई तृतीय-पक्ष सामग्री अपना अपस्ट्रीम लाइसेंस रखती है; [NOTICE.md](NOTICE.md) देखें (जैसे `downloads/` केवल स्थानीय; `awesome-dsh-plugins` पुनर्वितरित नहीं होना चाहिए)।
+
+## Known limitations
+
+- **आधिकारिक दस्तावेज़ एक स्नैपशॉट है।** अपस्ट्रीम बदलने पर `scripts/sync-official-docs.ps1` से पुनः-सिंक करें; ताज़गी मुहर और कमिट हैश `references/official-docs/SNAPSHOT.md` को संदर्भित करते हैं।
+- **`downloads/` उत्पन्न है, कमिट नहीं।** कच्चे स्नैपशॉट (सामुदायिक रेपो संग्रह, Discussions, लेख) उपयोग से पहले स्क्रिप्ट से उत्पन्न करने चाहिए।
+- **`awesome-dsh-plugins` सामग्री केवल स्थानीय है।** इसका अपस्ट्रीम आंतरिक-उपयोग प्रतिबंध घोषित करता है, इसलिए इसे रेपो के साथ पुनर्वितरित नहीं किया जाता।
+
+## Release channels
+
+हर channel इस repo या npm से resolve होता है, इसलिए **एक tag सब जगह पहुँच जाता है**; केवल Gitee mirror एक शेड्यूल्ड कॉपी है:
+
+| Channel | सत्य-स्रोत | कैसे अपडेट होता है |
+|---|---|---|
+| npm (`dsh-plugin-guide`) | इस repo का `package.json` | `v*` tag पर `.github/workflows/release.yml`: `verify-kit` गेट → CHANGELOG में उस संस्करण का section जाँच → `npm publish --provenance` (संस्करण पहले से हो तो छोड़ देता है) |
+| GitHub Release | वही tag | वही workflow इसे idempotent तरीके से बनाता है |
+| Discovery बैज (npm version, GitHub tag, DSH Market, dsh-doctor) | लाइव lookup | प्रकाशित करने को कुछ नहीं — हर render पर npm/registry पढ़ते हैं |
+| Gitee mirror | यह repo | **read-only शेड्यूल्ड mirror**, प्रकाशन लक्ष्य नहीं: परिवार का `gitee-sync` workflow इसे `--force-with-lease` से GitHub tip पर align करता है, इसलिए `main` सामान्यतः एक शेड्यूल्ड रन पीछे रहता है। **यहाँ से Gitee पर tag कभी push नहीं होता**; mirror को पुराना बताने से पहले `git ls-remote` से तुलना करें |
+| DSH Desktop Market / dsh1024 | npm | market npm पैकेज इंस्टॉल करता है, इसलिए प्रकाशित संस्करण तुरंत इंस्टॉल-योग्य है; प्रति-संस्करण सबमिशन नहीं |
+## Keeping it fresh
+
+```sh
+pwsh -File scripts/sync-official-docs.ps1                     # स्थानीय checkout से शब्दशः दस्तावेज़ प्रति
+pwsh -File scripts/download-sources.ps1                       # आधिकारिक साइट/दस्तावेज़, Cordis, पेपर
+pwsh -File scripts/download-community-repos.ps1               # सामुदायिक रिपॉज़िटरी (codeload tarballs)
+pwsh -File scripts/download-community-articles.ps1            # zh/en/HN सामुदायिक लेख
+pwsh -File scripts/archive-discussions.ps1                    # आधिकारिक Discussions ($env:GH_TOKEN चाहिए)
+pwsh -File scripts/gen-topic-snapshot.ps1 -OutDir <dir>       # dsh-plugin विषय जनगणना
+pwsh -File scripts/verify-kit.ps1 -Checkout <checkout>        # महत्वपूर्ण पथ + लिंक स्कैन + दस्तावेज़ विचलन
+```
+
+## Development
+
+skill बंडल (`index.js`) सादा ESM है, कोई बिल्ड चरण नहीं; `dsh-plugin-dev` CLI TypeScript है, tsdown से बिल्ट। द्वार:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm run typecheck && pnpm run typecheck:ci
+pnpm test
+pnpm run build
+pnpm run verify:artifacts        # आत्म-जाँच + स्कैफ़ोल्ड स्मोक (कोई नेटवर्क नहीं)
+pnpm run verify:self-contained   # पैक + साफ़ प्रोफ़ाइल इंस्टॉल/स्टार्ट/अनइंस्टॉल स्मोक
+pnpm pack
+pwsh -File scripts/verify-kit.ps1   # महत्वपूर्ण पथ + लिंक स्कैन (-Checkout <checkout> से दस्तावेज़ विचलन)
+```
+
+## Topics
+
+`dsh`, `deepseek-harness`, `dsh-plugin`, `cordis`, `agent-skill`, `plugin-development`, `knowledge-base`, `cli`, `scaffold`, `checker`
+
+## Contributors
+
+- [PerryLink](https://github.com/PerryLink) — निर्माता और अनुरक्षक: ज्ञान-आधार सामग्री, इंस्टॉल-योग्य बंडल रूपांतरण, पारिस्थितिकी योगदान और सामुदायिक अभियांत्रिकी।
+- दैनिक अनुरक्षण में DeepSeek Harness एजेंट सहायता करते हैं (उनका कोई GitHub खाता नहीं है और वे पारदर्शिता हेतु यहाँ सूचीबद्ध हैं, योगदानकर्ता के रूप में नहीं)।
+
+## PerryLink DSH Plugin Family
+
+This project is one of the **44 DeepSeek Harness plugins** maintained by [PerryLink](https://github.com/PerryLink). If this one helps you, the others likely will too:
+
+| Plugin | One-liner |
+|---|---|
+| **[dsh-auto-review](https://github.com/PerryLink/dsh-auto-review)** | Second-model auto-review on the approval chain, fail-closed by default | |
+| **[dsh-autotier](https://github.com/PerryLink/dsh-autotier)** | Automatic strong/cheap model-tier routing with deterministic risk guards and a `/tier` command | |
+| **[dsh-background-agents](https://github.com/PerryLink/dsh-background-agents)** | Durable background child agents with a Web UI sidebar, messaging and interrupt | 🚫 **सेवानिवृत्त** — ऊपर देखें |
+| **[dsh-budget](https://github.com/PerryLink/dsh-budget)** | Cost governance for DeepSeek Harness: budgets, carbon, and latency in one panel. | | 🧊 FROZEN — see the repo README |
+| **[dsh-catalog](https://github.com/PerryLink/dsh-catalog)** | DSH Desktop Market standard catalog source for the PerryLink family | |
+| **[dsh-cert-mcp](https://github.com/PerryLink/dsh-cert-mcp)** | Read-only MCP server exposing the certification registry: grades, snapshots and five-dimension evidence | |
+| **[dsh-checkpoint-rewind](https://github.com/PerryLink/dsh-checkpoint-rewind)** | Claude Code /rewind-equivalent: snapshots, session forks, one-shot restore | |
+| **[dsh-claude-move](https://github.com/PerryLink/dsh-claude-move)** | Migrate Claude Code sessions, memory, skills and CLAUDE.md into DSH | | 🧊 FROZEN — see the repo README |
+| **[dsh-click](https://github.com/PerryLink/dsh-click)** | Cross-platform native desktop control for DeepSeek Harness — Windows first. | |
+| **[dsh-composer-history](https://github.com/PerryLink/dsh-composer-history)** | Terminal-style input history for the web composer: arrows, Ctrl+R search | |
+| **[dsh-data-quality](https://github.com/PerryLink/dsh-data-quality)** | Dataset quality checks and citation cross-checks (the optional numeric bridge consumed here) | |
+| **[dsh-defend](https://github.com/PerryLink/dsh-defend)** | Prompt-injection, jailbreak, and secret-leak defense for DeepSeek Harness. | | 🧊 FROZEN — see the repo README |
+| **[dsh-doublecheck](https://github.com/PerryLink/dsh-doublecheck)** | Engineering-discipline guard: requirements grill, test gates, adversary review | |
+| **[dsh-draw](https://github.com/PerryLink/dsh-draw)** | Unified static-image generation routing for DeepSeek Harness. | | 🧊 FROZEN — see the repo README |
+| **[dsh-fast](https://github.com/PerryLink/dsh-fast)** | Read-only performance diagnostics for DeepSeek Harness. | |
+| **[dsh-fund-research](https://github.com/PerryLink/dsh-fund-research)** | Deterministic research reports for Chinese public mutual funds | |
+| **[dsh-github](https://github.com/PerryLink/dsh-github)** | GitHub PR/issues integration for DSH, every write gated by approval | |
+| **[dsh-industry-research](https://github.com/PerryLink/dsh-industry-research)** | Industry research orchestration that seals its deliverables through this plugin's `ctx.researchReport.assemble` | |
+| **[dsh-laya](https://github.com/PerryLink/dsh-laya)** | Laya typed decisions (`noul`/`choice`/`score`) as a first-class Cordis service and model-visible tools | |
+| **[dsh-library](https://github.com/PerryLink/dsh-library)** | Local document knowledge base for DeepSeek Harness. | |
+| **[dsh-local-ai](https://github.com/PerryLink/dsh-local-ai)** | Local-model (Ollama) integration for DeepSeek Harness. | |
+| **[dsh-lsp-actions](https://github.com/PerryLink/dsh-lsp-actions)** | LSP diagnostics, formatting, completion, code actions and rename over language servers | |
+| **[dsh-mask](https://github.com/PerryLink/dsh-mask)** | PII masking middleware: anonymize at the model boundary, restore at the display layer | |
+| **[dsh-mcp-panel](https://github.com/PerryLink/dsh-mcp-panel)** | Read-only MCP runtime panel: /mcp command + Settings tab with status, tools and errors | |
+| **[dsh-memento](https://github.com/PerryLink/dsh-memento)** | Approval-gated cross-session memory: ctx.memory seam + SQLite + memory tool | | 🧊 FROZEN — see the repo README |
+| **[dsh-observe](https://github.com/PerryLink/dsh-observe)** | OpenTelemetry and Langfuse observability exporter for DeepSeek Harness. | |
+| **[dsh-output-styles](https://github.com/PerryLink/dsh-output-styles)** | Claude Code outputStyles-equivalent runtime style switching | |
+| **[dsh-permission-rules](https://github.com/PerryLink/dsh-permission-rules)** | Claude Code-style declarative allow/deny/ask permission rules with audit | |
+| **[dsh-plugin-certification](https://github.com/PerryLink/dsh-plugin-certification)** | Community certification registry with repro-checkable grades and badges | |
+| **[dsh-plugin-doctor](https://github.com/PerryLink/dsh-plugin-doctor)** | Zero-dependency static + sandbox smoke detector for DSH plugins | |
+| **[dsh-plugin-guide](https://github.com/PerryLink/dsh-plugin-guide)** | Plugin-development knowledge base as an on-demand agent skill | |
+| **[dsh-plugin-kit](https://github.com/PerryLink/dsh-plugin-kit)** | Shared zero-runtime-dependency toolkit for the PerryLink DSH plugins | |
+| **[dsh-plugin-upgrade](https://github.com/PerryLink/dsh-plugin-upgrade)** | One-package, one-corridor-index plugin upgrade skill: routes a repository to the matching closed corridor card | |
+| **[dsh-reach](https://github.com/PerryLink/dsh-reach)** | Multi-channel approval/question bridge: WeChat/Telegram/Feishu, session console | | 🧊 FROZEN — see the repo README |
+| **[dsh-research-report](https://github.com/PerryLink/dsh-research-report)** | Verifiable research-report engine: content-addressed evidence ledger and sealed versions | |
+| **[dsh-score](https://github.com/PerryLink/dsh-score)** | Multi-dimensional quality scoring for DeepSeek Harness plugins. | |
+| **[dsh-session-pin](https://github.com/PerryLink/dsh-session-pin)** | Pin sessions in the Web sidebar with durable ordering | 🚫 **सेवानिवृत्त** — ऊपर देखें |
+| **[dsh-session-sync](https://github.com/PerryLink/dsh-session-sync)** | Cross-device session sync for DeepSeek Harness — a dedicated git mirror of your session store. | |
+| **[dsh-skill-pack-security](https://github.com/PerryLink/dsh-skill-pack-security)** | Security-audit skill pack: secret scan, dependency and supply-chain review | |
+| **[dsh-talk](https://github.com/PerryLink/dsh-talk)** | Voice-first session loop for DeepSeek Harness: talk to it, hear it answer. | |
+| **[dsh-team-rooms](https://github.com/PerryLink/dsh-team-rooms)** | Cross-session team rooms: shared message bus, task board and timeline | 🚫 **सेवानिवृत्त** — ऊपर देखें |
+| **[dsh-test-drive](https://github.com/PerryLink/dsh-test-drive)** | Isolated install-and-smoke test drives for DeepSeek Harness plugins. | |
+| **[dsh-ticktick](https://github.com/PerryLink/dsh-ticktick)** | TickTick/Dida365 task bridge: session-header panel + 11 tools | |
+| **[dsh-translate](https://github.com/PerryLink/dsh-translate)** | Vendor parameter translation and deterministic JSON repair for DeepSeek Harness. | |
+
+## Disclaimer
+
+सामुदायिक-अनुरक्षित, **नहीं** एक आधिकारिक DeepSeek उत्पाद। DeepSeek Harness डेवलपर पूर्वावलोकन में है और ब्रेकिंग बदलाव प्रकाशित करता है; संदेह होने पर `references/official-docs/` में आधिकारिक दस्तावेज़ सत्य का स्रोत हैं।
+
+## License
+
+[Apache License 2.0](LICENSE) © 2026 dsh-plugin-guide contributors — हमारा अपना पाठ (`SKILL.md`, `guide/`, `references/`, `scripts/`, यह README) Apache-2.0 है; पैक की गई तृतीय-पक्ष सामग्री [NOTICE.md](NOTICE.md) में दस्तावेज़ित है।
+
+### DSH Desktop मार्केट से इंस्टॉल करें
+
+सभी PerryLink प्लगइन DSH Desktop के बिल्ट-इन मार्केट में देखे जा सकते हैं: **Market → Sources → add source → पेस्ट करें** `https://perrylink-dsh-catalog.perrylink.workers.dev/catalog-source.json` **→ चुनें**। इंस्टॉलेशन मार्केट के npm-identity सत्यापन और आपकी पुष्टि से ही होता है।

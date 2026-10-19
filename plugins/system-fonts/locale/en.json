@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "title": "System fonts",
+    "description": "Adds system-font pickers for text, code and terminal fonts to Settings → General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Font size and weight stay with the host theme."
+  },
+  "strings": {
+    "row.text.title": "Text font",
+    "row.text.desc": "Interface and content share one family",
+    "row.code.title": "Code font",
+    "row.code.desc": "Inline code and code blocks",
+    "row.terminal.title": "Terminal font",
+    "row.terminal.desc": "The integrated terminal",
+    "row.lineHeight.title": "Line height",
+    "row.lineHeight.desc": "Row spacing for body and headings; drag left to tighten",
+    "row.tracking.title": "Letter spacing",
+    "row.tracking.desc": "Character spacing in content; 0 is the host default",
+    "note.loading": "Reading system fonts…",
+    "note.error": "System fonts unavailable — type a name",
+    "note.empty": "No matching fonts",
+    "menu.default": "Default font",
+    "menu.refresh": "Reload system fonts",
+    "menu.use": "Use “{name}”",
+    "search.placeholder": "Search fonts or type a family name",
+    "menu.builtin": "Built-in",
+    "menu.default.effective": "Default font ({family})"
+  }
+}

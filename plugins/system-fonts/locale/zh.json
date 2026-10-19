@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "title": "系统字体",
+    "description": "为「设置 → 通用」增加内容字体、代码字体、终端字体三个系统字体选择器，附行距与字距控制；从 Windows 已安装字体枚举，字号与字重仍由宿主主题管理。"
+  },
+  "strings": {
+    "row.text.title": "内容字体",
+    "row.text.desc": "界面与正文使用同一字体",
+    "row.code.title": "代码字体",
+    "row.code.desc": "行内代码与代码块",
+    "row.terminal.title": "终端字体",
+    "row.terminal.desc": "集成终端",
+    "row.lineHeight.title": "行距",
+    "row.lineHeight.desc": "正文与标题的行高，往左拖更紧凑",
+    "row.tracking.title": "字距",
+    "row.tracking.desc": "正文字符间距，0 为宿主默认",
+    "note.loading": "正在读取系统字体…",
+    "note.error": "系统字体读取失败，可手写族名",
+    "note.empty": "没有匹配的字体",
+    "menu.default": "默认字体",
+    "menu.refresh": "重新读取系统字体",
+    "menu.use": "使用“{name}”",
+    "search.placeholder": "搜索字体或输入字体名称",
+    "menu.builtin": "内置字体",
+    "menu.default.effective": "默认字体（{family}）"
+  }
+}

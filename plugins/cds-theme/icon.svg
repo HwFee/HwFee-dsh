@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36" role="img" aria-label="Claude Design System theme">
+  <title>Claude Design System theme</title>
+  <!-- Two offset surfaces: the CDS layering idea, read as a silhouette at 36px. -->
+  <rect x="5.5" y="7.5" width="15" height="15" rx="4.5" fill="#8f8880" fill-opacity="0.45"/>
+  <rect x="15.5" y="13.5" width="15" height="15" rx="4.5" fill="#d97757"/>
+  <circle cx="23" cy="21" r="2.6" fill="#ffffff" fill-opacity="0.9"/>
+</svg>

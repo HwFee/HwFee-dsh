@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Thinking Effort",
+    "description": "Adjust the current model's thinking effort with one slider. The stops come entirely from the provider: no metadata means no slider, and N advertised levels mean N stops."
+  }
+}
