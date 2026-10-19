@@ -1,6 +1,6 @@
 {
   "name": "@hwfee/dsh-usage-stats",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness 的用量统计插件：在新对话页的标题下方显示一张「用量」面板，包含会话数、消息数、总 token、活跃天数、高峰时段、常用模型、活跃度热力图，以及一句按中文字数折算的趣味对比。数据从 ~/.dsh/sessions 的会话日志聚合而来。 / Usage statistics panel for DeepSeek Harness: a stats card on the blank-session hero with sessions, messages, total tokens, active days, peak hour, favourite model, an activity heatmap and a Chinese-literature token comparison, aggregated from the session logs under ~/.dsh/sessions.",
   "type": "module",
   "main": "lib/index.js",
