@@ -73,6 +73,37 @@ test('every row the patch inserts names THIS package', function () {
   }
 })
 
+test('the shipped client bundle registers under the package name', async function () {
+  // THE REGRESSION, SECOND HALF. Fixing the patch row is only half a rename.
+  // The host composes one client-module row per package, keyed by the package
+  // name, and counts that row as arrived only when a factory is registered under
+  // the same id. A bundle registering a different id never satisfies its own row:
+  // the loader retries it through the one-resource URL, the bundle executes
+  // twice, and the retry dies with
+  //
+  //   client-modules: duplicate factory registration for "<id>"
+  //
+  // which fails the ENTIRE web boot — the desktop shows "The application could
+  // not start or stopped unexpectedly" and nothing is usable. This happened when
+  // the sibling plugin was renamed and only its patch row was fixed.
+  //
+  // Pinning the artifact is the only way to catch it, because the id is written
+  // at build time from package.json: a stale build passes every source test.
+  const artifact = read('client/client.js')
+  const match = /__ModuleLoader__\.load\(\{\s*id:\s*(["'])([^"']+)\1/.exec(artifact)
+  assert.ok(match !== null, 'the artifact must register a loader factory with a string id')
+  assert.equal(match[2], manifest.name,
+    `client/client.js registers "${match[2]}" but this package is "${manifest.name}" — `
+    + 'the host keys the client row by the package name, so a different id replays the bundle '
+    + 'and web boot dies on a duplicate factory registration')
+
+  // The runtime constant the plugin uses for its own ids is the same string, so a
+  // rename cannot half-apply between the bundle header and the source.
+  const constants = await import('../client/src/constants.js')
+  assert.equal(constants.PLUGIN_ID, manifest.name,
+    'client/src/constants.js PLUGIN_ID must be the package name')
+})
+
 test('the Host half entry point exists', function () {
   assert.equal(typeof manifest.main, 'string')
   const rel = manifest.main.replace(/^\.\//, '')

@@ -570,8 +570,16 @@ B_TIER_KEYS.forEach(function (item) {
 const checks = [
   ['eight faces declared (six Anthropic + two CJK fallbacks)', FONT_FACES.length + CJK_FACES.length === 8],
   ['all eight faces inlined in the artifact', inlined === FONT_FACES.length + CJK_FACES.length],
-  ['fonts are listed in package.json',
-    JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).files.includes('fonts')],
+  // The package ships the faces ONE way. This check used to assert that `files`
+  // included `fonts`, on the theory that an installed plugin would otherwise lose
+  // them. That theory was wrong: the shipped bundle inlines all eight faces as
+  // data URLs, so the directory was a second copy costing ~3 MB (the tarball went
+  // 7.5 MB -> 3.8 MB when it was dropped). What actually protects the user is the
+  // assertion above — every face inlined. So this checks the duplicate is NOT
+  // packed, which catches someone re-adding the directory without realising the
+  // bundle already carries the faces.
+  ['fonts directory is not shipped twice',
+    !JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).files.includes('fonts')],
   ['body is 14/20 regular 400/360', tokens['--dsw-font-markdown-base-font-weight'].light === '400'
     && tokens['--dsw-font-markdown-base-font-weight'].dark === '360'],
   ['headings are 580/550', tokens['--dsw-font-markdown-h1-font-weight'].light === '580'
