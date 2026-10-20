@@ -7,6 +7,18 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(root, 'client', 'src', 'index.js')
 const OUT = join(root, 'client', 'client.js')
 
+// The id the bundle registers with `window.__ModuleLoader__.load({ id })`.
+//
+// It is the PACKAGE NAME, read here rather than hardcoded, because the host
+// keys each client-module graph row by the package name: a bundle that
+// registers under anything else never satisfies its own row. The loader then
+// reports "loaded without registering", retries through the one-resource URL,
+// executes the bundle a second time, and the retry dies with
+// `client-modules: duplicate factory registration` — taking the whole web boot
+// down. The rename to @hwfee/dsh-usage-stats hit exactly this: the patch row
+// was fixed, the hardcoded id here was not.
+const PACKAGE_NAME = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name
+
 function entryHeader() {
   const source = readFileSync(ENTRY, 'utf8')
   const match = /^(\s*\/\*\*[\s\S]*?\*\/)/.exec(source)
@@ -29,7 +41,7 @@ export function buildArtifact() {
   const indented = cjs.split('\n').map((line) => (line === '' ? '' : '    ' + line)).join('\n')
   return entryHeader() +
     'window.__ModuleLoader__.load({\n' +
-    "  id: 'dsh-usage-stats',\n" +
+    '  id: ' + JSON.stringify(PACKAGE_NAME) + ',\n' +
     '  factory: (require) => {\n' +
     '    var module = { exports: {} }\n' +
     '    var exports = module.exports\n' +

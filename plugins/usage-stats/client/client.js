@@ -49,7 +49,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-usage-stats',
+  id: "@hwfee/dsh-usage-stats",
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports
@@ -81,7 +81,7 @@ window.__ModuleLoader__.load({
     module.exports = __toCommonJS(index_exports);
 
     // client/src/constants.js
-    var PLUGIN_ID = "dsh-usage-stats";
+    var PLUGIN_ID = "@hwfee/dsh-usage-stats";
     var USAGE_PATH = "/dsh-usage-stats/summary";
     var USAGE_MARKER_HEADER = "x-dsh-usage-stats";
     var USAGE_MARKER_VALUE = "1";

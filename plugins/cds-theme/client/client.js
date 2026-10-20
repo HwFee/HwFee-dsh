@@ -84,7 +84,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-cds-theme',
+  id: "dsh-cds-theme",
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports

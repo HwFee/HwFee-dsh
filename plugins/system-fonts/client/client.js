@@ -56,7 +56,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-system-fonts',
+  id: "dsh-system-fonts",
   factory: (require) => {
     var module = { exports: {} }
     var exports = module.exports

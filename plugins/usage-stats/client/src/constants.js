@@ -1,4 +1,28 @@
-export const PLUGIN_ID = 'dsh-usage-stats'
+/**
+ * The package's own name — and therefore the only id this client half may
+ * register under.
+ *
+ * WHY IT MUST EQUAL package.json `name`. The host composes one client-module
+ * graph row per package, keyed by the package name (`graphRow(packageName, …)`),
+ * and the boot audit only counts a row as arrived once a factory is registered
+ * under that exact id. Two silent failures follow from any other string:
+ *
+ *   - the row never matches its registration — the loader reports "loaded
+ *     without registering", retries the row through its one-resource URL, the
+ *     bundle executes a second time, and the second `load()` throws
+ *     `client-modules: duplicate factory registration … (bundle executed twice
+ *     without invalidate?)`;
+ *   - invalidation deletes factories and styles by row id, so a bundle
+ *     registered under another id is never evicted — it either resurrects as a
+ *     duplicate or keeps a stale stylesheet alive.
+ *
+ * This is the second half of the rename that shipped 0.1.1: the patch row was
+ * corrected to the scoped name, but the bundle still registered the old
+ * unscoped one, so every web boot failed with the duplicate-registration dialog.
+ * `tools/build-client.mjs` now reads the name from package.json instead of
+ * hardcoding it, and `test/manifest.test.mjs` pins the shipped artifact.
+ */
+export const PLUGIN_ID = '@hwfee/dsh-usage-stats'
 
 /** Same-origin route the Host half serves the aggregated summary from. */
 export const USAGE_PATH = '/dsh-usage-stats/summary'

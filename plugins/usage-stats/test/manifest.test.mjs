@@ -17,9 +17,18 @@
  * So this suite pins the whole chain, not just that one string:
  *
  *   package.json name  ==  cordis.patch.yml insert[].name
+ *   package.json name  ==  the id client/client.js registers with the loader
+ *   package.json name  ==  client/src/constants.js PLUGIN_ID
  *   package.json main  ==  an existing file (the Host half)
  *   package.json dsh.bundle.patch  ==  the patch that was just checked
  *   package.json exports map every entry that actually exists
+ *
+ * The second and third rows were added after 0.1.1: fixing the patch name was
+ * only half the rename. The client bundle still registered the old unscoped id,
+ * the host keys each client row by the package name, so the row never matched
+ * its registration, retried through its one-resource URL, executed the bundle
+ * twice and threw `client-modules: duplicate factory registration` — the web
+ * boot dialog, not a missing panel. A test that only reads YAML cannot see that.
  *
  * It is deliberately cheap: plain reads, no imports of the plugin.
  */
@@ -71,6 +80,30 @@ test('every row the patch inserts names THIS package', function () {
       `row "${row.id}" targets "${row.name}" but this package is "${manifest.name}" — `
       + 'a mismatched name makes the row unresolvable and the plugin silently unmounts')
   }
+})
+
+test('the shipped client bundle registers under the package name', async function () {
+  // THE REGRESSION, SECOND HALF. The host composes one client-module row per
+  // package, keyed by the package name, and counts that row as arrived only when
+  // a factory is registered under the same id. A bundle registering the old
+  // unscoped id therefore never satisfies its own row: the loader retries it
+  // through the one-resource URL, the bundle executes twice, and the retry dies
+  // with `client-modules: duplicate factory registration` — which fails the
+  // whole web boot, not just this panel. Pinning the artifact is the only way to
+  // catch it, because the id is generated at build time.
+  const artifact = read('client/client.js')
+  const match = /__ModuleLoader__\.load\(\{\s*id:\s*(["'])([^"']+)\1/.exec(artifact)
+  assert.ok(match !== null, 'the artifact must register a loader factory with a string id')
+  assert.equal(match[2], manifest.name,
+    `client/client.js registers "${match[2]}" but this package is "${manifest.name}" — `
+    + 'the host keys the client row by the package name, so a different id replays the bundle '
+    + 'and web boot dies on a duplicate factory registration')
+
+  // The runtime name the bundle exposes is the same string; keeping the bundle
+  // header and the source constant in step means a rename cannot half-apply.
+  const constants = await import('../client/src/constants.js')
+  assert.equal(constants.PLUGIN_ID, manifest.name,
+    'client/src/constants.js PLUGIN_ID must be the package name (the bundle header is built from package.json)')
 })
 
 test('the Host half entry point exists', function () {
