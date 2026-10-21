@@ -1,100 +1,51 @@
 # 市场提交材料 · Market submission
 
-三个插件的条目已经写好，放在 `market/catalog/`。这是给 [awesome-dsh-plugin/awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（**19,420 star**，`dshmarket.com` 与 `awesome-dsh-plugin.com` 的数据源）用的。
+条目放在 `market/catalog/`，每个插件一个 YAML。**完整流程见 [SUBMISSION-FLOW.md](SUBMISSION-FLOW.md)**；这份文件只记录材料内容与当前状态。
+
+目标市场是 [awesome-dsh-plugin/awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)（`dshmarket.com` 与 `awesome-dsh-plugin.com` 的 catalog 数据源）。
+
+## 当前状态
+
+| 条目 | category | 状态 |
+|---|---|---|
+| `cds-theme` | `theme` | ✅ 已收录（维护者直接合入 main） |
+| `system-fonts` | `ui` | ✅ 已收录（描述经维护者改正） |
+| `usage-stats` | `usage` | ✅ 已收录 |
+| `genui` | `ui` | ⏳ [PR #8392](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8392) 待合并 |
+| `git-bash` | `tools` | ⏳ PR #8392 待合并 |
+| `predict` | `ui` | ⏳ PR #8392 待合并 |
+
+PR #8392 只新增上述三条并在两个 README 各加三行，未改动任何既有条目（市场规则要求 PR 不碰与自己无关的条目）。
+
+第一次提交是 [PR #8189](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8189)：维护者读完代码后指出 `system-fonts` 的描述与实现相反——README 与代码都明确「从不写 `font-weight`，字重归宿主主题」，而条目写了「plus weight / 另加字重」。他删掉该词后把三个条目一起合入 main，PR 关闭。本地 `market/catalog` 已同步为改正后的文本。**这就是描述必须属实的实例**：市场的评审会逐句核对代码。
 
 ## 为什么是那个市场
 
 | 市场 | star | 收不收本仓库 | 说明 |
 |---|---|---|---|
-| **awesome-dsh-plugin/awesome-dsh-plugin** | **19,420** | ✅ | `dshmarket.com` 的 catalog 数据源；只要 `dsh.bundle`，**不要求 npm 发布** |
-| 2BingLing/dsh-market | 159 | ✅ | 靠 topic 自动扫描，已给仓库打了 `dsh-plugin` |
+| **awesome-dsh-plugin/awesome-dsh-plugin** | 19k+ | ✅ | `dshmarket.com` 的 catalog 数据源；只要 `dsh.bundle`，**不要求 npm 发布** |
+| 2BingLing/dsh-market | 159 | ✅ | 靠 topic 自动扫描，仓库已打 `dsh-plugin` |
 | dshworks/awesome-dsh-plugins | 21 | ⚠️ | 市场索引只收 npm 有包的条目，git-only 不收 |
 | polang233/dsh-plugin-index | 2 | ❌ | 硬性要求公开 npm 版本 |
 
-## 一个硬性阻塞：仓库要满 1 天
+## 条目规则
 
-`awesome-dsh-plugin` 的 CI 会检查仓库年龄：
+- 文件名必须是 `Owner__repo--path.yml` 形式；monorepo 子包用 `HwFee__HwFee-dsh--plugins-<slug>.yml`。
+- `url` 指向子目录，`name` 是 `owner/repo#subname`。
+- 只有 `description.en` 必填；中文会被维护者补，但这个仓库两条都写。
+- 英文描述含 `: `（冒号加空格）必须加引号，否则 YAML 把它当嵌套键。
+- 分类按插件实际做的事选：`genui`/`predict` → `ui`（对照市场上同类条目），`git-bash` → `tools`。
+- 一个 PR 最多 3 条；仓库需满 1 天（本仓库已满足）。
 
-> The repo is at least **1 day old**. This is checked automatically.
+## 提交
 
-本仓库创建于 `2026-10-19T07:55:57Z`，**必须等到 2026-10-20 07:55Z 之后**才能提 PR，否则 CI 直接红。这不是对插件的评价，只是过滤「PR 前几分钟才建好的仓库」。
-
-## 提交步骤（满 1 天后）
-
-### 1. Fork 并克隆
-
-```bash
-gh repo fork awesome-dsh-plugin/awesome-dsh-plugin --clone
-cd awesome-dsh-plugin
+```sh
+pwsh market/submit-to-catalog.ps1            # 干跑：列出上游还没有的条目
+pwsh market/submit-to-catalog.ps1 -Apply     # 开 PR
 ```
 
-### 2. 复制三个条目
+脚本只提交**上游没有的**条目；已收录的不会被重写。第一次提交用的是手工流程，现已自动化并做了这件事。
 
-```bash
-cp <本仓库>/market/catalog/*.yml data/plugins/
-ls data/plugins/ | grep HwFee
-```
+## 需要作者确认的一点（历史）
 
-文件名必须正好是 `HwFee__HwFee-dsh--plugins-cds-theme.yml` 这种形式（`owner__repo--path`，路径分隔符变 `-`）。
-
-### 3. 本地校验
-
-```bash
-npm ci
-node scripts/generate-readme.mjs
-git status   # README 应自动多出三行
-```
-
-如果 `generate-readme.mjs` 报错，说明 YAML 有问题，先修。
-
-### 4. 开 PR
-
-```bash
-git checkout -b add-hwfee-plugins
-git add data/plugins/ README.md README.zh.md
-git commit -m "Add HwFee DSH plugins: CDS theme, system fonts, usage stats"
-git push -u origin add-hwfee-plugins
-gh pr create --title "Add HwFee DSH plugins (3)" --body-file <PR 正文>
-```
-
-## 三个条目的内容
-
-| 文件 | category | 插件 |
-|---|---|---|
-| `HwFee__HwFee-dsh--plugins-cds-theme.yml` | `theme` | Claude Design System 主题 |
-| `HwFee__HwFee-dsh--plugins-system-fonts.yml` | `ui` | 字体与排印 |
-| `HwFee__HwFee-dsh--plugins-usage-stats.yml` | `usage` | 用量面板 |
-
-分类取自它允许的取值表（`theme` / `ui` / `usage` 都在表内），且按「插件实际做的事」选，不是按希望出现的位置。
-
-## PR 正文草稿
-
-```markdown
-Adds three plugins from https://github.com/HwFee/HwFee-dsh, a monorepo with
-one plugin per `plugins/*` directory.
-
-All three declare `dsh.bundle.patch` → `./cordis.patch.yml` and ship the built
-client artifact in the package, so `dsh plugin add` works from the subdirectory:
-
-| entry | category | what it does |
-|---|---|---|
-| `#cds-theme` | theme | Remaps the host's tokens onto CDS warm-grey surfaces and the clay accent; refines composer, sidebar, message rows, code blocks and markdown body. |
-| `#system-fonts` | ui | Font slots for content / code / terminal, plus weight, line height and letter spacing. Typography only. |
-| `#usage-stats` | usage | Sessions, messages, total tokens, active days, peak hour, favourite model and a heatmap, over all time / 30d / 7d. |
-
-Monorepo layout per contributing.md: `url` points at the subdirectory,
-`name` is `owner/repo#subname`.
-
-One note on `#cds-theme`: its package inlines six Anthropic web fonts as
-base64 (~660 KB). The design language itself comes from
-[open-claude-ui](https://github.com/Caho1/open-claude-ui) (MIT), and the
-README states which parts are derived from it and which are not.
-
-The repo has the `dsh-plugin` topic. Verified against dsh `0.2.1-rc.2`.
-```
-
-## 需要作者确认的一点
-
-`#cds-theme` 内联了 **6 个 Anthropic 商业字体**（AnthropicSans / Serif / Mono，共约 660 KB），无再分发授权。提交到公开目录等于向公众分发。
-
-维护者会实际阅读代码。这一条要不要在 PR 里主动说明，或者先移除字体，由作者决定 —— `market/PUBLISHING.md` 里有移除方法和后果（英文衬线会回退到系统字体）。
+`cds-theme` 内联了 6 个 Anthropic 商业字体（约 660 KB），无再分发授权，提交到公开目录等于向公众分发。该条目已被收录——当时的决定是随包发布并在 PR 里如实说明，`market/PUBLISHING.md` 记录了移除方法与后果。
