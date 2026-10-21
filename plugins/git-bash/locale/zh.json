@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Bash 默认 shell",
+    "description": "用 Git Bash 而不是 PowerShell 执行 shell 命令。自动定位真正的 Git for Windows bash（不用 WSL 的替身），提供 run_shell 工具，并在设置里显示当前用的是哪个 shell。"
+  }
+}

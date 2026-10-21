@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git Bash as default shell",
+    "description": "Run shell commands in Git Bash instead of PowerShell. Resolves the real Git for Windows bash (not the WSL stub), exposes a run_shell tool, and shows which shell is in effect."
+  }
+}

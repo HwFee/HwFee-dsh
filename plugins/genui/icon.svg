@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="Generative UI">
+  <!--
+    Original artwork, MIT, drawn for this plugin.
+
+    The mark reads as a card whose contents are being composed: a rounded frame
+    (the card), a filled accent bar (a chart/answer emerging), and two ghost
+    bars (content still forming). Neutral enough to sit beside any theme; the
+    two outer colours are the plugin's own, the accent matches the clay used by
+    cds-theme without depending on it.
+  -->
+  <rect x="4.5" y="8.5" width="39" height="31" rx="6" fill="none" stroke="#c6613f" stroke-width="2.4"/>
+  <rect x="11" y="16" width="9" height="16" rx="2.4" fill="#c6613f"/>
+  <rect x="24" y="16" width="13" height="4.6" rx="2.3" fill="#c6613f" opacity="0.75"/>
+  <rect x="24" y="24" width="13" height="4.6" rx="2.3" fill="#c6613f" opacity="0.4"/>
+  <rect x="24" y="32" width="7" height="2.2" rx="1.1" fill="#c6613f" opacity="0.22"/>
+</svg>

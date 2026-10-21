@@ -1,0 +1,67 @@
+{
+  "name": "@hwfee/dsh-genui",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 的生成式 UI 插件：模型用 render_ui 工具直接写一段 React 代码，回答里就地渲染成一张可交互卡片，而不是只给文字。附带一个内置 skill，教模型什么时候值得用界面、什么时候一段话就够。代码在插件自己的沙箱里求值：fetch / XMLHttpRequest / 定时器 / require / window / document / localStorage 全部被屏蔽，卡片崩溃由错误边界接住并退回源码。 / Generative UI for DeepSeek Harness: the model calls render_ui with a snippet of React and the answer renders as an interactive card in the conversation. Ships one built-in skill that teaches when a UI is worth it. The snippet is evaluated in a plugin-owned sandbox with network, timers, module loading and DOM globals masked; a crashing card falls back to its source.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "HwFee <1744567281@qq.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "generative-ui",
+    "intelligent-ui",
+    "react",
+    "skill"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-tool"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client/client.js",
+    "locale",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/render-tool.test.mjs && node test/sandbox.test.mjs && node test/answer-node.test.mjs && node test/skill.test.mjs && node test/vendor-css.test.mjs && node test/typography.test.mjs && node test/title-placement.test.mjs && node test/legibility.test.mjs && node test/tools-preflight.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

@@ -1,0 +1,8 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# `name` MUST equal the package's own `name` field. When the two disagree the
+# Loader cannot resolve this row to a package, the row never activates, and the
+# plugin silently disappears — no error surfaces anywhere. See AGENTS.md.
+- insert:
+    - id: dsh-predict
+      name: '@hwfee/dsh-predict'

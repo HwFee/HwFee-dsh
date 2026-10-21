@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Generative UI",
+    "description": "Let the model answer with a live React card. render_ui runs the snippet in a plugin-owned sandbox and renders it inline in the conversation; one built-in skill teaches when a card beats prose."
+  }
+}

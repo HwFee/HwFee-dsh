@@ -1,0 +1,64 @@
+{
+  "name": "@hwfee/dsh-git-bash",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 的 Git Bash 默认 shell：把 Windows 上的默认命令解释器从 PowerShell 换成 Git Bash，并暴露一个 run_shell 工具。自动从 git --exec-path 定位 Git Bash（WSL 的 bash 不算），找不到时降级而不是让插件消失。 / Git Bash as the default shell for DeepSeek Harness on Windows: resolves Git Bash from `git --exec-path` (never the WSL stub), exposes a run_shell tool, and degrades visibly instead of vanishing when the shell is missing.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "HwFee <1744567281@qq.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "git-bash",
+    "shell",
+    "windows"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client/client.js",
+    "locale",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/mode.test.mjs && node test/mode-route.test.mjs && node test/resolve.test.mjs && node test/tool.test.mjs && node test/store.test.mjs && node test/settings-row.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}
