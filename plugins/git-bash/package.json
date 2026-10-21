@@ -56,7 +56,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/mode.test.mjs && node test/mode-route.test.mjs && node test/resolve.test.mjs && node test/tool.test.mjs && node test/store.test.mjs && node test/settings-row.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/mode.test.mjs && node test/mode-route.test.mjs && node test/resolve.test.mjs && node test/tool.test.mjs && node test/store.test.mjs && node test/settings-row.test.mjs && node test/tool-view.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10"

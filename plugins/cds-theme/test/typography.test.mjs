@@ -44,9 +44,14 @@ const EXPECTED = {
   h2: { size: content(15), leading: content(20), weight: 'semibold', family: TEXT }, // heading :352 + :452
   h3: { size: content(15), leading: content(20), weight: 'semibold', family: TEXT },
   h4: { size: content(14), leading: content(18), weight: 'semibold', family: TEXT }, // heading :352 @14
-  code: { size: code(12), leading: code(14), weight: 'medium', family: CODE }, // :447
-  'code-block': { size: code(12), leading: code(17.5), weight: 'regular', family: CODE }, // :446
-  'code-block-small': { size: code(11.5), leading: code(16), weight: 'regular', family: CODE }, // :440
+  code: { size: code(12), leading: code(14), weight: 'medium', family: CODE }, // compact --cds-font-size-code
+  'code-block': { size: '12px', leading: '17px', weight: 'regular', family: CODE }, // :446 + unified code size
+  // :440 records the HOST's 11.5/16 for this rung. The theme deliberately
+  // renders the reference's code rung instead — 13/19, i.e. the client's
+  // `--cds-font-size-code` / `--cds-leading-code` — because every tool-card
+  // payload (read rows, diff, write, terminal) reads this one token and the
+  // host value measured visibly small beside the reference.
+  'code-block-small': { size: '12px', leading: '17px', weight: 'regular', family: CODE }, // :440 + reference code rung
   small: { size: '12px', leading: '16px', weight: 'regular', family: TEXT }, // :433/:438/:453
   'small-italic': { size: '12px', leading: '16px', weight: 'regular', family: TEXT },
   'small-strong': { size: '12px', leading: '16px', weight: 'bold', family: TEXT },
@@ -115,8 +120,12 @@ test('every role emits the six tokens the host theme declares', function () {
       assert.ok(Object.hasOwn(tokens, base + suffix), 'missing ' + base + suffix)
     }
   }
-  // 17 roles × 6 tokens + the two family roles + 13 UI steps × 2 tokens.
-  assert.equal(Object.keys(tokens).length, 17 * 6 + 2 + 13 * 2)
+  // N roles × 6 tokens + FIVE role tokens: the host's two family roles
+  // (text, code) plus this theme's UI role — family, size, and the size delta
+  // (`--dsw-font-family-ui`, `--dsw-font-size-ui`, `--dsw-font-size-ui-delta`)
+  // — + 13 UI steps × 2 tokens. Written off `TYPOGRAPHY_ROLES` so adding a role
+  // cannot leave a stale literal here.
+  assert.equal(Object.keys(tokens).length, TYPOGRAPHY_ROLES.length * 6 + 5 + 13 * 2)
   assert.ok(TYPOGRAPHY_TOKEN_NAMES.length === Object.keys(tokens).length)
 })
 
@@ -146,8 +155,10 @@ test('markdown headings are semibold 580 light / 550 dark', function () {
   }
 })
 
-test('inline code is 12px/14px medium, 500 light / 460 dark', function () {
+test('inline code is 13px/14px medium, 500 light / 460 dark', function () {
   const tokens = buildTokens(sanitize({}))
+  // 13px is the reference's single code size; the matrix recorded 12px for the
+  // chip before all three code surfaces were unified.
   assert.equal(tokens['--dsw-font-markdown-code-font-size'].light, code(12))
   assert.equal(tokens['--dsw-font-markdown-code-line-height'].light, code(14))
   assert.equal(tokens['--dsw-font-markdown-code-font-weight'].light, '500')
@@ -155,10 +166,13 @@ test('inline code is 12px/14px medium, 500 light / 460 dark', function () {
   assert.equal(tokens['--dsw-font-markdown-code-font-family'].light, CODE)
 })
 
-test('code blocks are 12px/17.5px regular with tabular numerals', function () {
+test('code blocks are 12px/17px regular with tabular numerals', function () {
   const tokens = buildTokens(sanitize({}))
-  assert.equal(tokens['--dsw-font-markdown-code-block-font-size'].light, code(12))
-  assert.equal(tokens['--dsw-font-markdown-code-block-line-height'].light, code(17.5))
+  assert.equal(tokens['--dsw-font-markdown-code-block-font-size'].light, '12px')
+  // 20px, not the reference's 19: the fenced block is a row-per-line surface
+  // where the host adds its own padding, and 19 read cramped once wrapping was
+  // forced on.
+  assert.equal(tokens['--dsw-font-markdown-code-block-line-height'].light, '17px')
   assert.equal(tokens['--dsw-font-markdown-code-block-font-weight'].light, '400')
   assert.equal(tokens['--dsw-font-markdown-code-block-font-weight'].dark, '360')
   assert.equal(tokens['--dsw-font-markdown-code-block-font-family'].light, CODE)
@@ -253,9 +267,37 @@ const HOST_UI_STEPS = [
 ]
 
 function uiShorthand(step, weightValue) {
+  // The UI ladder rides the UI size role, never the pinned host pixels: every
+  // step is `calc(<host px> + <--dsw-font-size-ui-delta>)`, and its family is
+  // the UI role, so a UI family/size choice reaches token-driven chrome.
+  const size = 'calc(' + step.size + ' + var(--dsw-font-size-ui-delta))'
+  const leading = 'calc(' + step.leading + ' + var(--dsw-font-size-ui-delta))'
   return (weightValue === '400' ? '' : weightValue + ' ')
-    + step.size + '/' + step.leading + ' ' + TEXT
+    + size + '/' + leading + ' ' + 'var(--dsw-font-family-ui)'
 }
+
+// REGRESSION: the UI size role is what makes "界面字号默认跟随正文" true.
+//
+// `--dsh-content-font-size` is the user's 字号大小; `--dsw-font-size-ui` must
+// default to it, and the whole chrome ladder must move with its delta. Pinning
+// the steps to 11/12/13/14px (the previous shape) left every token-driven
+// control behind when the content text grew.
+test('the UI size role defaults to the content size and drives every step', function () {
+  const tokens = buildTypographyTokens()
+  assert.equal(tokens['--dsw-font-size-ui'].light,
+    'var(--dsh-font-size-ui, var(--dsh-content-font-size, 14px))')
+  assert.equal(tokens['--dsw-font-size-ui'].dark,
+    tokens['--dsw-font-size-ui'].light, 'size does not compensate for the palette')
+  assert.equal(tokens['--dsw-font-size-ui-delta'].light,
+    'calc(var(--dsw-font-size-ui) - 14px)')
+  for (const step of UI_ROLE_TOKENS) {
+    assert.match(tokens[step.token].light, /^([^ ]+ )?calc\(/, step.token + ' must scale')
+    assert.ok(tokens[step.token].light.includes('var(--dsw-font-size-ui-delta)'),
+      step.token + ' must ride the UI size delta')
+    assert.ok(tokens[step.token].light.includes('var(--dsw-font-family-ui)'),
+      step.token + ' must use the UI family role')
+  }
+})
 
 test('all thirteen host UI-chrome steps are remapped', function () {
   assert.deepEqual(UI_ROLE_TOKENS.map(function (step) { return step.token }).sort(),
@@ -277,7 +319,8 @@ test('each UI step carries its reference rung in both palettes', function () {
     assert.equal(tokens[step.token].dark, expectedDark, step.token + ' dark shorthand')
     assert.equal(tokens[step.token + '-font-weight'].light, rung.light, step.token + ' light weight')
     assert.equal(tokens[step.token + '-font-weight'].dark, rung.dark, step.token + ' dark weight')
-    // Weight-only pass: the host's size/leading/family are not re-declared.
+    // The shorthand carries size/leading/family; the separate sub-tokens are
+    // not emitted for chrome (no component reads them — see the module).
     for (const suffix of ['-font-size', '-font-family', '-line-height', '-font-style']) {
       assert.ok(!Object.hasOwn(tokens, step.token + suffix),
         step.token + suffix + ' must stay the host value')
@@ -331,7 +374,7 @@ const REFERENCE_ELEMENT_WEIGHTS = {
   'user bubble text': ['400', '360'],
   'message action buttons': ['500', '460'],
   'thinking accordion trigger': ['500', '460'],
-  'raw thought log': ['400', '360'],
+  'tool-row terminal body': ['400', '360'],
   'composer textarea': ['400', '360'],
   'composer placeholder': ['400', '360'],
   'composer footer action': ['500', '460'],
@@ -388,7 +431,8 @@ test('addressable elements carry their reference weight in the emitted map', fun
       }
     }
     if (row.carrier === 'variable') {
-      // The language tag rides the host's own banner-font variable.
+      // The language tag rides the host's own banner-font variable, one pair
+      // per palette (the block follows the palette — see CODE_SURFACE).
       const light = css.split('.md-code-block {')[1]
       const dark = css.split('body[data-ds-dark-theme] .md-code-block {')[1]
       assert.ok(light.includes('--dsl-code-block-banner-font: '

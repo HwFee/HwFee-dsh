@@ -48,6 +48,8 @@ dsh plugin --profile desktop remove @hwfee/dsh-predict
 
 模型调用走宿主自己的 LLM 服务，所以供应商切换、凭据、重试和计费与正常回合一致，插件不自己拼 HTTP。
 
+预测请求**关闭推理**（`reasoningEffort: 'off'`，DeepSeek 侧即 `thinking: { type: 'disabled' }`）：预测只要一行字，思考纯属浪费，而且思考块一旦漏出来就会出现在输入框里。即使某条路由不认这个开关，流里的推理块也会被丢弃，正文里内联的 `<thinking>…</thinking>` 也会被剥掉——只有正文能变成 ghost 文字。预测不写会话日志，所以对话记录里不会多出一条消息或一个思考块。
+
 ## 已知边界
 
 - 预测的上下文窗口有限（最近若干轮），不包含工具调用的完整结果。
@@ -58,7 +60,7 @@ dsh plugin --profile desktop remove @hwfee/dsh-predict
 
 ```bash
 cd plugins/predict
-npm test        # 新鲜度 + 清单契约 + 解析/退避/幽灵文字/宿主/客户端/选择器/请求，共 8 套
+npm test        # 新鲜度 + 清单契约 + 解析/退避/幽灵文字/宿主/客户端/选择器/请求/推理过滤，共 9 套
 npm run build   # 重新生成 client/client.js（产物提交进 git）
 ```
 

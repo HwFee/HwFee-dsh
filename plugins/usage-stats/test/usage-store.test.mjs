@@ -18,7 +18,9 @@ import zlib from 'node:zlib'
 
 import {
   DEFAULT_CACHE_FILE,
+  DEFAULT_LEDGER_FILE,
   FALLBACK_CACHE_FILE,
+  FALLBACK_LEDGER_FILE,
   HOT_GRACE_MS,
   HOT_TAIL_BYTES,
   SESSIONS_ROOT,
@@ -26,8 +28,10 @@ import {
   aggregateUsage,
   createUsageStore,
   hasPersistedUsageCache,
+  sessionKeyOf,
 } from '../lib/usage-store.js'
 import { CACHE_VERSION } from '../lib/usage-cache.js'
+import { LEDGER_VERSION } from '../lib/usage-ledger.js'
 import { createUsageRoute, USAGE_PATH, MARKER_HEADER, MARKER_VALUE, refuseRequest } from '../lib/usage-route.js'
 import { apply, name } from '../lib/index.js'
 
@@ -495,19 +499,26 @@ try {
     assert.equal(typeof repaired.messages, 'number')
   })
 
-  await test('entries for deleted session files are pruned from the cache', async () => {
+  await test('a deleted session is pruned from the cache but kept in the ledger', async () => {
     const deletedDirectory = path.join(cacheRoot, 'w', 'session-gone')
     const deleted = path.join(deletedDirectory, 'session.v4.jsonl.zstd')
-    writeSession(deleted, [frameOf(record('user/message', 0, at(4, 10, 0), {}))])
-    const store = createUsageStore({ root: cacheRoot, cacheFile })
+    writeSession(deleted, [
+      frameOf(record('user/message', 0, at(4, 10, 0), {})),
+      frameOf(record('assistant/message', 1, at(4, 10, 1), { usage: { totalTokens: 40 } })),
+    ])
+    const ledger = path.join(tempRoot, 'ledger-prune.json')
+    const store = createUsageStore({ root: cacheRoot, cacheFile, ledgerFile: ledger })
     assert.equal((await store.aggregate()).sessions, 2)
 
     rmSync(deletedDirectory, { recursive: true, force: true })
     const after = await store.aggregate()
-    assert.equal(after.sessions, 1)
+    assert.equal(after.sessions, 2, 'the deleted session still counts')
+    assert.equal(after.totalTokens, 70, '30 (still on disk) + 40 (deleted)')
     const doc = JSON.parse(readFileSync(cacheFile, 'utf8'))
-    assert.equal(Object.keys(doc.files).some((file) => file === deleted), false, 'the deleted file is pruned')
+    assert.equal(Object.keys(doc.files).some((file) => file === deleted), false, 'the parse cache still prunes the deleted file')
     assert.equal(Object.keys(doc.files).length, 1)
+    const ledgerDoc = JSON.parse(readFileSync(ledger, 'utf8'))
+    assert.equal(ledgerDoc.sessions['gone'].totalTokens, 40, 'the row is keyed by session id, not by path')
   })
 
   await test('force re-reads everything even with a persisted cache', async () => {
@@ -538,6 +549,108 @@ try {
       'the fallback is the OS temp directory')
     assert.notEqual(DEFAULT_CACHE_FILE, FALLBACK_CACHE_FILE)
     assert.equal(typeof hasPersistedUsageCache(), 'boolean')
+
+    // The ledger is the durable half and lives beside the cache, so Windows
+    // cleanup cannot take the record of already-deleted sessions with it.
+    assert.match(DEFAULT_LEDGER_FILE, /[\\/]cache[\\/]usage-stats[\\/]ledger-[0-9a-f]+\.json$/)
+    assert.ok(DEFAULT_LEDGER_FILE.indexOf(os.tmpdir()) !== 0,
+      'the ledger must not live under the OS temp directory')
+    assert.match(FALLBACK_LEDGER_FILE, /dsh-usage-stats[\\/]ledger-[0-9a-f]+\.json$/)
+    assert.notEqual(DEFAULT_LEDGER_FILE, DEFAULT_CACHE_FILE)
+    assert.notEqual(DEFAULT_LEDGER_FILE, FALLBACK_LEDGER_FILE)
+  })
+
+  // ------------------------------------------------------- lifetime ledger
+
+  process.stdout.write('\nlib/usage-ledger.js — the append-only lifetime ledger\n')
+
+  const ledgerRoot = path.join(tempRoot, 'ledger-root')
+  const ledgerFile = path.join(tempRoot, 'ledger-restart.json')
+  const keptFile = path.join(ledgerRoot, 'w', 'session-keep', 'session.v4.jsonl.zstd')
+  const goneFile = path.join(ledgerRoot, 'w', 'session-gone-two', 'session.v4.jsonl.zstd')
+  writeSession(keptFile, [
+    frameOf(record('user/message', 0, at(6, 9, 0), {})),
+    frameOf(record('assistant/message', 1, at(6, 9, 1), { usage: { totalTokens: 10 } })),
+  ])
+  writeSession(goneFile, [
+    frameOf(record('user/message', 0, at(7, 9, 0), {})),
+    frameOf(record('assistant/message', 1, at(7, 9, 1), { usage: { totalTokens: 90 } })),
+  ])
+
+  await test('session identity is the directory name without the host prefix', async () => {
+    assert.equal(sessionKeyOf(keptFile), 'keep')
+    assert.equal(sessionKeyOf('/x/w/0d1e737b-a511-4d34-869d-e85450541134/session.v4.jsonl.zstd'),
+      '0d1e737b-a511-4d34-869d-e85450541134', 'an older bare-uuid directory is the same identity')
+    assert.equal(sessionKeyOf('/x/w/session-u/session.v4.jsonl.zstd'), 'u')
+  })
+
+  await test('a deleted session survives a restart through the ledger', async () => {
+    const first = await createUsageStore({ root: ledgerRoot, ledgerFile }).aggregate()
+    assert.equal(first.sessions, 2)
+    assert.equal(first.totalTokens, 100)
+
+    rmSync(path.dirname(goneFile), { recursive: true, force: true })
+
+    // A restarted store has no parse cache here, so the surviving log is read
+    // again; the deleted one must arrive from the ledger alone.
+    let reads = 0
+    const restarted = createUsageStore({
+      root: ledgerRoot,
+      ledgerFile,
+      readFile: (file) => { reads += 1; return readFileSync(file) },
+    })
+    const after = await restarted.aggregate()
+    assert.equal(reads, 1, 'only the log still on disk is decoded')
+    assert.equal(after.sessions, 2, 'the deleted session is still a session')
+    assert.equal(after.totalTokens, 100, 'its tokens are still counted')
+    assert.equal(after.perDay['2026-05-07'], 2, 'its day bucket is kept')
+  })
+
+  await test('a growing session replaces its row instead of being counted twice', async () => {
+    let clock = Date.now()
+    const store = createUsageStore({ root: ledgerRoot, ledgerFile, now: () => clock })
+    assert.equal((await store.aggregate()).totalTokens, 100)
+
+    appendFileSync(keptFile, frameOf(record('assistant/message', 2, at(6, 9, 2), { usage: { totalTokens: 5 } })))
+    clock += HOT_GRACE_MS + 1000
+
+    const grown = await store.aggregate()
+    assert.equal(grown.totalTokens, 105, '10 becomes 15, not 10 + 15')
+    assert.equal(grown.sessions, 2)
+    const doc = JSON.parse(readFileSync(ledgerFile, 'utf8'))
+    assert.equal(doc.sessions.keep.totalTokens, 15)
+  })
+
+  await test('force re-reads the logs but never resets the ledger', async () => {
+    const store = createUsageStore({ root: ledgerRoot, ledgerFile })
+    const forced = await store.aggregate({ force: true })
+    assert.equal(forced.sessions, 2, 'the deleted session is still there after a full re-read')
+    assert.equal(forced.totalTokens, 105)
+  })
+
+  await test('a corrupt or poisoned ledger is ignored, not fatal', async () => {
+    writeFileSync(ledgerFile, '{not json')
+    const corrupt = await createUsageStore({ root: ledgerRoot, ledgerFile }).aggregate()
+    assert.equal(corrupt.totalTokens, 15, 'rebuilt from the file still on disk')
+    assert.equal(corrupt.sessions, 1)
+
+    // A structurally valid row with a string count must be dropped, not merged:
+    // concatenating it would turn every later total into a string.
+    writeFileSync(ledgerFile, JSON.stringify({
+      version: LEDGER_VERSION,
+      sessions: {
+        keep: { hasUserMessage: true, messages: 'many', totalTokens: 15, perDay: {}, perHour: new Array(24).fill(0), perModel: {} },
+      },
+    }))
+    const poisoned = await createUsageStore({ root: ledgerRoot, ledgerFile }).aggregate()
+    assert.equal(poisoned.totalTokens, 15)
+    assert.equal(typeof poisoned.messages, 'number')
+
+    // An older version is ignored wholesale, so a shape change cannot be
+    // half-read into a total.
+    writeFileSync(ledgerFile, JSON.stringify({ version: LEDGER_VERSION + 1, sessions: {} }))
+    const outdated = await createUsageStore({ root: ledgerRoot, ledgerFile }).aggregate()
+    assert.equal(outdated.totalTokens, 15)
   })
 
   // ------------------------------------------------------------- usage route

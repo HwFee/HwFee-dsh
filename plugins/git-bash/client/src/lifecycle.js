@@ -7,6 +7,7 @@
 import { en, zh } from './locales.js'
 import { LOCALE_NS, SETTINGS_ROW_ID } from './constants.js'
 import { createSettingsRow } from './settings-row.js'
+import { createRunShellRow } from './tool-view.js'
 import { createModeStore, createShellInfoStore } from './store.js'
 import { installCss } from './styles.js'
 
@@ -33,6 +34,7 @@ export const MODE_MARKER_HEADER = 'x-dsh-git-bash'
  */
 export function createLifecycle({ React, primitives }) {
   const ShellRow = createSettingsRow({ React, primitives })
+  const RunShellRow = createRunShellRow({ React })
 
   return function apply(ctx) {
     // BLOCK BODY, NOT A CONCISE ARROW. `register` returns the disposer that
@@ -108,5 +110,26 @@ export function createLifecycle({ React, primitives }) {
         setMode: (value) => modeStore.set(value),
       }),
     }, ShellRow))
+
+    // THE TOOL'S OWN CARD. Every command-shaped tool renders through this one
+// view so the conversation reads the same whichever shell ran:
+//
+//   run_shell — this package's wire tool (generic card without a view);
+//   pwsh      — the Windows host shell tool (also generic);
+//   bash      — the POSIX host shell tool, which the host DOES draw with its
+//               terminal card, so the registration below outranks it
+//               (`priority` — the host renders the first live entry of the
+//               keyed cell in priority order).
+//
+// The host's supported seam is `tool.call.toolview`, keyed by wire tool name;
+// an uninstalled plugin simply leaves the host's own cards in place.
+    for (const wireName of ['run_shell', 'pwsh', 'bash']) {
+      ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
+        name: 'tool.call.toolview',
+        key: wireName,
+        priority: 100,
+        locale: LOCALE_NS,
+      }, RunShellRow))
+    }
   }
 }

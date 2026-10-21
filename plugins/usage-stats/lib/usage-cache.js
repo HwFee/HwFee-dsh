@@ -18,6 +18,12 @@
  * The file lives under the OS temp directory, keyed by the log root, so it
  * never touches the DSH profile or the session logs and is not part of any
  * task storage.
+ *
+ * THE LIFETIME LEDGER IS A DIFFERENT FILE IN THE SAME DIRECTORY. This module
+ * owns its location (`ledgerFile()` / `ledgerFileFallback()`) because both files
+ * must land side by side and be named from the same root hash, but its contents
+ * are owned by usage-ledger.js. Nothing here is allowed to prune it: an entry in
+ * the parse cache may disappear with its log, a ledger row may not.
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
@@ -59,11 +65,25 @@ function dataRoot() {
  * discovering the failure on the first write.
  */
 export function parseCacheFile(root, options) {
+  return stateFile(root, 'parse-cache', options)
+}
+
+/**
+ * The lifetime ledger for one log root. Sits beside the parse cache (same
+ * directory, same hash) but is a DIFFERENT kind of file: the parse cache is
+ * disposable, the ledger is the only durable record of sessions that have been
+ * deleted from disk. See usage-ledger.js.
+ */
+export function ledgerFile(root, options) {
+  return stateFile(root, 'ledger', options)
+}
+
+/** One `(root, kind)` pair to a file under the data root (or the temp fallback). */
+function stateFile(root, kind, options) {
   const key = crypto.createHash('sha1').update(String(root)).digest('hex').slice(0, 12)
-  const name = 'parse-cache-' + key + '.json'
   const useTemp = options !== null && typeof options === 'object' && options.preferTemp === true
   const base = useTemp ? path.join(os.tmpdir(), 'dsh-usage-stats') : path.join(dataRoot(), 'cache', 'usage-stats')
-  return path.join(base, name)
+  return path.join(base, kind + '-' + key + '.json')
 }
 
 /**
@@ -93,8 +113,11 @@ function finiteNonNegative(value) {
  * Validate and normalise one persisted stats entry. The cache lives in a shared
  * temp directory, so a hand-edited or half-written file must degrade to "read
  * the log again", never to string-concatenated totals.
+ *
+ * Exported because the lifetime ledger stores the SAME shape and must reject a
+ * poisoned row the same way — one validator, two files on disk.
  */
-function sanitizeStats(raw) {
+export function sanitizeStats(raw) {
   if (raw === null) return null
   if (raw === undefined || typeof raw !== 'object') return null
   if (typeof raw.hasUserMessage !== 'boolean') return null

@@ -1,7 +1,7 @@
 import {
   PLUGIN_ID, STYLE_ID,
   DEFAULT_UI_STACK, DEFAULT_CODE_STACK,
-  SCALE_STEPS, clampLineHeight, clampTracking,
+  SCALE_STEPS, clampLineHeight, clampTracking, clampUiFontSize,
 } from './constants.js'
 
 // --------------------------------------------------------- CSS building
@@ -313,6 +313,18 @@ export function buildCss(current) {
   // already carries the host's own families.
   if (uiStack !== null) lines.push('  --dsw-font-family: ' + uiStack + ' !important;')
   if (codeStack !== null) lines.push('  --ds-font-family-code: ' + codeStack + ' !important;')
+
+  // THE UI SIZE ROLE. `--dsh-font-size-ui` feeds cds-theme's
+  // `--dsw-font-size-ui`, the token ladder consumed by tool summaries and code
+  // copy buttons. The chrome's own hardcoded pixel sizes are NOT reachable
+  // through this variable; `uiscale.js` scales those text nodes inline. Emitted
+  // only when the user set an explicit px size: unset keeps the theme's own
+  // fallback (`var(--dsh-content-font-size, 14px)`), which is what an install
+  // that never touched the row should render.
+  const uiSize = clampUiFontSize(current.uiFontSize)
+  if (uiSize > 0) {
+    lines.push('  --dsh-font-size-ui: ' + uiSize + 'px !important;')
+  }
 
   // Row spacing rides the content steps: shift each step's own line-height,
   // never a blanket `line-height` on body — that would rescale menus, buttons

@@ -6,7 +6,7 @@
  * faces (Anthropic{Sans,Serif,Mono}-{Roman,Italic}-Web.woff2), and this module
  * declares them under the exact family names the reference CSS uses —
  * `"anthropic-sans"`, `"anthropic-serif"`, `"anthropic-mono"` — so the token
- * strings from `.reference/open-claude-ui/code-examples/cds-theme.css:205-213`
+ * strings from `.reference/open-claude-ui/code-examples/cds-theme.css:226-234`
  * copy over verbatim and resolve without translation.
  *
  * WEIGHT AXIS (probed with fontTools, not assumed). All six faces declare
@@ -222,7 +222,7 @@ export function fontFaceCss(options) {
  * The stack tokens.
  *
  * THE CJK RUNGS ARE NOW OURS, AND THAT IS A DELIBERATE DEPARTURE FROM THE
- * REFERENCE. The reference CSS (`cds-theme.css:205-213`) names four macOS
+ * REFERENCE. The reference CSS (`cds-theme.css:226-234`) names four macOS
  * families — `PingFang SC`, `PingFang TC`, `Hiragino Sans`,
  * `Apple SD Gothic Neo`. On Windows none of them resolve, so Chinese fell
  * through to whatever the system default happened to be, with unpredictable

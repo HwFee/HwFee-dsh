@@ -136,6 +136,23 @@ test('colour tokens stay legible in BOTH palettes', function () {
   }
 })
 
+// REGRESSION: "工具调用摘要文字变橙".
+//
+// The host uses `state-warn-label` as its amber CATEGORY token: tool call
+// summaries (`.toolAmber`), their children, and trajectory bars all read it.
+// The theme used to overwrite it with the CDS warning orange, so every tool
+// summary looked like a warning. The label keeps the host's own amber pair;
+// the other warn tokens stay themed for real warning surfaces.
+test('the tool-summary token keeps the host amber, not the theme orange', function () {
+  const tokens = buildTokens(sanitize({}))
+  // Literal copies of the host's static amber-600 / amber-400. The token
+  // contract forbids `var(--dsw-static-*)` in this map, so the values are
+  // spelled out; if the host ever moves its ramp these two numbers are the
+  // only place to update.
+  assert.equal(tokens['--dsw-alias-state-warn-label'].light, '#dd8629')
+  assert.equal(tokens['--dsw-alias-state-warn-label'].dark, '#f7ad31')
+})
+
 test('diff row text clears AA over its own wash, on the canvas AND inside a card', function () {
   // THE REGRESSION: the host paints added/removed lines with
   // `color: state-success|error-primary` over a wash of the same hue. Light

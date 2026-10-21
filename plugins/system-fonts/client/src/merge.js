@@ -94,6 +94,11 @@ const ROLE_TITLES = [
   ['text', ['正文字体', 'Text font']],
   ['code', ['代码字体', 'Code font']],
   ['terminal', ['终端字体', 'Terminal font']],
+  // The UI role. It has no HOST row to replace (the host has three font inputs),
+  // so it is only ever OUR row — but it still has to be in this list, or the
+  // merge drops it while moving rows into the host's collapsible group, and the
+  // row silently never appears.
+  ['ui', ['界面字体', 'Interface font']],
 ]
 const ROLE_ORDER = ROLE_TITLES.map(function (entry) { return entry[0] })
 const HOST_FAMILY_TITLES = ROLE_TITLES.reduce(function (all, entry) {

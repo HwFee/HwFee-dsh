@@ -1,4 +1,4 @@
-import { FONT_ROLES, normalizeFontFamily, firstFamily } from './constants.js'
+import { FONT_ROLES, UI_FAMILY_VARIABLE, normalizeFontFamily, firstFamily } from './constants.js'
 
 /**
  * Bridge to the host theme service (`ctx.get('theme')`, provided by
@@ -117,6 +117,24 @@ export function createThemeBridge(theme, settings) {
      * 把族名写入委托给宿主管线；服务缺失时返回 false，由调用方保留本地写入。
      */
     setFamily(role, name) {
+      // THE UI ROLE IS OURS, not the host's. `FONT_ROLES` is exactly
+      // `['text', 'code', 'terminal']`, so `setFontFamily('ui', …)` would throw
+      // `invalid font role` inside the service. The variable it backs is read by
+      // cds-theme's `--dsw-font-family-ui`, whose fallback is the text role —
+      // which is what makes "follows the body by default" true. Writing the
+      // custom property directly is the whole implementation.
+      if (role === 'ui') {
+        try {
+          const value = normalizeFontFamily(name)
+          const body = typeof document === 'undefined' ? undefined : document.body
+          if (body === undefined) return false
+          if (value === '') body.style.removeProperty(UI_FAMILY_VARIABLE)
+          else body.style.setProperty(UI_FAMILY_VARIABLE, value)
+          return true
+        } catch (error) {
+          return false
+        }
+      }
       if (!this.live) return false
       try {
         svc.setFontFamily(role, normalizeFontFamily(name))

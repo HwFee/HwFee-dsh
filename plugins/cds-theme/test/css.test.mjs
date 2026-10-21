@@ -198,11 +198,35 @@ test('the composer interior adds no second ring', function () {
 
 // ----------------------------------------------------------------- code
 
+test('code content is padded evenly inside the block', function () {
+  // The host pads the pre 6px top / 20px bottom / 22px sides, which pins the
+  // code to the top edge and leaves a band below it. The real app centres the
+  // text; the theme mirrors that with symmetric padding.
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const pre = rules.find(function (r) {
+    return r.selector.includes('.md-code-block pre')
+  })
+  assert.ok(pre, 'expected a code-content padding rule')
+  assert.match(pre.body, /padding:\s*14px 18px\s*!important/)
+})
+
+test('terminal line-heights are FIXED (only inline code follows the setting)', function () {
+  // The host pins the terminal line-height in px (22px chat command block,
+  // 18px tool row). These are now pinned on purpose: the code-size setting was
+  // narrowed to the inline chip only, so a terminal cannot drift with it.
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const chat = rules.find(function (r) { return r.selector === '[data-terminal]' })
+  const tool = rules.find(function (r) { return r.selector === '[class*="terminalBody"]' })
+  assert.ok(chat, 'expected the chat terminal rule')
+  assert.ok(tool, 'expected the tool-row terminal rule')
+  assert.match(chat.body, /line-height: 22px/)
+  assert.match(tool.body, /line-height: 18px/)
+})
+
 test('code blocks pair their surface with the palette, in both modes', function () {
-  // THE REGRESSION: an earlier version forced `#0d0d0c` in BOTH palettes while
-  // Shiki kept painting token colours inline from the light palette, producing
-  // black-on-black code in light mode with no CSS-only remedy. Surface and
-  // syntax colour must come from the same palette.
+  // Values taken from the installed Claude desktop app (2.42304.2,
+  // `ion-dist/js/c5d464fa3-Dlv8sG-j.js` `claude-light` / `claude-dark`):
+  // a white block on the warm light canvas, #1a1a19 in dark mode.
   const css = buildCssFor(sanitize({}))
 
   const light = parseRules(css).find(function (r) { return r.selector === '.md-code-block' })
@@ -215,14 +239,41 @@ test('code blocks pair their surface with the palette, in both modes', function 
   assert.ok(dark, 'expected a dark-mode code-block rule')
   assert.ok(dark.body.includes(CODE_SURFACE.dark), 'dark block must use the dark surface')
 
-  assert.equal(CODE_SURFACE.dark, '#0d0d0c', 'C18: the warm near-black, not #0d0d0d')
-  assert.notEqual(CODE_SURFACE.light, CODE_SURFACE.dark,
-    'a single forced surface is what broke the light palette')
+  assert.equal(CODE_SURFACE.light, '#ffffff', 'Claude light block is white')
+  assert.equal(CODE_SURFACE.dark, '#1a1a19', 'Claude dark block is #1a1a19, not the reconstruction #0d0d0c')
 })
 
-test('the code block never forces a text colour it cannot back with a surface', function () {
-  // A `color` on the container is inherited by nothing that matters: Shiki sets
-  // each span inline. Declaring one invites the very mismatch this guards.
+test('code blocks carry the Claude app syntax palette', function () {
+  // The host renders token colours as var(--shiki-token-*), so these
+  // declarations are the actual switch. Values are the app's `claude-light`
+  // and `claude-dark` palettes; see docs/cds-spec.md §8.5.
+  const css = buildCssFor(sanitize({}))
+  const rules = parseRules(css)
+  const light = rules.find(function (r) { return r.selector === '.md-code-block' })
+  const dark = rules.find(function (r) { return r.selector === 'body[data-ds-dark-theme] .md-code-block' })
+  assert.ok(light && dark)
+
+  for (const [expect, rule, name] of [
+    // Values from the app's real Shiki theme (claude-chat-light / -dark, 12
+    // palette slots). The old hex values here were an approximation that had
+    // drifted from it; these are transcribed from the theme factory.
+    ['--shiki-foreground: hsl(220, 20%, 10%)', light, 'light foreground'],
+    ['--shiki-token-keyword: hsl(280, 100%, 38%)', light, 'light keyword'],
+    ['--shiki-token-string: hsl(120, 100%, 25%)', light, 'light string'],
+    ['--shiki-token-constant: hsl(180, 100%, 25%)', light, 'light constant'],
+    ['--shiki-foreground: hsl(220, 15%, 93%)', dark, 'dark foreground'],
+    ['--shiki-token-keyword: hsl(280, 85%, 72%)', dark, 'dark keyword'],
+    ['--shiki-token-string: hsl(95, 75%, 65%)', dark, 'dark string'],
+    ['--shiki-token-constant: hsl(180, 80%, 65%)', dark, 'dark constant'],
+  ]) {
+    assert.ok(rule.body.includes(expect), name + ' missing')
+  }
+})
+
+test('the code block never pins a literal text colour', function () {
+  // Themed code text comes from var(--shiki-foreground) and the per-token
+  // var(--shiki-token-*); a literal hex would survive a palette change and
+  // reappear as the original light-on-light bug.
   const css = buildCssFor(sanitize({}))
   for (const rule of parseRules(css)) {
     if (!rule.selector.includes('md-code-block')) continue
@@ -231,13 +282,21 @@ test('the code block never forces a text colour it cannot back with a surface', 
   }
 })
 
-test('no shiki token variables are declared where the host ignores them', function () {
-  // Shiki runs in `css-variables` mode and writes `style:{color:…}` per span, so
-  // redeclaring --shiki-token-* on an ancestor silently does nothing. The theme
-  // must not pretend otherwise.
+test('shiki variables are scoped to the code block', function () {
+  // The overrides are what recolour the syntax; they must not leak into the
+  // rest of the app (inline code, tool summaries, terminal elsewhere).
+  //
+  // TWO SURFACES ARE ALLOWED, and only two. The markdown block was the first;
+  // the theme's own edit/write diff card (`diffview.js`) is the second, because
+  // it renders token spans by the same mechanism and would otherwise fall back
+  // to the host's palette. Any third site is still a leak.
   const css = buildCssFor(sanitize({}))
-  assert.ok(!css.includes('--shiki-token-'), 'stale shiki token overrides')
-  assert.ok(!css.includes('--shiki-'), 'stale shiki variable overrides')
+  const rules = parseRules(css).filter(function (r) { return r.body.includes('--shiki-token-') })
+  assert.ok(rules.length > 0, 'expected Shiki token overrides')
+  for (const rule of rules) {
+    assert.ok(rule.selector.includes('md-code-block') || rule.selector.includes('data-cds-diffcard'),
+      'Shiki variables leaked outside the block: ' + rule.selector)
+  }
 })
 
 test('code blocks go through the host’s own --dsl-code-block-* seam', function () {
@@ -318,27 +377,36 @@ test('no rule keys on the collapsed-sidebar attribute', function () {
     'data-sidebar-collapsed is an app-frame attribute and must not scope component rules')
 })
 
-test('the code banner paints its own colour instead of going transparent', function () {
-  // THE REGRESSION: the banner sat inside a sticky wrapper whose background is
-  // the page canvas. Making the banner transparent let that canvas colour show
-  // through as a lighter bar across the top of the block.
-  const css = buildCssFor(sanitize({}))
-
-  const banner = parseRules(css).find(function (r) {
+test('the code banner is a floating copy control, not a header strip', function () {
+  // The real Claude app has no header: the copy control floats in the
+  // top-right and appears on hover. The host always renders a banner, so the
+  // wrapper is collapsed, the language label hidden, and only the actions kept
+  // as an overlay — deleting the banner would also delete the copy button.
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const banner = rules.find(function (r) {
     return r.selector === '.md-code-block [data-code-block-banner]'
   })
   assert.ok(banner, 'expected a banner rule')
-  assert.ok(/background:/.test(banner.body), 'the banner must paint a background')
-  assert.ok(!/background:\s*transparent/.test(banner.body),
-    'a transparent banner exposes the sticky wrapper canvas colour')
+  assert.match(banner.body, /position:\s*absolute/)
+  assert.match(banner.body, /background:\s*transparent/)
+  assert.ok(!/border-bottom/.test(banner.body), 'a floating control draws no header seam')
 
-  // The wrapper itself must follow the banner, not the canvas.
-  const wrap = parseRules(css).find(function (r) {
-    return r.selector.includes('bannerWrap')
+  const label = rules.find(function (r) {
+    return r.selector === '.md-code-block [data-code-block-banner] > :first-child'
   })
+  assert.ok(label && /display:\s*none/.test(label.body), 'the language label is hidden')
+
+  const reveal = rules.find(function (r) {
+    return r.selector.includes(':hover [data-code-block-banner]')
+  })
+  assert.ok(reveal && /opacity:\s*1/.test(reveal.body), 'the control appears on hover')
+
+  // The wrapper must collapse, or a blank band remains above the code.
+  const wrap = rules.find(function (r) { return r.selector.includes('bannerWrap') })
   assert.ok(wrap, 'expected a bannerWrap rule')
-  assert.ok(wrap.body.includes('--dsl-code-block-banner-background-color'),
-    'the wrapper must follow the banner colour')
+  assert.match(wrap.body, /position:\s*static/)
+  assert.match(wrap.body, /background:\s*transparent/)
+  assert.match(wrap.body, /min-height:\s*0/)
 })
 
 test('inline code is not painted with the block surface', function () {
@@ -351,6 +419,61 @@ test('inline code is not painted with the block surface', function () {
   for (const surface of [CODE_SURFACE.light, CODE_SURFACE.dark]) {
     assert.ok(!rule.body.includes(surface), 'inline code must not use a block surface')
   }
+})
+
+test('inline code keeps the app chip geometry and fill', function () {
+  // Measured from the installed Claude app: alpha-1 fill (#f0f0ef over the
+  // light canvas), half-pixel alpha-3 edge, 4px radius, 1px 4px padding, and
+  // RED letters. The old 1px inset ring was nearly invisible on the warm
+  // canvas.
+  const rule = parseRules(buildCssFor(sanitize({})))
+    .find(function (r) { return r.selector.includes(':not(pre) > code') })
+  assert.ok(rule, 'expected an inline-code rule')
+  assert.ok(rule.body.includes('background-color: #f0f0ef'),
+    'the chip fill is the app alpha-1 composite')
+  assert.ok(rule.body.includes('border-radius: 4px'),
+    'the chip radius is 4px in the chat markdown rule')
+  assert.ok(rule.body.includes('padding: 1px 4px'),
+    'the chip padding is 1px 4px')
+  assert.ok(rule.body.includes('border: .5px solid hsla(0, 0%, 8%, 0.10)'),
+    'the chip edge is a half-pixel alpha-3 line')
+  assert.ok(rule.body.includes('box-shadow: none'),
+    'the inset ring is gone; it read as an invisible hairline')
+  // The host appends `font-size: .875em !important` (12.25px at 14px body);
+  // the chip must use the code-size token instead.
+  assert.ok(rule.body.includes('font-size: var(--dsw-font-markdown-code-font-size)'),
+    'the chip font size is the code-size token, not the host .875em')
+  assert.ok(rule.selector.includes(':not(:where(h1, h2, h3, h4, h5, h6) code)'),
+    'heading code keeps the host inheritance')
+  // Dark mode shifts the fill/edge and the ink together.
+  const dark = parseRules(buildCssFor(sanitize({}))).find(function (r) {
+    return r.selector.startsWith('body[data-ds-dark-theme]') && r.selector.includes(':not(pre) > code')
+  })
+  assert.ok(dark, 'expected a dark-mode chip rule')
+  assert.ok(dark.body.includes('background-color: #262625'))
+})
+
+test('inline code letters are the app code-chip ink, not body ink', function () {
+  // REGRESSION: the chip once set fill and edge but not `color`, so it
+  // inherited the body's near-black ink. The real app paints these letters
+  // with `--cds-text-danger` — red-600 #8e2626 light, red-300 #ec7e7e dark —
+  // and a transcript screenshot measures every chip at exactly rgb(142,38,38)
+  // against #0b0b0b body text. Unset `color` is the bug this pins: if the
+  // declaration disappears again, the light and dark rules below go red.
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const light = rules.find(function (r) {
+    return !r.selector.startsWith('body[data-ds-dark-theme]') && r.selector.includes(':not(pre) > code')
+  })
+  assert.ok(light, 'expected the light inline-code rule')
+  assert.match(light.body, /color:\s*#8e2626\s*!important/,
+    'the chip letters are red-600, not the inherited body ink')
+
+  const dark = rules.find(function (r) {
+    return r.selector.startsWith('body[data-ds-dark-theme]') && r.selector.includes(':not(pre) > code')
+  })
+  assert.ok(dark, 'expected the dark inline-code rule')
+  assert.match(dark.body, /color:\s*#ec7e7e\s*!important/,
+    'dark mode takes red-300 so the chip stays legible on #262625')
 })
 
 // ---------------------------------------------------------------- motion
@@ -454,16 +577,21 @@ test('every rule is scoped — nothing targets bare html or a wildcard root', fu
 })
 
 test('no rule hard-codes pure black or pure white as a surface', function () {
-  // CDS forbids #000 and #fff as surfaces; code blocks use #0d0d0c and the
-  // switch thumb is allowed to be white because it is a physical control.
+  // CDS forbids #000/#fff surfaces. The code block is the one documented
+  // exception: the real Claude light palette makes it #ffffff (docs §8.5), so
+  // the guard must see that value (`#ffffff` did not match the old `#fff\b`)
+  // and exempt exactly that block rather than passing it by accident.
   const state = sanitize({})
   const css = buildCssFor(state)
   const surfaces = parseRules(css).filter(function (rule) {
     return /(^|[^-])background(-color)?:/.test(rule.body)
   })
   for (const rule of surfaces) {
-    assert.ok(!/background(-color)?:\s*#000\b/i.test(rule.body), 'pure black surface in ' + rule.selector)
-    assert.ok(!/background(-color)?:\s*#fff\b/i.test(rule.body), 'pure white surface in ' + rule.selector)
+    const codeBlock = rule.selector.includes('md-code-block')
+    assert.ok(!/background(-color)?:\s*#000(?:000)?\b/i.test(rule.body), 'pure black surface in ' + rule.selector)
+    if (!codeBlock) {
+      assert.ok(!/background(-color)?:\s*#(?:fff|ffffff)\b/i.test(rule.body), 'pure white surface in ' + rule.selector)
+    }
   }
 })
 
@@ -553,7 +681,7 @@ test('hover-revealed actions: CDS curve + colours, host geometry untouched', fun
   const css = buildCssFor(sanitize({}))
   const rules = parseRules(css)
   const bar = rules.find(function (rule) {
-    return rule.selector === '[data-actions-reveal="hover"] > :last-child'
+    return rule.selector === '[data-actions-reveal] > :last-child'
   })
   assert.ok(bar, 'expected the fade rule on the data-actions-reveal hook')
   assert.match(bar.body, /transition-timing-function:\s*cubic-bezier\(0\.16, 1, 0\.3, 1\)\s*!important/)
@@ -564,7 +692,7 @@ test('hover-revealed actions: CDS curve + colours, host geometry untouched', fun
   }
 
   const button = rules.find(function (rule) {
-    return rule.selector === '[data-actions-reveal="hover"] > :last-child :where(button)'
+    return rule.selector === '[data-actions-reveal] > :last-child :where(button)'
   })
   assert.ok(button, 'expected the action-button colour rule')
   assert.match(button.body, /color:\s*var\(--dsw-alias-label-secondary\)\s*!important/)
@@ -577,16 +705,23 @@ test('hover-revealed actions: CDS curve + colours, host geometry untouched', fun
   assert.ok(hover)
   assert.match(hover.body, /color:\s*var\(--dsw-alias-label-primary\)\s*!important/)
 
-  // No salted class in any of these selectors.
+  // REGRESSION GUARD — these selectors once read `[data-actions-reveal="hover"]`,
+  // and the value is "always" on the tail that ends a response. Only the newest
+  // turn tail stays mounted, so the rule styled NOTHING the reader could see: a
+  // live probe found one such element, value "always", its four buttons computed
+  // 13.33px/400 in the primary colour. Matching the hook by value can only
+  // re-break this, so no rule may qualify it.
   for (const rule of rules) {
     if (!rule.selector.includes('data-actions-reveal')) continue
+    assert.ok(!/data-actions-reveal\s*=/.test(rule.selector),
+      'the reveal hook must not be qualified by value: ' + rule.selector)
     assert.ok(!/_\w+_\d+/.test(rule.selector), 'salted class in ' + rule.selector)
   }
 })
 
 // ------------------------------------- replication item: scroll fade masks
 
-test('scroll fade masks ride the data-scroll-* hooks with the reference ladder', function () {
+test('the step body feathers its bottom edge and never its top edge', function () {
   const css = buildCssFor(sanitize({}))
   const rules = parseRules(css)
   const top = rules.find(function (rule) { return rule.selector === '[data-step-process-body][data-scroll-up]' })
@@ -596,16 +731,26 @@ test('scroll fade masks ride the data-scroll-* hooks with the reference ladder',
   })
   assert.ok(top && bottom && both)
 
-  // Top: transparent → 0d → 26 → 4d → 80 → b3 → d9 → #000 over 24px.
-  // Bottom: opaque → d9 → b3 → 80 → 4d → 26 → 0d → transparent (mirrored).
+  // REGRESSION GUARD — the top edge used to carry the reference's 24px ladder.
+  // It landed on the pinned reasoning header: rows in this body are 24px tall,
+  // and an expanded reasoning row puts its `[data-disclosure-header]` at
+  // `position:sticky; top:0` INSIDE the very element the mask is applied to, so
+  // the 「思考」 label and the first line under it were feathered while a
+  // response streamed. A mask cannot exempt a descendant, so the top edge gets
+  // no fade at all — and this rule must stay a plain `none` so it also cancels
+  // the host's own `.fadeTop` class (0,2,0 attribute selector vs 0,1,0 class).
+  // This test previously ASSERTED the top gradient — i.e. it pinned the bug as
+  // correct behaviour — which is why it is rewritten rather than deleted.
+  assert.equal(top.body.trim(), 'mask-image: none;',
+    'the top edge must not be masked: it is where the reasoning header pins')
+
+  // Bottom: opaque → d9 → b3 → 80 → 4d → 26 → 0d → transparent (mirrored),
+  // evaluated at the reference's 28px fade size (C12).
   const ladder = ['#0000000d', '#00000026', '#0000004d', '#00000080', '#000000b3', '#000000d9']
-  for (const [rule, expected, fadeExpr] of [
-    [top, ladder, /calc\(24px \* \.15\)/],
-    [bottom, ladder.slice().reverse(), /calc\(100% - 24px \* \.15\)/],
-  ]) {
+  for (const [rule, expected] of [[bottom, ladder.slice().reverse()]]) {
     assert.match(rule.body, /mask-image:\s*linear-gradient\(to bottom,/)
-    assert.match(rule.body, fadeExpr)
-    assert.match(rule.body, /calc\(100% - 24px \* \.87\)|calc\(24px \* \.87\)/)
+    assert.match(rule.body, /calc\(100% - 28px \* \.15\)/)
+    assert.match(rule.body, /calc\(100% - 28px \* \.87\)/)
     let previous = -1
     for (const alpha of expected) {
       const at = rule.body.indexOf(alpha)
@@ -613,11 +758,19 @@ test('scroll fade masks ride the data-scroll-* hooks with the reference ladder',
       previous = at
     }
   }
-  assert.match(top.body, /#000 24px\)/)
-  assert.match(top.body, /transparent 0,/)
   assert.match(bottom.body, /transparent 100%\)/)
-  assert.match(bottom.body, /calc\(100% - 24px\)/)
-  assert.match(both.body, /mask-image:.*\),.*\)/, 'both edges layer two gradients')
+  assert.match(bottom.body, /calc\(100% - 28px\)/)
+  // Both edges scrollable: still one gradient, and it is the bottom one.
+  assert.match(both.body, /mask-image:\s*linear-gradient\(to bottom, #000 0,/,
+    'both-scrollable keeps the bottom ladder only')
+  assert.ok(!/transparent 0,/.test(both.body), 'no top gradient when both edges scroll')
+
+  // No rule anywhere in the sheet may put a top-edge gradient on this body.
+  for (const rule of rules) {
+    if (!/data-step-process-body/.test(rule.selector)) continue
+    assert.ok(!/transparent 0,/.test(rule.body),
+      'a top-edge fade would land on the pinned 「思考」 header: ' + rule.selector)
+  }
 
   // Degrade: every mask rule in the sheet is attributed to a scroll hook.
   for (const rule of rules) {
@@ -643,9 +796,9 @@ test('hover-reveal and scroll-fade rules are always emitted under refine', funct
     sanitize({ enabled: true, refine: true }),
   ]
   const expectedActions = [
-    '[data-actions-reveal="hover"] > :last-child',
-    '[data-actions-reveal="hover"] > :last-child :where(button)',
-    '[data-actions-reveal="hover"] > :last-child :where(button):hover',
+    '[data-actions-reveal] > :last-child',
+    '[data-actions-reveal] > :last-child :where(button)',
+    '[data-actions-reveal] > :last-child :where(button):hover',
   ]
   const expectedFades = [
     '[data-step-process-body][data-scroll-down]',
@@ -678,39 +831,21 @@ test('hover-reveal and scroll-fade rules are always emitted under refine', funct
 
 // ------------------------- B-group item 3: code-block details (own switch)
 
-test('code-block details: reference banner label, hairline, disclosure', function () {
+test('code-block details: no banner label, disclosure intact', function () {
   const css = buildCssFor(sanitize({}))
   const rules = parseRules(css)
-  const pick = function (prefix) {
-    return rules.find(function (rule) { return rule.selector.indexOf(prefix) === 0 })
-  }
 
-  // Banner language label (docs/v1/01-…md:449): Mono 10.5/12, 500, uppercase,
-  // letter-spacing .05em. Both banner shapes are addressed by the same hooks.
-  const label = pick('[data-code-block-banner] > :first-child')
-  assert.ok(label, 'expected the banner label rule')
-  assert.match(label.body, /font-family:\s*var\(--ds-font-family-code\)\s*!important/)
-  assert.match(label.body, /font-size:\s*10\.5px\s*!important/)
-  assert.match(label.body, /line-height:\s*12px\s*!important/)
-  assert.match(label.body, /font-weight:\s*500\s*!important/)
-  assert.match(label.body, /text-transform:\s*uppercase\s*!important/)
-  assert.match(label.body, /letter-spacing:\s*0\.05em\s*!important/)
-
-  // The card banner's title keeps the host's casing/metrics.
-  const title = rules.find(function (rule) {
-    return rule.selector === '[data-code-block-banner] > :first-child > :not(:first-child)'
+  // The banner is a floating copy control now (codeRules): the language label
+  // is hidden and there is no header seam to draw — the real app has no header.
+  const label = rules.find(function (rule) {
+    return rule.selector === '.md-code-block [data-code-block-banner] > :first-child'
   })
-  assert.ok(title)
-  assert.match(title.body, /text-transform:\s*none\s*!important/)
-  assert.match(title.body, /font-size:\s*11px\s*!important/)
-
-  // Half-pixel banner seam through the CDS border token (codeRules() ships a
-  // 1px div and survives the switch; this rule is the CDS hairline).
-  const seam = rules.find(function (rule) {
-    return rule.selector.indexOf('[data-code-block-banner]') >= 0
-      && /border-bottom:\s*\.5px solid var\(--dsw-alias-border-l2\)\s*!important/.test(rule.body)
-  })
-  assert.ok(seam)
+  assert.ok(label, 'expected the label-hiding rule')
+  assert.match(label.body, /display:\s*none/)
+  assert.ok(!rules.some(function (rule) {
+    return rule.selector.includes('data-code-block-banner')
+      && /border-bottom:\s*\.5px solid var\(--dsw-alias-border-l2\)/.test(rule.body)
+  }), 'the floating control has no header seam')
 
   // No line-number rules: the host mounts `data-line-numbers` only for its own
   // `numbered` code-block variant, which the chat markdown renderer never
@@ -718,9 +853,13 @@ test('code-block details: reference banner label, hairline, disclosure', functio
   // line numbers.
   assert.ok(!css.includes('data-line-numbers'), 'line-number rules must be gone')
 
-  // Disclosure row: 12/16 Medium, secondary → primary on hover, swift curve.
+  // Disclosure row: 14/20 Regular in the TEXT family, secondary → primary on
+  // hover, swift curve. This is the reference's tool-row root type
+  // (`font-sans text-body font-normal text-secondary`, c734f318c) — the row is
+  // prose, not code; only the terminal card goes monospace.
   const header = rules.find(function (rule) { return rule.selector === '[data-disclosure-header]' })
   assert.ok(header)
+
   assert.match(header.body, /font-size:\s*12px/)
   assert.match(header.body, /line-height:\s*16px/)
   assert.match(header.body, /font-weight:\s*500/)
@@ -744,9 +883,6 @@ test('code-block details are ALWAYS emitted (the switch was removed)', function 
   // are unconditional inside `refine`. A legacy payload that still carries
   // `codeBlockDetails: false` must NOT be able to hide them.
   const alwaysOn = [
-    '.md-code-block [data-code-block-banner], [data-code-block-banner]',
-    '[data-code-block-banner] > :first-child, [data-code-block-banner] > :first-child > :first-child',
-    '[data-code-block-banner] > :first-child > :not(:first-child)',
     '[data-disclosure-header]',
     '[data-disclosure-header] :where(span, div, button)',
     '[data-disclosure-header]:hover, [data-disclosure-header]:focus-within',
@@ -973,7 +1109,7 @@ test('the always-on rule sets are byte-identical to the verified sheet', functio
   }
   assert.equal(countRules(CODE_BLOCK_RULES), CODE_BLOCK_RULE_COUNT)
   assert.equal(countRules(MARKDOWN_BODY_RULES), MARKDOWN_BODY_RULE_COUNT)
-  assert.equal(CODE_BLOCK_RULE_COUNT, 6)
+  assert.equal(CODE_BLOCK_RULE_COUNT, 3)
   assert.equal(MARKDOWN_BODY_RULE_COUNT, 10)
 })
 
@@ -1047,6 +1183,21 @@ test('the three motion curves are tokens: unconditional and exact', function () 
   assert.ok(withSpring.includes('scale(.96)'), 'the press transform is part of the sheet')
   assert.equal(buildCssFor(sanitize({ buttonSpring: false })), withSpring,
     'a retired switch field must change nothing')
+})
+
+test('the UI font role is unconditional, master-switched and excludes code', function () {
+  const ui = 'body {\n  font-family: var(--dsw-font-family-ui) !important;\n}'
+  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {\n  font-family: var(--dsw-font-family) !important;\n}'
+  for (const state of [{}, { refine: false }]) {
+    const sheet = buildCssFor(sanitize(state))
+    assert.ok(sheet.includes(ui), 'chrome must take the UI family: ' + JSON.stringify(state))
+    assert.ok(sheet.includes(text), 'conversation content must keep the text family: ' + JSON.stringify(state))
+  }
+  assert.equal(buildCssFor(sanitize({ enabled: false })), '')
+  assert.ok(hasRule(buildCssFor(sanitize({})),
+    /:not\(code\):not\(pre\):not\(kbd\):not\(samp\)/,
+    /font-family: var\(--dsw-font-family\)/),
+    'code, pre, kbd and samp must be excluded from the text-role rule')
 })
 
 test('the button-spring rules only reach controls this plugin owns', function () {
@@ -1274,4 +1425,130 @@ test('no markdown-body rule hard-codes a host surface or a Windows hook', functi
     assert.ok(!/data-windows-/.test(rule.selector), 'Windows hook in ' + rule.selector)
   }
   assert.ok(!css.includes('data-windows-titlebar') && !css.includes('data-windows-menu'))
+})
+
+// ------------------------------------------------ settings row hairlines
+
+/**
+ * THE "THICK LINE" REGRESSION. The host replaces a slot entry that threw with an
+ * EMPTY `div[data-slot-error]`. That div is still a direct child of the settings
+ * outlet and it is zero-height, so a `> *` hairline painted a second 0.5px line
+ * one device pixel under the row above. Measured on a real screenshot, that
+ * turned the line under 「默认 shell」 into two device rows of full-strength ink
+ * while every other separator was one — the user reports it as "a thick line".
+ *
+ * The rule must therefore claim only cells that hold a row. The last-cell
+ * clearing rule stays `> *:last-child` — the host's own wording — so this sheet
+ * keeps exactly one `:has()` discipline (child-scoped hiders), which
+ * `thememode.test.mjs` pins.
+ */
+test('the settings hairline only claims cells that hold a row', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  for (const slot of ['settings.general.item', 'settings.appearance.item']) {
+    const selector = '[data-slot="' + slot + '"] > *'
+    const painted = rules.filter(function (rule) {
+      return rule.selector.includes(selector) && /border-bottom:\s*0?\.5px/.test(rule.body)
+    })
+    assert.equal(painted.length, 1, slot + ' must have exactly one hairline rule, got ' + painted.length)
+    assert.match(painted[0].selector, /> \*:where\(:not\(:empty\)/,
+      'an empty slot cell must not inherit the row hairline: ' + painted[0].selector)
+    assert.match(painted[0].selector, /:not\(\[data-slot-error\]\)/,
+      'a crashed occupant must not claim row spacing: ' + painted[0].selector)
+    // The guard must stay inside `:where()`, or its specificity beats the
+    // last-cell rule and every section grows a bottom line.
+    assert.ok(!/> \*:not\(/.test(painted[0].selector),
+      'the hairline guard must not raise specificity: ' + painted[0].selector)
+
+    const cleared = rules.filter(function (rule) {
+      return rule.selector.includes(selector) && /border-bottom:\s*none/.test(rule.body)
+    })
+    assert.equal(cleared.length, 1, slot + ' must clear the hairline on its last cell')
+    assert.match(cleared[0].selector, /> \*:last-child/,
+      'the last cell keeps the host\'s own clearing rule: ' + cleared[0].selector)
+  }
+})
+
+// ------------------------------------------------- tool rows and wrapping
+
+/**
+ * The theme's wrap decision: every code surface wraps, and the host's per-block
+ * wrap toggle is gone. The toggle is the ONLY banner button with
+ * `aria-pressed`; the copy button has none, which is what keeps the rule
+ * language-independent (the aria-label is localised).
+ */
+test('code blocks wrap by default and the wrap toggle is removed', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const pre = rules.find(function (rule) {
+    return rule.selector.includes('.md-code-block pre') && /white-space:\s*pre-wrap/.test(rule.body)
+  })
+  assert.ok(pre, 'expected the markdown code block to wrap')
+  assert.match(pre.body, /overflow-wrap:\s*anywhere/, 'wrapped code must break long tokens')
+
+  const lines = rules.find(function (rule) {
+    return rule.selector.includes('[data-code-wrap] [class*="_line_"]') && /white-space:\s*pre-wrap/.test(rule.body)
+  })
+  assert.ok(lines, 'diff/read line rows are not <pre>, so they need their own wrap rule')
+
+  const toggle = rules.find(function (rule) {
+    return rule.selector.includes('[data-code-block-banner] button[aria-pressed]')
+  })
+  assert.ok(toggle, 'expected a rule for the wrap toggle')
+  assert.match(toggle.body, /display:\s*none/, 'the wrap toggle must be hidden')
+})
+
+/** One inset card: labels gone, the request boxed, the response flowing. */
+test('tool cards: generic labels removed, request boxed, response bare', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const label = rules.find(function (rule) { return rule.selector.includes('[class*="_ioLabel"]') })
+  assert.ok(label, 'expected the generic input/output labels to be addressed')
+  assert.match(label.body, /display:\s*none/)
+
+  const divider = rules.find(function (rule) { return rule.selector.includes('[class*="_ioDivider"]') })
+  assert.ok(divider, 'expected the divider between input and output to be addressed')
+
+  const request = rules.find(function (rule) {
+    return rule.selector.includes('[class*="_ioSection"]:first-of-type')
+  })
+  assert.ok(request, 'expected the request section to be styled')
+  assert.match(request.body, /border-radius:\s*var\(--dsw-radius-lg\)/)
+  assert.match(request.body, /background:\s*var\(--dsw-alias-markdown-code-block\)/)
+
+  const seat = rules.find(function (rule) { return rule.selector.includes('[class*="_bodyWrap"]') })
+  assert.ok(seat, 'expected the expanded body to be inset under the row')
+  assert.match(seat.body, /margin:\s*4px 0 8px 22px/)
+})
+
+/**
+ * The diff card matches the reference's payload card: full-bleed hunk rows and
+ * a numbered gutter. It does NOT repeat the file path — the tool row above it
+ * already names the file for edit, write and read alike.
+ */
+test('diff card: no path line, full bleed, numbered gutter', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const path = rules.find(function (rule) {
+    return rule.selector.includes('[data-diff] [class*="_path_"]')
+      && rule.selector.includes('[data-read] [class*="_path_"]')
+      && /display:\s*none/.test(rule.body)
+  })
+  assert.ok(path, 'the in-card path line must be hidden for edit and read alike')
+
+  const body = rules.find(function (rule) {
+    return rule.selector.includes('[data-diff] > [class*="_body_"]')
+  })
+  assert.ok(body, 'expected the diff body to be styled')
+  assert.match(body.body, /grid-template-columns:\s*minmax\(0, 1fr\)/,
+    'the max-content grid column must be pinned or wrapped lines overflow')
+  assert.match(body.body, /counter-reset:\s*cds-diff-line/)
+
+  const number = rules.find(function (rule) {
+    // The selector now carries `:not([class*="_path_"]):not([class*="_gap_"])`
+    // between the row class and `::after` — a separator must not be numbered —
+    // so this matches the same rule without pinning the two names adjacent.
+    return /\[data-diff\] \[class\*="_line_"\]/.test(rule.selector)
+      && /::after/.test(rule.selector)
+      && /content:\s*counter\(cds-diff-line\)/.test(rule.body)
+  })
+  assert.ok(number, 'expected the line-number gutter')
+  assert.match(number.body, /content:\s*counter\(cds-diff-line\)/)
+  assert.match(number.body, /text-align:\s*right/)
 })

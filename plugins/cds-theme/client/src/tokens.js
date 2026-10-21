@@ -3,6 +3,7 @@ import {
   LIGHT_SURFACES, DARK_SURFACES, LIGHT_TEXT, DARK_TEXT,
   LIGHT_BORDERS, DARK_BORDERS, CLAY, ACCENT_PRESETS,
   LIGHT_STATE, DARK_STATE, RADII, SHADOWS, EASING, DURATIONS,
+  CODE_SURFACE,
 } from './palette.js'
 import { resolveSurface, mixColor } from './color.js'
 import { buildTypographyTokens, TYPOGRAPHY_TOKEN_NAMES } from './typography.js'
@@ -34,6 +35,7 @@ function accentOf(state, scheme) {
   // rings, borders, breathing lights — which carries no text. A solid button
   // fill carries a white label, and lifting it in dark mode drops that label to
   // 3.96:1, below AA. So the fill and the accent deliberately diverge here.
+  // Recorded as D6 in `docs/cds-spec.md` §9.3; see §2.4 for the contrast figures.
   const toward = '#000000'
   return {
     brand: brand,
@@ -372,8 +374,10 @@ export function buildTokens(state) {
 
   // ----------------------------------------------------------- markdown
   pair('--dsw-alias-markdown-inline-code', lightSurf.nested, darkSurf.nested)
-  pair('--dsw-alias-markdown-code-block', lightSurf.nested, darkSurf.nested)
-  pair('--dsw-alias-markdown-code-block-banner', lightSurf.hover, darkSurf.nested)
+  // Code/tool-body surface from the installed Claude app (tool-row expanded
+  // command: #fcfcfb / #151515), not the generic nested rung.
+  pair('--dsw-alias-markdown-code-block', '#fcfcfb', '#151515')
+  pair('--dsw-alias-markdown-code-block-banner', CODE_SURFACE.light, CODE_SURFACE.dark)
   pair('--dsw-alias-markdown-code-segment-selected', lightSurf.raised, darkSurf.raised)
   pair('--dsw-alias-markdown-code-segment-unselected', lightSurf.nested, darkSurf.nested)
   pair('--dsw-alias-markdown-citation', lightSurf.nested, darkSurf.nested)
@@ -387,7 +391,25 @@ export function buildTokens(state) {
   pair('--dsw-alias-state-warn-primary', LIGHT_STATE.warn, DARK_STATE.warn)
   pair('--dsw-alias-state-warn-secondary', LIGHT_STATE.warnSecondary, DARK_STATE.warnSecondary)
   pair('--dsw-alias-state-warn-tertiary', LIGHT_STATE.warnSubtle, DARK_STATE.warnSubtle)
-  pair('--dsw-alias-state-warn-label', LIGHT_STATE.warn, DARK_STATE.warn)
+  // THE LABEL IS THE HOST'S AMBER, NOT THE THEME'S ORANGE.
+  //
+  // The host consumes this token as its "amber category", not only for real
+  // warnings: `.toolAmber` colours a TOOL CALL SUMMARY with it, `.subtoolAmber`
+  // its children, and the trajectory's `[data-timeline-span="tool"]` bars. The
+  // host's own value is `var(--dsw-static-amber-600)` (#dd8629).
+  //
+  // Overriding it with the CDS warning orange (#e8590c) made every tool summary
+  // look like a warning — reported as "工具调用摘要文字变橙". CDS has no warn
+  // token at all (docs/cds-spec.md §1.4: the nearest documented state colour is
+  // Tailwind amber), and this token's consumers expect amber, so the label keeps
+  // the host's own pair. The primary/secondary/tertiary tokens stay themed:
+  // they drive actual warning borders/chips, where the theme's palette is
+  // intentional.
+  // The literals ARE the host's `--dsw-static-amber-600` (#dd8629) and
+  // `--dsw-static-amber-400` (#f7ad31). They are written out because this
+  // theme's token contract forbids leaking host static ramp names into the
+  // override map — a static that disappears would leave the token unresolved.
+  pair('--dsw-alias-state-warn-label', '#dd8629', '#f7ad31')
   pair('--dsw-alias-state-error-primary', LIGHT_STATE.error, DARK_STATE.error)
   pair('--dsw-alias-state-error-secondary', LIGHT_STATE.errorSecondary, DARK_STATE.errorSecondary)
   // The host defines an error TERTIARY too (`var(--dsw-static-red-100/900)` in

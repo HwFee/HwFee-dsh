@@ -1,10 +1,11 @@
 import { installPanelCss, removePanelCss } from './panel.js'
 import { createThemeBridge } from './bridge.js'
 import { LOCALE_NS, en, zh } from './locales.js'
+import { uiScaleFactor } from './constants.js'
 
 // ------------------------------------------------------------ lifecycle
 
-export function createLifecycle({ settings, typography, chrome, catalogue, panel, merger, locale, React, primitives, onTheme }) {
+export function createLifecycle({ settings, typography, chrome, uiScaler, catalogue, panel, merger, locale, React, primitives, onTheme }) {
   let applied = false
 
   /**
@@ -22,6 +23,7 @@ export function createLifecycle({ settings, typography, chrome, catalogue, panel
       if (stopped) return
       typography.apply()
       if (chrome) chrome.apply()
+      if (uiScaler) uiScaler.refresh()
     }
     const cancel = []
     if (typeof window.requestAnimationFrame === 'function') {
@@ -49,9 +51,14 @@ export function createLifecycle({ settings, typography, chrome, catalogue, panel
       typography.activate()
       catalogue.activate()
       if (chrome) chrome.activate()
+      if (uiScaler) {
+        uiScaler.activate()
+        uiScaler.setScale(uiScaleFactor(settings.getState()))
+      }
       return function () {
         applied = false
         catalogue.dispose()
+        if (uiScaler) uiScaler.teardown()
         if (chrome) chrome.teardown()
         typography.teardown()
         removePanelCss()
@@ -187,12 +194,13 @@ export function createLifecycle({ settings, typography, chrome, catalogue, panel
     //
     // `settings.general.item` is a flat sibling list: a slot can only inject
     // rows NEXT TO the host's FontSettingsGroup, never inside it. So the rows
-    // register here at orders 12–16 (right behind the host's group) and
+    // register here at orders 12–17 (right behind the host's group) and
     // `merge.js` reparents them INSIDE the group's collapsible font region —
-    // each picker after the official family row it replaces, sliders last, the
-    // official inputs covered (hidden, not removed). Collapsed, the host does
-    // not render that region: the rows are then seated back in the slot outlet
-    // and hidden, so they expand/collapse with the group.
+    // each picker after the official family row it replaces (the UI picker
+    // after them), sliders last, the official inputs covered (hidden, not
+    // removed). Collapsed, the host does not render that region: the rows are
+    // then seated back in the slot outlet and hidden, so they expand/collapse
+    // with the group.
     //
     // Every family write still goes through `theme.setFontFamily(role, value)`
     // (see `panel.js` / `bridge.js`), so the host's persisted state and our

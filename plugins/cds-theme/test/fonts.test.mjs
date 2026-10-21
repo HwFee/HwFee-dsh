@@ -309,8 +309,22 @@ test('the reference stylesheet still supplies the Latin half of the stack', func
     return
   }
   const reference = readFileSync(REFERENCE_CSS, 'utf8').split(/\r?\n/)
-  const lines = reference.slice(204, 213) // file lines 205-213 (1-based)
+
+  // Locate the nine-line stack block by CONTENT, not by a hardcoded slice.
+  // The old `slice(204, 213)` broke the moment upstream inserted 12 lines above
+  // it (open-claude-ui afe22f3/every-commit after ddf3aea): the window slid onto
+  // the easing-curve block and this test reported "the reference no longer
+  // carries the expected token" while all five tokens were still present,
+  // 21 lines lower. Anchoring on the first and last line keeps the assertion
+  // about the tokens and lets upstream insert lines above the block freely.
+  const first = reference.findIndex(function (line) {
+    return line.trim() === '--font-cjk-sans-sc: "PingFang SC";'
+  })
+  assert.notEqual(first, -1, 'the reference stack block start disappeared')
+  const lines = reference.slice(first, first + 9)
   assert.equal(lines.length, 9)
+  assert.equal(lines[8].trim(), '--font-anthropic-mono: "anthropic-mono", ui-monospace, monospace;',
+    'the reference stack block no longer ends where it used to')
   const css = fontStackCss()
 
   // The four macOS family NAMES are still pinned verbatim, and so is the

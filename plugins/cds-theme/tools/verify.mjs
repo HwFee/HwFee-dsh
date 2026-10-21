@@ -417,7 +417,7 @@ const defaultSheet = buildCssFor(sanitize({}))
 const noRefine = buildCssFor(sanitize({ refine: false }))
 const legacySheet = buildCssFor(sanitize({ revealActions: false, scrollFades: false }))
 
-line('hover-reveal rules under refine', defaultSheet.includes('[data-actions-reveal="hover"] > :last-child') ? 'present' : 'MISSING')
+line('hover-reveal rules under refine', defaultSheet.includes('[data-actions-reveal] > :last-child') ? 'present' : 'MISSING')
 line('scroll-fade rules under refine', defaultSheet.includes('[data-step-process-body][data-scroll-up]') ? 'present' : 'MISSING')
 line('same rules with refine=false',
   !noRefine.includes('data-actions-reveal') && !noRefine.includes('data-step-process-body') ? 'absent' : 'STILL PRESENT')
@@ -584,8 +584,8 @@ const checks = [
     && tokens['--dsw-font-markdown-base-font-weight'].dark === '360'],
   ['headings are 580/550', tokens['--dsw-font-markdown-h1-font-weight'].light === '580'
     && tokens['--dsw-font-markdown-h1-font-weight'].dark === '550'],
-  ['code block is 12/17.5 400', tokens['--dsw-font-markdown-code-block-font-size'].light === 'calc(12px + var(--dsh-code-font-delta))'
-    && tokens['--dsw-font-markdown-code-block-line-height'].light === 'calc(17.5px + var(--dsh-code-font-delta))'],
+  ['code block is 12/17 400', tokens['--dsw-font-markdown-code-block-font-size'].light === '12px'
+    && tokens['--dsw-font-markdown-code-block-line-height'].light === '17px'],
   ['inline code is 12/14 500', tokens['--dsw-font-markdown-code-font-size'].light === 'calc(12px + var(--dsh-code-font-delta))'
     && tokens['--dsw-font-markdown-code-line-height'].light === 'calc(14px + var(--dsh-code-font-delta))'],
   ['all 13 UI steps remapped', UI_ROLE_TOKENS.every(function (step) {
@@ -652,7 +652,7 @@ const checks = [
     dynamicChars < 100000 && inlineFontChars > 800000
     && staticChars > 0],
   ['hover-reveal rules present under refine',
-    defaultSheet.includes('[data-actions-reveal="hover"] > :last-child')
+    defaultSheet.includes('[data-actions-reveal] > :last-child')
     && defaultSheet.includes('transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1)')],
   ['scroll-fade rules present under refine',
     defaultSheet.includes('[data-step-process-body][data-scroll-up]')
@@ -678,10 +678,14 @@ const checks = [
     && !defaultSheet.includes('data-windows-menu')],
   ['the code-block detail rules are ALWAYS on (its switch was removed)',
     Object.hasOwn(sanitize({}), 'codeBlockDetails') === false
-    && detailsRules.length === 6
+    // This block used to carry the banner half as well (6 rules). `codeRules()`
+    // took the banner over when the copy control became a floating rail on the
+    // tool row, so the block now owns the disclosure half only. Assert the
+    // shape it actually has — and keep the invariant that matters: every rule
+    // in it targets the disclosure row, and the whole set is always on.
+    && detailsRules.length === 3
     && detailsRules.every(function (rule) {
-      return rule.selector.includes('data-code-block-banner')
-        || rule.selector.includes('data-disclosure-header')
+      return rule.selector.includes('data-disclosure-header')
     })],
   ['a legacy {codeBlockDetails:false} emits the identical sheet',
     buildCssFor(sanitize({ codeBlockDetails: false })) === defaultSheet],

@@ -44,6 +44,18 @@ dsh plugin --profile desktop remove @hwfee/dsh-git-bash
 
 **非零退出不是错误。** `grep` 没匹配到会退出 1，那是一个结果而不是故障，工具照常返回退出码和输出。只有"shell 根本起不来"才算错误。
 
+**命令卡片。** `run_shell`、宿主的 `pwsh` 与 `bash` 三种命令行都渲染成同一张卡（`tool.call.toolview`，按 wire 名注册；宿主原有的 `bash` 视图用 `priority` 让位）：
+
+```
+Ran a command                       ← 描述（模型没写时用「已运行命令」）
+┌──────────────────────────────┐
+│ $ grep -rn "box-shadow" src  │   ← 带 $ 前缀的命令，命令/参数/字符串分色
+└──────────────────────────────┘
+输出的前几行直接流淌在卡片里……        ← 无标签、无第二个框
+```
+
+罐头输出（`[gitbash · …] exit 0 · direct` 那几行）保持原样，它是结果的一部分。卡片默认自动换行，长输出在 280px 后内部滚动，不会把对话撑高。
+
 ## 与宿主 shell 的关系
 
 宿主的 shell 是 `ctx.shell` 能力接缝，**每个上下文只能有一个实现**。Windows 上基础 bundle 组装的是 `pwsh-sandbox`（PowerShell），POSIX 上是 `bash-sandbox`。
@@ -58,7 +70,7 @@ dsh plugin --profile desktop remove @hwfee/dsh-git-bash
 
 ```bash
 cd plugins/git-bash
-npm test        # 新鲜度 + 清单契约 + 解析 + 工具 + 状态，31 项
+npm test        # 新鲜度 + 清单契约 + 解析 + 工具 + 状态 + 命令卡片，113 项
 npm run build   # 重新生成 client/client.js（产物提交进 git）
 ```
 

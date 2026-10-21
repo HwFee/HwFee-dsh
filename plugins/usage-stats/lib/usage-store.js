@@ -27,7 +27,13 @@
  *     that grew by more than the tail cap is always re-read — that is a whole
  *     session of new records, not a torn last frame.
  *
- * `?refresh=1` (force) bypasses every layer and re-reads all logs.
+ * THE SUMMARY IS NOT "WHAT IS ON DISK". It is the union of the lifetime ledger
+ * (usage-ledger.js): one row per session, replaced when that session grows and
+ * NEVER removed when its log is deleted. Archiving leaves the log in place, so
+ * an archived session keeps being counted either way; deleting removes the log,
+ * and only the ledger remembers it. `?refresh=1` (force) still re-reads every
+ * log and clears the parse cache — the ledger is not a cache and survives it.
+ * Deleting `ledger-<hash>.json` is the explicit reset.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -37,14 +43,38 @@ import zlib from 'node:zlib'
 
 import {
   CACHE_VERSION,
-  hasParseCache, loadParseCache, parseCacheFile, parseCacheFileFallback, saveParseCache,
+  hasParseCache, ledgerFile, loadParseCache, parseCacheFile, parseCacheFileFallback, saveParseCache,
 } from './usage-cache.js'
+import { loadLedger, saveLedger } from './usage-ledger.js'
 
 /** zstd frame magic; every concatenated frame starts with it. */
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 
 /** Contract-fixed log root. Exported so the route layer and tests can name it. */
 export const SESSIONS_ROOT = path.join(os.homedir(), '.dsh', 'sessions')
+
+/** The prefix the host puts on a session directory (`session-<uuid>`). */
+const SESSION_DIR_PREFIX = 'session-'
+
+/**
+ * The durable identity of one session: its directory name with the host's
+ * `session-` prefix removed.
+ *
+ * Keyed by the SESSION, not the file path, because the ledger must survive the
+ * log disappearing — and because current directory names are `session-<uuid>`
+ * while older ones are the bare uuid, and both spellings are the same session.
+ *
+ * One session directory holds one `session.v4.jsonl.zstd` (the host's layout), so
+ * the directory name is a sufficient key. A second log file in the same
+ * directory would share the row and the later parse would win; that is the one
+ * shape this key cannot represent.
+ */
+export function sessionKeyOf(file) {
+  const text = typeof file === 'string' ? file : ''
+  const directory = path.basename(path.dirname(text))
+  if (directory === '' || directory === '.' || directory === path.sep) return text
+  return directory.startsWith(SESSION_DIR_PREFIX) ? directory.slice(SESSION_DIR_PREFIX.length) : directory
+}
 
 /**
  * Resolved once at import: Node 22.15+ and 24 ship zstd, and the package
@@ -350,6 +380,11 @@ function yieldToEventLoop() {
  * @param options.cacheFile persisted-cache path; null (the default for custom
  *        roots) keeps the store purely in memory — tests stay hermetic, and the
  *        module-level store passes a real path explicitly
+ * @param options.ledgerFile lifetime-ledger path; null keeps it in memory. A
+ *        custom root does not inherit the real ledger: two different corpora
+ *        must never share rows.
+ * @param options.ledgerFallbackFile temp-directory ledger location, used when
+ *        the data root is read-only
  * @param options.now       clock, injected by tests for the hot-tail window
  * @param options.graceMs   hot-tail recency window
  * @param options.tailBytes hot-tail max appended size
@@ -363,6 +398,8 @@ export function createUsageStore({
   decompress = ZSTD_DECOMPRESS,
   cacheFile = null,
   fallbackFile = null,
+  ledgerFile = null,
+  ledgerFallbackFile = null,
   now = Date.now,
   graceMs = HOT_GRACE_MS,
   tailBytes = HOT_TAIL_BYTES,
@@ -373,6 +410,9 @@ export function createUsageStore({
   let cache = new Map()
   let diskLoaded = false
   let savedOnce = false
+  let ledger = new Map()
+  let ledgerLoaded = false
+  let ledgerSavedOnce = false
   let walk = null
   let inflight = null
 
@@ -400,8 +440,14 @@ export function createUsageStore({
       cache = cacheFile === null ? new Map() : loadParseCache(cacheFile)
       diskLoaded = true
     }
+    if (!ledgerLoaded) {
+      ledger = ledgerFile === null ? new Map() : loadLedger(ledgerFile)
+      ledgerLoaded = true
+    }
     if (force) {
       // A true re-read: nothing cached in memory, nothing reused, walk fresh.
+      // The ledger is deliberately NOT cleared — it is the record of sessions
+      // whose logs may no longer exist, so nothing on disk could rebuild it.
       cache = new Map()
       walk = null
     }
@@ -416,9 +462,11 @@ export function createUsageStore({
 
     let stale = false
     let dirty = false
+    let ledgerDirty = false
 
     // Rebuilt rather than mutated so entries for deleted session files fall out
-    // of the cache on their own.
+    // of the CACHE on their own. The ledger is the opposite: a row is only ever
+    // added or replaced, never dropped because its log is gone.
     const next = new Map()
     for (const file of files) {
       let stat
@@ -431,6 +479,7 @@ export function createUsageStore({
       const cached = cache.get(file)
       let stats
       let entry
+      let fresh = false
       if (!force && cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
         stats = cached.stats
         entry = cached
@@ -455,13 +504,29 @@ export function createUsageStore({
         }
         entry = { mtimeMs: stat.mtimeMs, size: stat.size, stats }
         dirty = true
+        fresh = true
       }
 
       next.set(file, entry)
-      mergeFileStats(summary, stats)
+
+      // A row REPLACES itself, so a growing session is never counted twice; a
+      // failed re-read keeps whatever the row already earned because `stats` is
+      // null and we skip it. On a cache hit the row is only filled in when it is
+      // missing (a fresh ledger, or one written before this feature existed).
+      if (stats !== null) {
+        const key = sessionKeyOf(file)
+        if (fresh || !ledger.has(key)) {
+          ledger.set(key, stats)
+          ledgerDirty = true
+        }
+      }
     }
     if (next.size !== cache.size) dirty = true
     cache = next
+
+    // The summary is the ledger, not the file table: every session ever counted
+    // keeps its place after the log is deleted.
+    for (const stats of ledger.values()) mergeFileStats(summary, stats)
 
     if (stale) summary.stale = true
 
@@ -477,6 +542,16 @@ export function createUsageStore({
         if (saveParseCache(fallbackFile, cache)) cacheFile = fallbackFile
       }
       savedOnce = true
+    }
+    if (ledgerFile !== null && (ledgerDirty || !ledgerSavedOnce)) {
+      // Same fallback discipline as the parse cache, for the same reason: a
+      // read-only data root must not silently turn the lifetime record into a
+      // per-process one. Here the file also carries rows that exist nowhere
+      // else, so a failed write is the only way history can be lost.
+      if (!saveLedger(ledgerFile, ledger) && ledgerFallbackFile !== null) {
+        if (saveLedger(ledgerFallbackFile, ledger)) ledgerFile = ledgerFallbackFile
+      }
+      ledgerSavedOnce = true
     }
     return summary
   }
@@ -511,8 +586,17 @@ export function createUsageStore({
 export const DEFAULT_CACHE_FILE = parseCacheFile(SESSIONS_ROOT)
 /** The temp-directory fallback, used when the data root cannot be written. */
 export const FALLBACK_CACHE_FILE = parseCacheFileFallback(SESSIONS_ROOT)
+/** The lifetime ledger next to the cache; deleting it resets the totals. */
+export const DEFAULT_LEDGER_FILE = ledgerFile(SESSIONS_ROOT)
+/** The temp-directory ledger fallback, used only when the data root is unwritable. */
+export const FALLBACK_LEDGER_FILE = ledgerFile(SESSIONS_ROOT, { preferTemp: true })
 
-const defaultStore = createUsageStore({ cacheFile: DEFAULT_CACHE_FILE, fallbackFile: FALLBACK_CACHE_FILE })
+const defaultStore = createUsageStore({
+  cacheFile: DEFAULT_CACHE_FILE,
+  fallbackFile: FALLBACK_CACHE_FILE,
+  ledgerFile: DEFAULT_LEDGER_FILE,
+  ledgerFallbackFile: FALLBACK_LEDGER_FILE,
+})
 
 /**
  * True when a previous Host run left a parse cache behind. The plugin uses this

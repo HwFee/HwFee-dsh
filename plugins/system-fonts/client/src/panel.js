@@ -1,5 +1,5 @@
 import {
-  PLUGIN_ID, PANEL_STYLE_ID, clampLineHeight, clampTracking,
+  PLUGIN_ID, PANEL_STYLE_ID, clampLineHeight, clampTracking, clampUiFontSize, UI_FONT_BASE_PX,
 } from './constants.js'
 import { createLocaleHandle, DEFAULT_LOCALE } from './locales.js'
 
@@ -18,7 +18,10 @@ export const PANEL_CSS = [
   '.dsf-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }',
   '.dsf-trigger .dsf-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
   '.dsf-trigger .dsf-chevron { flex: none; margin-left: auto; }',
-  '.dsf-trigger .dsf-placeholder { color: var(--dsw-alias-label-tertiary); }',
+  // NO placeholder grey. An UNSET family means "the host's own stack", which is
+  // a real value the trigger names, not an empty field waiting for input — and a
+  // dimmed trigger next to a bright one reads as "this row is disabled". All three
+  // (four, with the UI row) now share the trigger's own `label-primary`.
   '.dsf-family { width: 220px; max-width: 100%; }',
   '.dsf-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; }',
   '.dsf-item .dsf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
@@ -50,6 +53,15 @@ export const PANEL_CSS = [
   '.dsf-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--dsw-alias-state-business-primary, #4c72e0); }',
   '.dsf-slider::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--dsw-alias-state-business-primary, #4c72e0); }',
   '.dsf-slider-value { flex: none; min-width: 52px; text-align: right; color: var(--dsw-alias-label-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }',
+  // Same read-out + arrows shape and geometry as the host's own size rows:
+// a 72×36 rounded plate, the value right-aligned before the arrow column,
+// `px` outside the plate. Measured from the host (字号大小) on 2026-10-20.
+  '.dsf-stepper { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 72px; height: 36px; padding-right: 27px; box-sizing: border-box; border-radius: 10px; background: var(--dsw-alias-bg-module-platform); }',
+  '.dsf-stepper-value { color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; font-variant-numeric: tabular-nums; }',
+  '.dsf-stepper-unit { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }',
+  '.dsf-stepper-arrows { position: absolute; right: 8px; top: 5px; display: flex; flex-direction: column; gap: 2px; }',
+  '.dsf-stepper-arrow { display: flex; align-items: center; justify-content: center; width: 17px; height: 12px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }',
+  '.dsf-stepper-arrow:hover { color: var(--dsw-alias-label-primary); }',
   '@media (max-width: 600px) { .dsf-row { flex-wrap: wrap; } .dsf-row-text { padding-right: 0; } .dsf-control { flex-wrap: wrap; } .dsf-family { width: 100%; } }',
 ].join('\n')
 
@@ -77,15 +89,15 @@ export function removePanelCss() {
  * weight control: the weight of every step belongs to the theme, so a knob
  * here could only fight it.
  *
- * The rows register into `settings.general.item` at orders 12–14 — right
- * behind the host's FontSettingsGroup (appearance 10, font-size 11) — and
- * `merge.js` then reparents them INSIDE the group's collapsible font region,
- * each picker directly after the official family row it replaces, with the
- * sliders at the end of that region. While the region is collapsed the host
- * does not render it, so the rows are seated back in the slot outlet and
- * hidden: they expand/collapse with the group instead of showing as standalone
- * settings entries. The registration order is only the pre-merge / fallback
- * seat.
+ * The rows register into `settings.general.item` at orders 12–15 — the three
+ * host family roles plus OUR UI role, right behind the host's FontSettingsGroup
+ * (appearance 10, font-size 11) — and `merge.js` then reparents them INSIDE the
+ * group's collapsible font region, each picker directly after the official
+ * family row it replaces, with the UI picker after them and the sliders at the
+ * end of that region. While the region is collapsed the host does not render
+ * it, so the rows are seated back in the slot outlet and hidden: they
+ * expand/collapse with the group instead of showing as standalone settings
+ * entries. The registration order is only the pre-merge / fallback seat.
  * 三行替代宿主自带字体输入框：文本、代码、终端，每行只有一个字族下拉（字重归宿主
  * 主题管，故不设字重控件）。挂载后由 merge.js 搬进宿主字号组的折叠区（折叠时归位
  * 并隐藏）。
@@ -94,6 +106,12 @@ const SLOTS = [
   { id: 'dsh-system-fonts-content',   order: 12, role: 'text',     titleKey: 'row.text.title',     descKey: 'row.text.desc',     familyKey: 'uiFamily' },
   { id: 'dsh-system-fonts-code',      order: 13, role: 'code',     titleKey: 'row.code.title',     descKey: 'row.code.desc',     familyKey: 'codeFamily' },
   { id: 'dsh-system-fonts-terminal',  order: 14, role: 'terminal', titleKey: 'row.terminal.title', descKey: 'row.terminal.desc', familyKey: 'terminalFamily' },
+  // THE UI ROLE. The host exposes three font roles (`text`, `code`,
+  // `terminal`) and no fourth, so this row does NOT go through
+  // `setFontFamily(role, …)`: the bridge writes `--dsh-font-family-ui`
+  // directly, and cds-theme's `--dsw-font-family-ui` falls back to
+  // `--dsw-font-family`, which is what "follows the body by default" means.
+  { id: 'dsh-system-fonts-ui', order: 15, role: 'ui', titleKey: 'row.ui.title', descKey: 'row.ui.desc', familyKey: 'uiFontFamily' },
 ]
 
 // The two continuous rows follow the family rows (15, 16). Every drag tick
@@ -138,11 +156,20 @@ const EFFECTIVE_FONT_VAR = {
   text: '--dsw-font-family',
   code: '--ds-font-family-code',
   terminal: '--dsw-font-family-terminal',
+  // The UI role resolves through cds-theme's `--dsw-font-family-ui`, whose own
+  // fallback is `--dsw-font-family`. Reading it means an unset UI family shows
+  // the family that is ACTUALLY rendering the chrome (Anthropic Sans by default)
+  // instead of the word "Default" — a placeholder that told the user nothing.
+  ui: '--dsw-font-family-ui',
 }
 const HOST_DEFAULT_VAR = {
   text: '--dsh-font-family-text-default',
   code: '--dsh-font-family-code-default',
   terminal: '--dsh-font-family-terminal-default',
+  // There is no host baseline for a role the host does not have, so the UI row
+  // compares against the TEXT baseline: "same as the body" is exactly the state
+  // this row calls its default, and an empty string there means "follows it".
+  ui: '--dsh-font-family-text-default',
 }
 
 /** The first family of a CSS font list, unquoted. */
@@ -172,14 +199,31 @@ function effectiveDefaultFamily(role) {
 }
 
 // commits immediately, so the text behind the panel tracks the slider.
-// 两个连续取值行（15、16）：拖动即提交。
+// 两个连续取值行（17、18）：拖动即提交。The UI family row sits at 15 and the
+// UI size stepper at 16, so both follow terminal and precede the sliders — in
+// the region AND in the flat, collapsed fallback list.
 const SLIDER_SLOTS = [
-  { id: 'dsh-system-fonts-line-height', order: 15, titleKey: 'row.lineHeight.title', descKey: 'row.lineHeight.desc', key: 'lineHeightPct', min: 50, max: 100, step: 1,
+  { id: 'dsh-system-fonts-line-height', order: 17, titleKey: 'row.lineHeight.title', descKey: 'row.lineHeight.desc', key: 'lineHeightPct', min: 50, max: 100, step: 1,
     normalize: function (v) { return clampLineHeight(v) },
     display: function (v) { return v + '%' } },
-  { id: 'dsh-system-fonts-tracking',    order: 16, titleKey: 'row.tracking.title',   descKey: 'row.tracking.desc',   key: 'trackingEm',  min: -30, max: 30, step: 1,
+  { id: 'dsh-system-fonts-tracking',    order: 18, titleKey: 'row.tracking.title',   descKey: 'row.tracking.desc',   key: 'trackingEm',  min: -30, max: 30, step: 1,
     normalize: function (v) { return clampTracking(v) },
     display: function (v) { return (v > 0 ? '+' : '') + (v / 100).toFixed(2) + 'em' } },
+]
+
+/**
+ * The UI size row. PIXELS, like the host's own 字号大小 (14 px) and the code /
+ * terminal size rows above it; a stepper with the same read-out-and-arrows
+ * shape, not a slider. 0 means "not set": the row shows the host's 14 px chrome
+ * base and nothing is written.
+ */
+const STEPPER_SLOTS = [
+  { id: 'dsh-system-fonts-ui-size', order: 16, titleKey: 'row.uiSize.title', descKey: 'row.uiSize.desc', key: 'uiFontSize',
+    min: 10, max: 20, step: 1,
+    normalize: function (v) { return clampUiFontSize(v) },
+    // 0 is "unset": display the host chrome's base size in px.
+    display: function (v) { const n = clampUiFontSize(v); return n > 0 ? n : UI_FONT_BASE_PX },
+    increaseKey: 'row.uiSize.increase', decreaseKey: 'row.uiSize.decrease' },
 ]
 
 /**
@@ -305,7 +349,10 @@ export function createPanel({ React, primitives, settings, catalogue, bridge, lo
         }
       },
     },
-      React.createElement('span', { className: 'dsf-value' + (family === '' ? ' dsf-placeholder' : '') },
+      // NO conditional class. An unset family is "the host's own stack" — a real
+      // value, not an empty field — and dimming it made the un-configured rows
+      // look disabled next to the configured one.
+      React.createElement('span', { className: 'dsf-value' },
         valueText),
       IconChevron ? React.createElement(IconChevron, { size: 12, className: 'dsf-chevron' }) : null)
 
@@ -464,6 +511,53 @@ export function createPanel({ React, primitives, settings, catalogue, bridge, lo
         React.createElement('span', { className: 'dsf-slider-value' }, slot.display(value))))
   }
 
+  /**
+   * A size row, in the host's own idiom: value + `px` + stacked arrows. This
+   * is the shape of 字号大小 / 代码字号 / 终端字号, so 界面字号 reads as one of
+   * them instead of being the only percentage slider in the group.
+   * 与宿主字号行一致：数值 + px + 上下箭头，不用滑块。
+   */
+  function StepperRow({ slot, t, bindRef }) {
+    const state = useStoreValue(settings, settings.getState)
+    const raw = slot.normalize(state[slot.key])
+    const value = slot.display(raw)
+    const stepBy = function (delta) {
+      const from = raw > 0 ? raw : value
+      const next = slot.normalize(from + delta)
+      if (next !== raw) settings.setState({ [slot.key]: next })
+    }
+    const chevron = function (up) {
+      return React.createElement('svg', {
+        width: 9, height: 9, viewBox: '0 0 16 16', fill: 'none',
+        strokeWidth: 1, 'aria-hidden': 'true',
+      }, React.createElement('path', {
+        d: up
+          ? 'M12 10L8.70711 6.70711C8.31658 6.31658 7.68342 6.31658 7.29289 6.70711L4 10'
+          : 'M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6',
+        stroke: 'currentColor',
+      }))
+    }
+    const arrow = function (delta, label) {
+      return React.createElement('button', {
+        type: 'button',
+        className: 'dsf-stepper-arrow',
+        'aria-label': t(label),
+        onClick: function () { stepBy(delta) },
+      }, chevron(delta > 0))
+    }
+    return React.createElement('div', { className: 'dsf-row', 'data-dsf-row': slot.id, ref: bindRef },
+      React.createElement('div', { className: 'dsf-row-text' },
+        React.createElement('div', { className: 'dsf-title' }, t(slot.titleKey)),
+        React.createElement('div', { className: 'dsf-desc' }, t(slot.descKey))),
+      React.createElement('div', { className: 'dsf-control' },
+        React.createElement('div', { className: 'dsf-stepper' },
+          React.createElement('span', { className: 'dsf-stepper-value' }, String(value)),
+          React.createElement('span', { className: 'dsf-stepper-arrows' },
+            arrow(slot.step, slot.increaseKey),
+            arrow(-slot.step, slot.decreaseKey))),
+        React.createElement('span', { className: 'dsf-stepper-unit' }, 'px')))
+  }
+
   const fontSlots = SLOTS.map(function (slot) {
     return Object.assign({}, slot, { component: makeRow(slot) })
   })
@@ -475,7 +569,15 @@ export function createPanel({ React, primitives, settings, catalogue, bridge, lo
       },
     })
   })
-  const slots = fontSlots.concat(sliderSlots)
+  const stepperSlots = STEPPER_SLOTS.map(function (slot) {
+    const bindRef = rowRef(slot)
+    return Object.assign({}, slot, {
+      component: function BoundStepper(props) {
+        return React.createElement(StepperRow, { slot: slot, t: tFor(props), bindRef: bindRef })
+      },
+    })
+  })
+  const slots = fontSlots.concat(stepperSlots, sliderSlots)
 
   return {
     slots,

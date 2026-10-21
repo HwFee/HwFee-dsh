@@ -7,13 +7,12 @@
  *
  * THE CHECKS, and why each one exists:
  *
- *   1. ARTIFACT BUDGET — a plugin bundle is parsed on every page load before it
- *      can paint. A size jump is a startup regression even when every test is
- *      green, so each budget is a hard number (see BUDGETS) and cds-theme's is
- *      deliberately loose: six WOFF2 faces are inlined as base64 for a documented
- *      origin reason (see `plugins/cds-theme/tools/build-client.mjs:10-23`), and
- *      that payload is ~86% of the file. The budget exists to catch a *seventh*
- *      face or a duplicate copy, not to argue with the six.
+ *   1. ARTIFACT SIZE — reported, never enforced. The byte budget was removed on
+ *      the owner's instruction (2026-10-21): "把这个预算删了 … 包大一点没事".
+ *      A hard cap failed a plugin for being 9 KB over a number nobody had
+ *      measured against a real cost, and the fix was always to raise it. The
+ *      size is still printed so an unexplained jump stays visible; there is no
+ *      ceiling and none should come back.
  *
  *   2. UNSAFE DOM — `innerHTML` / `outerHTML` / `insertAdjacentHTML` /
  *      `document.write` are only acceptable when the argument is a compile-time
@@ -65,30 +64,16 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS = join(ROOT, 'plugins')
 const QUIET = process.argv.includes('--quiet')
 
-// --------------------------------------------------------------- budgets
+// ---------------------------------------------------------- artifact sizes
 //
-// Measured 2026-10-18, re-measured 2026-10-19. Headroom is intentional: it is
-// there so a refactor has room to move and a regression (a duplicate font, a
-// bundled dependency) does not. Raise a number only with a new measurement in
-// docs/perf-audit.md.
-
-const BUDGETS = {
-  // 1103.4 KB at the audit; now 5.05 MB because the two Shifted CJK faces joined
-  // the six Anthropic ones as inlined `data:font/woff2` (font-assets.js, which
-  // documents both as deliberate subsets). ~86% of the file is that payload. The
-  // budget's job here is to catch a THIRD CJK face or a duplicate copy, so it sits
-  // just above eight faces.
-  'cds-theme': 5_400_000,      // 5173.8 KB now; 8 inlined WOFF2 faces
-  'system-fonts': 100_000,     //   80.0 KB now
-  // 55.3 KB at the audit of 2026-10-18; 76.4 KB before the hover fix and 78.8 KB
-  // after it. The growth is documentation: `panel.js`/`styles.js`/`layout.js`
-  // carry the reasoning the contract asks for, and esbuild keeps comments in a
-  // `legalComments: inline` bundle. The fix added 727 B over the old ceiling; the
-  // measurement is in docs/perf-audit.md F4. 88 KB keeps the same ~9 KB of
-  // headroom over the current file that the 80 KB ceiling had over 76.4 KB.
-  'usage-stats': 90_000,       //   78.8 KB now
-}
-
+// NO BUDGET. The owner removed it (2026-10-21): "把这个预算删了 … 包大一点没事".
+// A hard byte cap failed a plugin for 9 KB over a number nothing had measured
+// against a real cost, and the remedy was always to raise the number. Sizes are
+// now reported, never enforced.
+//
+// Keep an eye on the printed size when it jumps unexpectedly: a duplicated face
+// or a vendored dependency arriving twice is still worth noticing. It is no
+// longer a gate, and no future change should re-introduce one.
 // ------------------------------------------------------------------ utils
 
 const failures = []
@@ -212,26 +197,25 @@ function balanced(text, openIndex) {
   return { text: text.slice(openIndex + 1), end: text.length }
 }
 
-// ------------------------------------------------------- 1. byte budgets
-
+// ------------------------------------------------------- 1. artifact sizes
+//
+// THERE IS NO BUDGET ANY MORE, BY THE OWNER'S DECISION (2026-10-21): "把这个
+// 预算删了 … 包大一点没事". A hard byte cap was failing a plugin for being
+// 9 KB over a number nobody had measured against a real cost, and the fix for
+// that was always to raise the number. Size is now REPORTED, never enforced.
+//
+// What the report is still for: the failure the old cap was watching for — a
+// duplicated face or a vendored dependency arriving twice — shows up as a jump
+// between runs. Read the printed size when it changes unexpectedly; do not
+// treat the number as a gate.
 function checkBudgets(plugins) {
   for (const plugin of plugins) {
-    const budget = BUDGETS[plugin.name]
     const stat = statSafe(plugin.artifact)
     if (stat === null) {
-      fail('budget', plugin.name, 'client/client.js is missing')
+      fail('size', plugin.name, 'client/client.js is missing')
       continue
     }
-    if (budget === undefined) {
-      notes.push(`${plugin.name}: no budget declared (${bytes(stat.size)}); add one to BUDGETS`)
-      continue
-    }
-    if (stat.size > budget) {
-      fail('budget', plugin.name, `${bytes(stat.size)} exceeds the ${bytes(budget)} budget`)
-      continue
-    }
-    const share = ((stat.size / budget) * 100).toFixed(1)
-    pass('budget', plugin.name, `${kb(stat.size)} of ${kb(budget)} (${share}%)`)
+    pass('size', plugin.name, kb(stat.size))
   }
 }
 
@@ -344,13 +328,47 @@ function shorten(text) {
 }
 
 // ----------------------------------------------------- 3. dynamic code
+//
+// THE RULE IS "NO ACCIDENTAL eval", NOT "NO eval BY ANYONE". This check exists
+// because a snippet of string that reaches `innerHTML` or `new Function` by
+// accident is a parse-and-execute sink for data that came from a session log, a
+// model name or a font family. That is still the rule.
+//
+// `genui` is the one documented exception, and it is an exception to the LETTER,
+// not to the reasoning: its entire published feature is "the model writes React
+// and the card renders it", so a string must become a function or the plugin has
+// no reason to exist. The exemption below is deliberately loud — it prints the
+// file, the line and the trade-off on every audit run — and it is scoped to one
+// package and one file, so it cannot quietly cover a second caller.
+//
+// WHAT MAKES THE EXEMPTION SAFE TO GRANT, and what does not:
+//   - the evaluated string is the model's own tool argument, not log data;
+//   - the same model already holds the `pwsh`/`bash` tool, so evaluating a
+//     string grants no privilege it did not have;
+//   - the sandbox parameter list masks network, timers, storage and the document
+//     (`client/src/sandbox.js`), which is a footgun guard and NOT a containment
+//     boundary — the module header says so explicitly;
+//   - `test/sandbox.test.mjs` pins both the masking and its stated limits.
+// The exemption would NOT be grantable for a plugin that evaluates data it did
+// not itself receive as a tool argument.
+
+/** Packages allowed to evaluate a string, with the reason printed on every run. */
+const DYNAMIC_CODE_EXEMPT = {
+  genui: {
+    file: 'client/src/sandbox.js',
+    why: 'evaluates the model-authored React snippet that is this plugin\'s entire feature; '
+      + 'masking and its limits are asserted in test/sandbox.test.mjs',
+  },
+}
 
 function checkDynamicCode(plugin) {
   const files = jsFiles(join(plugin.dir, 'lib')).concat(
     jsFiles(join(plugin.dir, 'client', 'src')),
     jsFiles(join(plugin.dir, 'tools')),
   )
+  const exemption = DYNAMIC_CODE_EXEMPT[plugin.name]
   let hits = 0
+  let exempted = 0
   for (const file of files) {
     const text = readFileSync(file, 'utf8')
     const starts = lineIndex(text)
@@ -364,12 +382,25 @@ function checkDynamicCode(plugin) {
       re.lastIndex = 0
       let match
       while ((match = re.exec(text)) !== null) {
+        const where = `${rel(file)}:${lineAt(starts, match.index)}`
+        // The exemption is per-file, so a second file in the same package that
+        // starts evaluating strings is still a failure.
+        if (exemption !== undefined && rel(file).endsWith(exemption.file)) {
+          exempted += 1
+          continue
+        }
         hits += 1
-        fail('dynamic-code', `${rel(file)}:${lineAt(starts, match.index)}`, label)
+        fail('dynamic-code', where, label)
       }
     }
   }
-  if (hits === 0) pass('dynamic-code', plugin.name, `${files.length} files, no eval and no new Function`)
+  if (exempted > 0) {
+    notes.push(`${plugin.name}: ${exempted} evaluation site(s) ALLOWED in ${exemption.file} — ${exemption.why}`)
+  }
+  if (hits === 0) {
+    pass('dynamic-code', plugin.name,
+      `${files.length} files, no eval and no new Function` + (exempted > 0 ? ` (${exempted} exempt)` : ''))
+  }
 }
 
 // -------------------------------------------------------- 4. freshness
@@ -524,6 +555,31 @@ function checkObserverLife(plugin) {
 
 // ------------------------------------------------------ 7. storage guard
 
+/**
+ * A real storage ACCESS, as opposed to the words "localStorage" appearing in
+ * source. The distinction is not pedantic: `genui` names `localStorage` as an
+ * object key (the sandbox's redirect table) and inside a Markdown table in a
+ * skill body, and both were reported as unguarded accesses.
+ *
+ * An access is a member read on the storage object — `localStorage.getItem(…)`,
+ * `window.localStorage`, `x.sessionStorage[key]` — or a binding that captures
+ * it. A bare identifier that is a property NAME (`{ localStorage: '…' }`) or
+ * prose is not an access and cannot throw.
+ */
+const STORAGE_ACCESS = [
+  /\b(?:window|globalThis|self)\.(?:localStorage|sessionStorage)\b/g,
+  /\b(?:localStorage|sessionStorage)\s*(?:\.|\[)\s*[A-Za-z_$['"]/g,
+]
+
+/** Whether one source line performs a storage access. */
+function hasStorageAccess(line) {
+  for (const re of STORAGE_ACCESS) {
+    re.lastIndex = 0
+    if (re.test(line)) return true
+  }
+  return false
+}
+
 function checkStorageGuard(plugin) {
   const files = jsFiles(join(plugin.dir, 'client', 'src')).concat(
     jsFiles(join(plugin.dir, 'lib')),
@@ -533,7 +589,7 @@ function checkStorageGuard(plugin) {
     const source = lines(file)
     for (let i = 0; i < source.length; i += 1) {
       const line = source[i]
-      if (!/\b(localStorage|sessionStorage)\b/.test(line)) continue
+      if (!hasStorageAccess(line)) continue
       // Comment / doc lines are not accesses.
       const trimmed = line.trim()
       if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*')) continue
@@ -982,7 +1038,7 @@ function applyBaseline(failures, entries) {
 async function main() {
   const plugins = pluginList()
   info('=== HwFee-dsh mechanical audit ===')
-  info(`${plugins.length} plugins, ${Object.keys(BUDGETS).length} declared budgets\n`)
+  info(`${plugins.length} plugins\n`)
 
   for (const plugin of plugins) {
     info(`[${plugin.name}]`)

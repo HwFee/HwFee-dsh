@@ -64,19 +64,16 @@ export const LIGHT_SURFACES = {
 /**
  * Dark surfaces.
  *
- * DEPARTURE FROM THE SPEC, and why. The spec (following the stylesheet) puts
- * the dark canvas at #0b0b0b and the sidebar at the same value. That is a
- * near-black workspace: fine for a chat window, punishing for a tool people
- * keep open for hours with dense text and code. The spec's own §2.1 direction
- * law is "index grows toward the viewer", and its ramp gives us the adjacent
- * steps, so this ladder starts at #151515 instead — one rung up — and keeps
- * every subsequent step exactly as specified (#1a1a19 → #20201f → #2c2c2a).
- * The relationship between layers is preserved; only the floor moves. The
- * result is still unambiguously CDS graphite, and the `host` column lets
- * `warmth: 0` fall back to the stock bluish ladder for comparison.
+ * The ladder follows the spec: surface-0 (the sidebar) at `#0b0b0b`, surface-1
+ * (the conversation canvas) at `#151515`, then the 2-unit OLED run
+ * `#1a1a19 → #20201f → #2c2c2a`. An earlier build raised the floor to `#151515`
+ * (sidebar `#121211`) to soften the near-black workspace; the user chose
+ * fidelity instead, so the floor is back. Only the floor moved — the spacing
+ * between layers never did. The `host` column still lets `warmth: 0` fall back
+ * to the stock bluish ladder for comparison.
  */
 export const DARK_SURFACES = {
-  sidebar: { cds: '#121211', host: '#1b1b1c' },
+  sidebar: { cds: '#0b0b0b', host: '#1b1b1c' },
   canvas: { cds: '#151515', host: '#151517' },
   raised: { cds: '#1a1a19', host: '#232324' },
   nested: { cds: '#20201f', host: '#2c2c2e' },
@@ -88,7 +85,7 @@ export const DARK_SURFACES = {
 // -------------------------------------------------------------------- text
 
 /**
- * Neutral text tiers (`css:139-141`, `css:293-295`).
+ * Neutral text tiers (`css:139-141`, `css:348-350`).
  *
  * CDS defines THREE tiers. The host has four (`primary`, `secondary`,
  * `tertiary`, `caption`), so the fourth borrows: `caption` introduces no new
@@ -111,6 +108,8 @@ export const DARK_SURFACES = {
  *
  *   light  #8a8a8a -> #767676   3.45:1 -> 4.54:1 on #ffffff
  *   dark   #7d7b76 -> #85837e   4.12:1 -> 4.60:1 on #1a1a19
+ *
+ * Recorded as D2 in `docs/cds-spec.md` §9.3; the measured reasoning is in §2.2.
  */
 export const LIGHT_TEXT = {
   primary: '#151515',
@@ -131,7 +130,7 @@ export const DARK_TEXT = {
 // ------------------------------------------------------------------ borders
 
 /**
- * The alpha ladder (`css:97-105`, `css:257-264`). `hsla(0, 0%, 8%, α)` is
+ * The alpha ladder (`css:97-105`, `css:302-319`). `hsla(0, 0%, 8%, α)` is
  * #141414 at that alpha — deliberately not pure black, so a hairline over a
  * white surface lands on #e8e8e8 rather than a dirty #e6e6e6.
  */
@@ -318,59 +317,112 @@ export const SHADOWS = {
 // -------------------------------------------------------------------- code
 
 /**
- * Code block surfaces, per palette.
+ * Code block surfaces and syntax colours, taken from the installed Claude
+ * desktop app (2.42304.2), not from the reconstruction:
+ * `app/resources/ion-dist/` → `js/c5d464fa3-Dlv8sG-j.js` defines the live
+ * `claude-light` / `claude-dark` Shiki themes; the values below are that
+ * module's palette (`x` for light, `C` for dark) with the same role mapping.
  *
- * CDS wants code blocks dark in BOTH palettes (`#0d0d0c`, the one near-black
- * the system allows — `docs/cds-spec.md` §8.5, C18). This theme does not do
- * that, and the reason is a hard constraint rather than a taste call:
- *
- * Shiki renders here through `codeToTokensBase(..., { theme: 'css-variables' })`
- * and then paints every span from `style: { color: e.color }` — an INLINE
- * style (see `.repro/bundles/frontend-full.js`, the `xR`/`T8` helpers and the
- * per-line `<span style={r.style}>`). An inline `color` cannot be reached by
- * any stylesheet, and the `--shiki-token-*` variables the host declares in its
- * own `shiki.css` do not name the variables this path emits, so overriding
- * them changes nothing.
- *
- * Forcing a dark surface therefore yields dark-on-dark code in light mode with
- * no CSS-only remedy — it was exactly the black-on-black bug this comment
- * replaces. The honest fix is to keep surface and syntax colour in the SAME
- * palette, which the host already guarantees: it ships a light token set and a
- * dark token set, and switches them with `body[data-ds-dark-theme]`.
- *
- * So the block follows the palette, and CDS's warmth is expressed through the
- * surrounding chrome — radius, hairline, banner material — not by inverting the
- * syntax colours.
+ * The light block is WHITE on the warm chat canvas; the dark block is
+ * `#1a1a19`, not the `#0d0d0c` the reference repository hard-codes. The theme
+ * remaps the host's Shiki variables on `.md-code-block` so the syntax palette
+ * is Claude's, while the surrounding chrome stays CDS.
  */
 export const CODE_SURFACE = {
-  light: '#f7f7f5',
-  dark: '#0d0d0c',
+  light: '#ffffff',
+  dark: '#1a1a19',
+}
+
+/**
+ * Inline-code chip, measured from the installed Claude app and its own
+ * stylesheet (`--cds-alpha-1` fill, alpha-3/.5px edge, 4px radius in the chat
+ * markdown rule).
+ *
+ * THE LETTERS ARE RED, not body ink. Claude's prose rule is
+ *
+ *   code:not(pre code){ color:var(--cds-prose-code-color,
+ *                            var(--cds-text-danger,currentColor)); … }
+ *
+ * and `--cds-text-danger` resolves to `--cds-role-danger-600` = red-600
+ * `#8e2626` in light, `--cds-role-danger-300` = red-300 `#ec7e7e` in dark
+ * (`app/resources/ion-dist/css/c6a992d55-*.css`). The same rule tints the
+ * `.ReactMarkdown code` and TipTap editor variants, so it is the system's
+ * chip ink rather than one surface's accident.
+ *
+ * Cross-checked against a screenshot of the real app: every chip in the
+ * transcript measures exactly `rgb(142, 38, 38)` = `#8e2626` while the body
+ * ink is `#0b0b0b` (--cds-gray-900). An earlier revision of this theme left
+ * `color` unset, so the chip inherited body ink and read as black — visibly
+ * wrong next to the app.
+ *
+ * Link/button-nested code is the one variant Claude paints differently
+ * (`--code-chip-ink: --cds-text-accent`, transparent fill); this theme keeps
+ * the chip treatment there because the host's markdown rarely nests them and
+ * a second rule buys nothing the user can see.
+ */
+export const INLINE_CODE = {
+  light: { background: '#f0f0ef', border: 'hsla(0, 0%, 8%, 0.10)', ink: '#8e2626' },
+  dark: { background: '#262625', border: 'hsla(0, 0%, 100%, 0.10)', ink: '#ec7e7e' },
 }
 
 export const CODE_BORDER = {
-  light: 'hsla(0, 0%, 8%, 0.10)',
-  dark: 'hsla(0, 0%, 100%, 0.10)',
+  light: '#e4e4e3',
+  dark: '#141414',
 }
 
-/** The banner sits one step off the block so the divider reads without a line. */
+/** The app has no header strip (copy is a floating control); the host does. */
 export const CODE_BANNER = {
-  light: '#f0efec',
-  dark: '#171716',
+  light: '#ffffff',
+  dark: '#1a1a19',
 }
-
-// ------------------------------------------------------------------ motion
 
 /**
- * CDS easing curves (`docs/cds-spec.md` §6.4). The host exposes one easing
- * token and three durations, so only those travel; component-local springs are
- * outside what CSS can reach and are not faked here.
- *
- * `pulse` is the reference's breathing-pulse curve — `.reference/…/cds-theme.css:199`
- * `--cds-ease-pulse: cubic-bezier(.4, 0, .2, 1)` and the 7-curve table in
- * `docs/v1/01-…md:608` (思考状态静默三点跳动). It is numerically the same as
- * `inOut` on purpose: the reference reuses the standard material curve for the
- * thinking breath, and naming it separately keeps the token vocabulary intact.
+ * Role → `--shiki-token-*`. The host renders token colours as
+ * `var(--shiki-token-*)`, so overriding these on the block is what makes the
+ * syntax palette Claude's. `type` is deliberately absent: the host's
+ * css-variables theme folds `entity.name.type` into `token-function`, so there
+ * is no separate variable for it.
  */
+export const CODE_TOKENS = {
+  // EXACTLY THE APP'S SHIKI THEME, not an approximation. `claude-chat-light` /
+  // `claude-chat-dark` are generated by a factory whose 18 TextMate rules only
+  // reference 12 palette slots; these are those slots, transcribed. Two rules
+  // that look wrong at first glance are faithful here:
+  //   - `keyword.operator` (`=`, `+`, `&&`) uses the DEFAULT fg, not the keyword
+  //     colour, so operators are never purple;
+  //   - `entity.name.type` / `support.class` resolve to the `variable` slot, so a
+  //     type name has no colour of its own.
+  light: {
+    foreground: 'hsl(220, 20%, 10%)',
+    comment: 'hsl(220, 10%, 48%)',
+    punctuation: 'hsl(220, 15%, 20%)',
+    keyword: 'hsl(280, 100%, 38%)',
+    string: 'hsl(120, 100%, 25%)',
+    regex: 'hsl(120, 90%, 27%)',
+    number: 'hsl(180, 100%, 25%)',
+    property: 'hsl(355, 90%, 38%)',
+    attrName: 'hsl(355, 85%, 40%)',
+    function: 'hsl(215, 100%, 38%)',
+    variable: 'hsl(25, 100%, 35%)',
+    parameter: 'hsl(25, 95%, 37%)',
+  },
+  dark: {
+    foreground: 'hsl(220, 15%, 93%)',
+    comment: 'hsl(220, 10%, 55%)',
+    punctuation: 'hsl(220, 15%, 85%)',
+    keyword: 'hsl(280, 85%, 72%)',
+    string: 'hsl(95, 75%, 65%)',
+    regex: 'hsl(95, 70%, 63%)',
+    number: 'hsl(180, 80%, 65%)',
+    property: 'hsl(355, 85%, 72%)',
+    attrName: 'hsl(355, 80%, 70%)',
+    function: 'hsl(210, 100%, 72%)',
+    variable: 'hsl(30, 95%, 68%)',
+    parameter: 'hsl(30, 90%, 67%)',
+  },
+}
+
+/** The three motion curves plus the two interaction easings (docs/cds-spec.md §6). */
 export const EASING = {
   inOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
   swift: 'cubic-bezier(0.16, 1, 0.3, 1)',
@@ -379,7 +431,6 @@ export const EASING = {
   snap: 'cubic-bezier(0.32, 0.72, 0, 1)',
   pulse: 'cubic-bezier(0.4, 0, 0.2, 1)',
 }
-
 export const DURATIONS = {
   fast: '0.12s',
   base: '0.2s',

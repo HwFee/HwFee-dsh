@@ -20,7 +20,7 @@ export async function aggregateUsage(options?: { force?: boolean }): Promise<Sum
 ```js
 {
   generatedAt: number,        // 毫秒时间戳
-  sessions: number,           // 有 user/message 的会话文件数
+  sessions: number,           // 有 user/message 的会话数（含已从磁盘删除的，来自累计账本）
   messages: number,           // user/message + assistant/message 条数
   totalTokens: number,        // 所有 assistant/message 的 usage.totalTokens 之和
   activeDays: number,         // 出现过消息的不同日历日数（本地时区）
@@ -38,7 +38,8 @@ export async function aggregateUsage(options?: { force?: boolean }): Promise<Sum
 - 计 token：`assistant/message` 的 `data.usage`，取 `totalTokens`，缺则 `inputTokens + outputTokens`。
 - 取模型：`request/header` 的 `data.header.config.model`，以及 `model/selection` 的 `data.model`（后者更新）。
 - 取时间：每条记录的 `time`（毫秒）。
-- **缓存（三层）**：进程内与磁盘持久化的逐文件解析结果都按 `(文件路径, mtimeMs, size)` 失效；`force`（`?refresh=1`）绕过全部缓存重读所有文件。完整策略、失效键与最坏陈旧度见下面的「负载模型」。
+- **缓存（三层）**：进程内与磁盘持久化的逐文件解析结果都按 `(文件路径, mtimeMs, size)` 失效；`force`（`?refresh=1`）绕过全部逐文件缓存并重读所有日志。完整策略、失效键与最坏陈旧度见下面的「负载模型」。
+- **总量来自累计账本**（`lib/usage-ledger.js`）：每个会话一行（按 session id，见「累计账本」），会话继续写时整行替换，日志被删除时**不删行**。所以 `Summary` 是账本的并集，不是磁盘现状；`force` 只清逐文件缓存，**不清账本**。
 
 ### 负载模型 · load model
 
@@ -56,6 +57,25 @@ export async function aggregateUsage(options?: { force?: boolean }): Promise<Sum
 - **最坏显示陈旧度 ≈ 18 s**（15 s 客户端 TTL + 3 s 热尾窗口），且只影响「刚结束会话的最后几条记录」——下一次打开、TTL 过期或 `stale` 补请求都会纠正。这个数字可以接受，因为：面板只在空白会话出现（可见对话没有正在写入的日志），统计本身是历史聚合；已结束文件精确命中缓存（陈旧度 0）；`?refresh=1` 始终是真正的全量重读（实测 128 个文件全读，约 2.3 s）。
 - **已知限制**：每台机器**第一次**打开（还没有磁盘缓存）要冷解析整个语料，**≈2.4 s**（128 个文件 / 约 50 MB 压缩 / 26k 个 zstd 帧，解压约占 80–90%）。它只发生一次；之后每次 DSH 重启约 **17 ms**（磁盘缓存命中，0 个文件重读）。并行解码（worker 池）是未来可选项，目前不做。
 - **缓存位置与持久性**：缓存**不放 OS 临时目录**。Windows 的「磁盘清理 / 存储感知」会把临时目录按计划清空，清掉之后下次启动会静默退回 ≈2.4 s 冷解析、而界面上看不出任何原因——那正是用户报的"每次都要加载很长时间"。现在优先写到 **DSH 数据根**（`$DSH_HOME`，否则 `~/.dsh`）下的 `cache/usage-stats/`，与会话日志同树，持久性与 App 其余状态一致；只有该位置**写入失败**时才回落到临时目录（此时下一次启动仍会快，只是不跨清理周期）。两条路径都按日志根哈希命名，互不干扰；`hasPersistedUsageCache()` 只探测主路径，所以回落到临时目录时预热不会触发（宁可冷启动一次，也不读一个"可能还在也可能没了"的文件）。
+- **账本开销**：进程内第一次统计时读一次账本（本机实测 279 行 / 62 KB / <2 ms），之后只在某行真的变化时原子重写；合并是每会话一次的常数工作，与文件数同阶，所以 `aggregate` 的整体成本仍由「要不要解压日志」决定。
+
+### 累计账本 · lifetime ledger
+
+`lib/usage-ledger.js`，文件是同目录下的 `ledger-<日志根哈希>.json`。它和解析缓存**不是一类东西**：解析缓存可丢（丢了只是变慢），账本丢了就找不回来（已删除的会话在磁盘上没有副本）。
+
+| 方面 | 解析缓存 `parse-cache-<hash>.json` | 累计账本 `ledger-<hash>.json` |
+|---|---|---|
+| 键 | 文件绝对路径 `(路径, mtimeMs, size)` | session id（目录名去掉 `session-` 前缀） |
+| 日志被删 | 条目**剪掉** | 行**保留** |
+| 会话长大 | 条目替换 | 行替换（不是相加） |
+| 文件损坏 / 版本不符 | 忽略，重读该日志 | 忽略，从现存日志重建 |
+| 丢失的后果 | 一次冷解析（≈2.4 s） | 已删会话的统计永久丢失 |
+| 删除它 | 无副作用 | **等价于「重置统计」** |
+
+- **删除与归档的区别**：归档只往 `~/.dsh/storages/workspace.json` 的 `archivedSessionIds` 加一个 id，日志原地不动 → 无论有没有账本都会被统计。删除是真的删日志目录 → 只有账本还记得它。
+- **账本只增不减**：`?refresh=1` 全量重读日志、清空解析缓存，但**不动**账本；唯一能让数字下降的办法是删掉 `ledger-<hash>.json`（或删掉整个 DSH 数据目录）。
+- **写入失败**：与解析缓存同样的回落顺序（数据根 → OS 临时目录）；两处都写不进去时退化为「只在本次进程内累计」，日志一删就丢。
+- **校验**：行复用 `usage-cache.js` 的 `sanitizeStats()`，字符串计数或非法 `perHour` 会被整行丢弃——否则一个字符串会污染之后所有总量。
 
 ### `lib/usage-route.js`
 
@@ -218,11 +238,11 @@ export { apply }
 
 - `test/stats.test.mjs`：`stats.js` 的全部纯函数。必须覆盖 `formatNumber` 的**两套标度输出表**（0、1、999、1e3、1234、9999、1e4、12345、99999、999999、1e6、1234567、99,999,999、1e8、123456789、1e9，`short` 与 `myriad` 逐项断言）、舍入规则（999,999 short → `1M`、myriad → `100万`；99,999,999 myriad → `1亿`；非零值不出现 `0.0万`；小数与负数；非法输入 → `0`；未知 scale → short）、`resolveUnitScale`（auto 按 zh/en，显式模式压过语言，非法模式按 auto）、`formatHour` 的 0/11/12/13/23、`bookComparison` 的 ratio<1 与 ≥1、`buildHeatmap` 的滚动几何（第三参数注入固定 `now`）、**右下角 = 今天**（最后一格 key === 今天、其行号 === 6、列号 === 最后一列、任何格 key 都不晚于今天、每列恰好 7 格）、`pad` 只出现在首个活跃日之前、`summarize` 的 30 天裁剪。
   - `bookComparison` 用**注入的 `random`** 测：`() => 0` 应选中 `BOOKS[0]`，`() => 0.999` 应选中最后一本，`() => 0.5` 选中中间那本。另测每个 `BOOKS` 条目都出现在某个固定 `random` 值的结果里（保证随机源接得对），并断言返回值**不**含 `text`/`author`/`basis`/`charsText`（句子、署名、口径都已移到面板 locale）。
-- `test/usage-store.test.mjs`：用临时目录构造几条合成 `session.v4.jsonl.zstd`（zstd 帧，用 `zlib.zstdCompressSync` 逐条拼接），断言聚合结果与缓存契约：进程内命中不重读（注入计数的 `readFile`）；`force` 全量重读；**磁盘缓存跨 store/重启复用**（0 次读）、损坏/版本不符/被投毒的条目被忽略、删除的会话被剪枝；**热尾**（小增量复用 + `stale: true`、超过 256 KB 必重读、沉降后精确重读一次）；**目录 memo** 的 1500 ms 窗口；**后台预热**的协作解析（按帧 yield、结果与同步解析一致）以及 `aggregate()` **single-flight**（请求加入 in-flight 预热；`force` 等它结束后再全量重读）。
+- `test/usage-store.test.mjs`：用临时目录构造几条合成 `session.v4.jsonl.zstd`（zstd 帧，用 `zlib.zstdCompressSync` 逐条拼接），断言聚合结果与缓存契约：进程内命中不重读（注入计数的 `readFile`）；`force` 全量重读；**磁盘缓存跨 store/重启复用**（0 次读）、损坏/版本不符/被投毒的条目被忽略、**删除的会话从解析缓存剪掉但账本保留**；**累计账本**（session id 含旧 `session-` 前缀归一、删掉的会话跨重启仍在摘要里、会话长大是替换不是相加、`force` 不清账本、损坏/投毒/旧版本账本被忽略）；**热尾**（小增量复用 + `stale: true`、超过 256 KB 必重读、沉降后精确重读一次）；**目录 memo** 的 1500 ms 窗口；**后台预热**的协作解析（按帧 yield、结果与同步解析一致）以及 `aggregate()` **single-flight**（请求加入 in-flight 预热；`force` 等它结束后再全量重读）。
 - `test/layout.test.mjs`：`layout.js` 的缩小算术（纯函数）。断言档位常量与滑块范围一致（240–520、4px 步进；`HEAT_CELL_MAX = 22`；断点 560）；roomy 档复现此前实测的固定高度 `161.5px`（卡片 55 × 2 + 6、gap 2×10、foot 8+0.5+17）；**所有 71 个设置 × 三档网格行数（2/3 行）都满足 `fixed + band ≤ H`**（内容永不超出面板）；格子大小在同一档内随高度单调不减、最高设置到达 22px 上限、最紧凑角落不低于 6px；档位切换时的回落幅度不超过一个档位的预算差；缩小顺序（图形 → 间距 → 字号）与 `CARD_LABEL_FLOOR = 10` / `CARD_VALUE_FLOOR = 15` 下限；`overviewVars()` 输出的是完整、纯 px、不含 `calc()`/`var()` 的具体长度；非法高度回落而不是抛错。
 - `test/settings.test.mjs`：两个偏好 + 面板接线。覆盖默认高度 `344`、`clampBodyHeight`（越界夹取、非数值/布尔/数组回落默认、手改值对齐 4px 网格）、`sanitizeSettings` 丢弃未知字段、`loadSettings` 对空/坏 JSON/旧 payload 回落默认（**旧 payload 无 `units` → `auto`**）、`saveSettings` 在坏 storage 下不抛、store 只在值真变时通知且写盘、换一个 store 重挂载仍读到同一值；`clampUnits` 的三态与非法回落、`setUnits` 持久化且与高度共用 storage key；两行的 id 与 `order: 40/41`（不并列）；以及 **CSS 契约**：`.dus-body` 是唯一消费 `height: var(--dus-body-height, 344px)` 的规则（`.dus-models` / `.dus-overview` 只做 `height:100%` 填充）、`.dus-overview` 是 `overflow-y: hidden`（**不再是 `auto`**）、热力列宽上限是 `var(--dus-heat-cell-max, 22px)`、卡片字号走带下限的变量、`bodyHeightStyle()` 同时输出夹取后的高度和 `layout.js` 派生的一整套 px 长度。**单位接线**：同一份 summary 在 short / myriad / auto+zh / auto+en 下渲染出的六张卡、模型行、热力 `aria-label` 最大值、书目对比倍数逐项断言；卡片 `title` 与可见文本一致；`panel.js` 源码里不再有 `formatTokens`/`formatCount`；单位行渲出三个互斥 radio 并点击写入 store；生命周期把两行一起注册到主题页（id/order 断言）。另外锁定 zh/en 字典键集一致、设置行文案纯语言无 `中文 · English` 拼接。
 - `test/settings-slot.test.mjs`：设置行的落位策略（纯函数 + 注入的 slots/timers）：主题页声明后**两行一起**落在 `settings.appearance.item` 且取消回退计时器；3000 ms 内未声明 → 两行一起回退 `settings.general.item` 且只警告一次；`waitMs<=0` 立即决定；回退后迟到的主题页声明不产生双行；主题页注册被拒时先回滚已注册行再整体回退；主题页消失时两行一起移回通用列表；`dispose()` 取消计时器并移除两行。
 - `test/summary-cache.test.mjs`：客户端摘要缓存 + 面板接线：TTL 内不请求、过期后重取、并发挂载共享一个 in-flight、`refresh` 只绕过 TTL（不附带 `force`）、`force` 才真正全量重读、失败不污染缓存、面板首帧用 `peek()` 渲染（无 loading 闪烁）、普通挂载不传 force、`stale` 响应触发一次增量补请求（不是 `?refresh=1`）、卸载取消待触发的补请求。
 - `test/tooltip.test.mjs`：热力图悬停气泡的落位，**走真实 `panel.js`**（一个约 90 行的 hooks 运行器驱动组件，不重写一份定位逻辑）。断言的是止损的那条不变量 —— **气泡的 BOX（不是中心点）始终留在面板内** —— 以及让它结构性成立的兜底（`.dus-tip-layer`）。用例：1104px 面板 + 实测 163.66px 宽的气泡，右缘不得越过 `panelWidth - 8`（旧的中心夹取会给出 1157.83，即截图里那次 50px 级越界）；已经居中放得下的气泡不被无谓挪动；首列从左边拉起；宽度尚未测量时的首帧落位也必须合法；284px 窄面板仍然在内；层恒定挂载（无悬停时为空）、悬停不新增第二个层、气泡排在面板最后；样式表里 `overflow: hidden` / `inset: 0` / `max-width: min(240px, calc(100% - 16px))` 与 `TIP_INSET` 对齐。这个文件**用变异测试反证过**：把夹取改回中心点，三条用例立即失败。
 
-`npm test` = `build:check` + 上述七个测试文件（`stats` / `layout` / `tooltip` / `settings` / `settings-slot` / `summary-cache` / `usage-store`，共 146 个测试）。
+`npm test` = `build:check` + 上述七个测试文件（`stats` / `layout` / `tooltip` / `settings` / `settings-slot` / `summary-cache` / `usage-store`，共 158 个测试）。

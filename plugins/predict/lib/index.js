@@ -26,7 +26,8 @@
 
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
-  CONTEXT_TURNS, PREDICTION_PROMPT, afterAttempt, parseSuggestion, shouldPredict,
+  ANCHOR_LIMIT, CONTEXT_TURNS, PREDICTION_PROMPT, afterAttempt, leastReasoning, parseSuggestion,
+  predictionChunkText, shouldPredict,
 } from './predict.js'
 import { buildRequestMessages } from './request.js'
 import { PLUGIN_ID } from './constants.js'
@@ -341,11 +342,19 @@ async function runPrediction(ctx, { sessionId, session, state, controller }) {
     if (route === null) {
       reason = 'no-route'
     } else {
+      // NO CONTEXT, NO CALL. `buildRequestMessages` returns null when the turn
+    // left nothing to continue from (no assistant prose and no user line).
+    // Predicting from an empty prompt is how an unrelated suggestion gets
+    // invented, so the honest answer is to stay silent.
+    const messages = buildRequestMessages(state.turns, route)
+    if (messages === null) {
+      reason = 'no-context'
+    } else {
       waiter = waitAborted(signal)
       const outcome = await Promise.race([
         callModel(ctx, {
           route,
-          messages: buildRequestMessages(state.turns, route),
+          messages,
           signal,
         }).then(
           (value) => ({ value }),
@@ -365,6 +374,7 @@ async function runPrediction(ctx, { sessionId, session, state, controller }) {
           succeeded = true
           text = suggestion
         }
+      }
       }
     }
   } catch (error) {
@@ -437,8 +447,14 @@ export function rebuildConversation(state, session) {
       turns.push({ role: 'user', text, source: message.source })
     } else if (message?.role === 'assistant') {
       const text = contentText(message.content)
-      if (text === '') continue
-      turns.push({ role: 'assistant', text, source: message.source })
+      if (text !== '') turns.push({ role: 'assistant', text, source: message.source })
+      // ANCHORS, even when the turn has no prose. A coding-agent turn is mostly
+      // tool calls (`block.type === 'tool-call'`, per dsh-agent-loop's own
+      // filter at lib/index.js:1164), so dropping text-less turns threw away
+      // the only topical signal in the conversation: which files were touched.
+      // These become one compact annotation per turn, not transcript lines.
+      const anchors = anchorTurn(message.content)
+      if (anchors !== '') turns.push({ role: 'anchor', text: anchors })
     }
   }
   state.turns = turns.slice(-CONTEXT_TURNS * 2)
@@ -454,6 +470,38 @@ export function contentText(content) {
     }
   }
   return text
+}
+
+/**
+ * One compact annotation for a turn's tool calls: `edit plugins/x/styles.js`.
+ *
+ * WHY THIS EXISTS. The suggestion model needs to know WHAT the turn touched,
+ * not what it said. Without it an anaphoric next line ("now the other file")
+ * has no referent, and the model invents one — the "completely unrelated
+ * prediction" report. Kept to a single line per turn so the request stays
+ * small: this is the cheap half of what Cursor buys with a 13k-token context.
+ *
+ * @param content the assistant message's content blocks
+ * @returns the annotation, or '' when the turn called no tools
+ */
+export function anchorTurn(content) {
+  if (!Array.isArray(content)) return ''
+  const parts = []
+  for (const block of content) {
+    if (block === null || typeof block !== 'object' || block.type !== 'tool-call') continue
+    const name = typeof block.name === 'string' ? block.name : (typeof block.toolName === 'string' ? block.toolName : '')
+    if (name === '') continue
+    // The path is the useful half; accept the shapes the fs tools actually use
+    // rather than guessing one. `input` is the field agent-loop hands to the
+    // scheduler, `arguments` the pre-parse name.
+    const input = block.input ?? block.arguments ?? {}
+    const path = typeof input?.path === 'string' ? input.path
+      : typeof input?.file_path === 'string' ? input.file_path
+        : ''
+    parts.push(path === '' ? name : name + ' ' + path)
+    if (parts.length >= ANCHOR_LIMIT) break
+  }
+  return parts.join(' · ')
 }
 
 /**
@@ -504,40 +552,14 @@ function trimTurns(state) {
   if (state.turns.length > limit) state.turns = state.turns.slice(-limit)
 }
 
-/**
- * Append one suggestion to the session log.
- *
- * The record is `ignorable`: a reader that does not know the type (an older
- * build, a different client) retains it and skips it, so adding this cannot
- * make an existing session unreadable. The payload is deliberately tiny — the
- * text and nothing else — because it is persisted next to the conversation and
- * its only consumer is the composer.
- *
- * @param {object} session the session whose log receives the record
- * @param {string} text the suggestion
- * @returns {boolean} whether the record landed
- */
-export function appendSuggestion(session, text) {
-  if (session === null || typeof session !== 'object') return false
-  if (typeof session.appendPluginRecord !== 'function') return false
-  try {
-    session.appendPluginRecord(SUGGESTION_RECORD, { text })
-    return true
-  } catch {
-    // A record that cannot be written is not an error worth surfacing: the
-    // feature is optional and the turn already completed.
-    return false
-  }
-}
-
-/**
- * The record type this plugin writes.
- *
- * The grammar is `plugin:` plus lowercase slash-separated segments, so the
- * package name cannot be used verbatim (the `@` and the scope separator are
- * illegal). `plugin:dsh-predict/suggestion` names the owner and the payload.
- */
-export const SUGGESTION_RECORD = 'plugin:dsh-predict/suggestion'
+// THERE IS DELIBERATELY NO "WRITE THE SUGGESTION TO THE SESSION" HELPER.
+//
+// An earlier design appended a `plugin:dsh-predict/suggestion` record and
+// persisted the model's text next to the conversation. The shipped path never
+// used it (the client asks for the suggestion over `predictSettings/suggestion`
+// and draws it in the composer), but a writer is a standing invitation to route
+// the model's answer — reasoning included — into the transcript. The only
+// durable record of a prediction is now the absence of one.
 
 /**
  * The session id behind a `session/event` subject.
@@ -557,6 +579,28 @@ export function sessionIdOf(subject) {
 /**
  * One model call through the session's own LLM service.
  *
+ * THINKING IS SWITCHED OFF AT THE SOURCE, and then filtered anyway.
+ *
+ * The third argument of `ctx.llm.prepareCall` is the documented `ConfigureCall`
+ * hook (`dsh-llm/lib/index.js`, `prepareCall(config, signal, configure)`): it
+ * runs before adapter defaults are materialized, which is the only point at
+ * which this call can say "no reasoning" without racing the adapter's own
+ * default. `leastReasoning` selects `reasoningEffort: 'off'` (DeepSeek turns
+ * that into `thinking: { type: 'disabled' }`). Without it, a route configured
+ * for `high` would reason before writing six words, every turn.
+ *
+ * The stream is still filtered by `predictionChunkText`, because a model that
+ * cannot switch thinking off (or a route that ignores the effort) must not be
+ * able to hand reasoning to the composer. Only `text-delta` survives; a stream
+ * with nothing but reasoning resolves to `''`, which `parseSuggestion` turns
+ * into "no prediction".
+ *
+ * NOTHING IS APPENDED TO THE SESSION. A prediction is not a turn: it is not a
+ * message, not a step, and not a plugin record. The host renders the transcript
+ * from `assistant/message` events that only the agent loop appends, so keeping
+ * this function free of session writes is what guarantees the transcript never
+ * receives a prediction — or its reasoning.
+ *
  * @param {object} ctx host context
  * @param {object} options
  * @param {{ provider: string, model: string }} options.route the route to use
@@ -565,13 +609,13 @@ export function sessionIdOf(subject) {
  * @returns {Promise<string>} the assistant text, joined
  */
 export async function callModel(ctx, { route, messages, signal }) {
-  const prepared = await ctx.llm.prepareCall(route, signal)
+  const prepared = await ctx.llm.prepareCall(route, signal, leastReasoning)
   const chunks = []
   // `prepared.stream` refuses a config that differs from the prepared one (see
   // `INVALID_PREPARED_CALL` in dsh-llm), so the route is spread back in exactly.
   for await (const chunk of prepared.stream({ ...prepared.config, messages, signal })) {
-    if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') chunks.push(chunk.text)
-    else if (chunk?.type === 'text' && typeof chunk.text === 'string') chunks.push(chunk.text)
+    const text = predictionChunkText(chunk)
+    if (text !== '') chunks.push(text)
   }
   return chunks.join('')
 }

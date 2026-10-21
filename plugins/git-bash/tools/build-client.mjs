@@ -57,16 +57,72 @@ export function buildArtifact() {
     '})\n'
 }
 
+/**
+ * Load the artifact the way the HOST does: register the factory, then run it.
+ *
+ * WHY THIS GATE EXISTS. `client/src/styles.js` holds its whole sheet in a
+ * template literal. A single backtick inside a CSS COMMENT ends that literal:
+ * the following words become JavaScript, the build still SUCCEEDS (esbuild sees
+ * a valid expression), and the failure surfaces only when the page boots —
+ * `@hwfee/dsh-git-bash: import failed: code is not defined`, which takes down
+ * the ENTIRE web boot and shows the user "The application could not start".
+ * That happened once with the words "text-code" in a comment.
+ *
+ * A static search for backticks cannot catch it: the file legitimately contains
+ * them. Running the factory can, and it costs one module evaluation.
+ *
+ * @param {string} artifact the generated bundle text
+ * @throws when the factory throws while registering or materializing
+ */
+async function assertFactoryLoads(artifact) {
+  const { mkdtempSync, rmSync, writeFileSync: write } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { pathToFileURL } = await import('node:url')
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-client-'))
+  const file = join(dir, 'bundle.mjs')
+  write(file, artifact)
+  const global = globalThis
+  const saved = { window: global.window, loader: global.__ModuleLoader__ }
+  let factory = null
+  global.window = global
+  global.__ModuleLoader__ = { load: (entry) => { factory = entry.factory } }
+  try {
+    await import(pathToFileURL(file).href)
+    if (typeof factory !== 'function') throw new Error('the bundle never called __ModuleLoader__.load')
+    // A tiny `require` satisfies the host-module table the factory reaches for
+    // (react / primitives). Those are optional in this plugin: a missing one is
+    // a degraded row, not a boot failure, which is exactly what must hold here.
+    factory(() => { throw new Error('not provided in the build check') })
+  } finally {
+    global.window = saved.window
+    global.__ModuleLoader__ = saved.loader
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === join(process.argv[1])
 
 if (isMain) {
   const check = process.argv.includes('--check')
   const artifact = buildArtifact()
 
+  // BOTH MODES LOAD THE ARTIFACT. `--check` proves the committed file is
+  // current; this proves the current file can RUN. They are different
+  // questions, and the backtick incident passed the first while failing the
+  // second hard enough to stop the whole app.
+  try {
+    await assertFactoryLoads(artifact)
+  } catch (error) {
+    console.error('client/client.js does not load: ' + (error?.message ?? error))
+    console.error('A template-literal break in client/src/ (a backtick inside a CSS comment) does this. '
+      + 'The host will fail web boot with "import failed: <message>" — fix the source, do not ship it.')
+    process.exit(1)
+  }
+
   if (check) {
     const committed = readFileSync(OUT, 'utf8')
     if (committed === artifact) {
-      console.log('client/client.js is up to date with client/src/')
+      console.log('client/client.js is up to date with client/src/ and loads')
       process.exit(0)
     }
     console.error('client/client.js is STALE — run `npm run build` and commit the artifact')

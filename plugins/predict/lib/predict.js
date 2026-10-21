@@ -40,6 +40,26 @@ export const CONTEXT_TURNS = 6
 export const MESSAGE_CHAR_LIMIT = 600
 
 /**
+ * Characters of the final assistant message sent as the subject to continue.
+ *
+ * 4,000 rather than supi's 8,000: their model is a fine-tuned suggestion model,
+ * ours is a general chat model asked for one line, and every extra character is
+ * latency on a keystroke-adjacent feature (Cursor reports p50 260 ms
+ * server-side for a 13k-token Tab request). The TAIL is kept, not the head — a
+ * reply's conclusion is what the user reacts to.
+ */
+export const ASSISTANT_TAIL_CHARS = 4000
+
+/**
+ * How many tool anchors ("edit plugins/…/styles.js") ride along.
+ *
+ * Each is a few dozen bytes and is what makes an anaphoric next line ("do the
+ * same for the other file") answerable at all. Eight describes one turn's work
+ * without turning the request into a transcript.
+ */
+export const ANCHOR_LIMIT = 8
+
+/**
  * The ceiling on one prediction, in characters.
  *
  * A suggestion is a line the user could have typed. Past a couple hundred
@@ -71,6 +91,25 @@ export const COOLDOWN_TURNS = 10
  * not re-offered immediately, without a hidden knob nobody can see.
  */
 export const SKIP_AFTER_DISMISS = 1
+
+/**
+ * The reasoning effort a prediction asks for: none.
+ *
+ * WHY NOT CONFIGURABLE. A prediction is one short line the user could have
+ * typed; thinking before it buys nothing and costs tokens on every turn. Worse,
+ * it is the only content this plugin ever forwards to a visible surface, so a
+ * setting that re-enabled it would put a reasoning block one bug away from the
+ * composer (and from the transcript, after Tab). The value is a constant for
+ * that reason: no settings key, no RPC field, and {@link leastReasoning} never
+ * reads one.
+ *
+ * `'off'` is the adapter-owned effort id that disables thinking: the DeepSeek
+ * adapter serializes it as `thinking: { type: 'disabled' }`
+ * (`dsh-llm-deepseek/lib/index.js` — `OFF_REASONING_EFFORT`), and pi-ai accepts
+ * `off` as a thinking level. A model that does not advertise `off` gets its
+ * least advertised effort instead — see {@link leastReasoning}.
+ */
+export const PREDICTION_REASONING_EFFORT = 'off'
 
 /**
  * The system prompt for the prediction request.
@@ -122,6 +161,88 @@ export function truncate(text, limit) {
 }
 
 /**
+ * Pick the prediction's reasoning controls for `ctx.llm.prepareCall`.
+ *
+ * This is the `ConfigureCall` shape documented in `@deepseek-ai/dsh-llm`:
+ * `(controls, model) => controls`. It runs before adapter defaults are applied,
+ * so returning `reasoningEffort: 'off'` is what stops an adapter-configured
+ * default (DeepSeek defaults to `high`) from turning thinking on.
+ *
+ * THE TWO EDGE CASES ARE NOT OPTIONAL:
+ *
+ *   - a model with no reasoning metadata rejects ANY `reasoningEffort` with
+ *     `UNSUPPORTED_REASONING_EFFORT`, which would kill every prediction on a
+ *     non-reasoning route; the controls are returned untouched there.
+ *   - a model whose efforts do not include `'off'` still gets its least effort
+ *     (`efforts[0]`, the documented least-effort selection), because leaving the
+ *     default alone is exactly the thinking this call exists to avoid.
+ *
+ * @param {object} controls the call controls prepared so far
+ * @param {object | undefined} model exact model metadata from the adapter
+ * @returns {object} the controls to use
+ */
+export function leastReasoning(controls, model) {
+  const base = controls !== null && typeof controls === 'object' ? controls : {}
+  const efforts = model?.reasoning?.efforts
+  if (!Array.isArray(efforts) || efforts.length === 0) return base
+  const off = efforts.find((effort) => effort?.id === PREDICTION_REASONING_EFFORT)
+  const chosen = off ?? efforts[0]
+  if (chosen === undefined || typeof chosen.id !== 'string' || chosen.id === '') return base
+  return { ...base, reasoningEffort: chosen.id }
+}
+
+/**
+ * The text ONE stream chunk contributes to a prediction, or `''`.
+ *
+ * WHY A SWITCH AND NOT A TRUTHY CHECK. The stream carries reasoning as its own
+ * chunk type (`reasoning-delta`) beside text (`text-delta`). Joining whatever
+ * happens to have a `text` field — the shape a "collect the text" helper is
+ * tempted to take — is precisely how a thinking block reaches the composer.
+ * Only text deltas count; every other chunk (reasoning, tool calls, block
+ * boundaries, usage, finish) contributes nothing.
+ *
+ * `block-end` is deliberately ignored even for text blocks: the adapter already
+ * streamed the same characters as `text-delta`, so accepting both would double
+ * the suggestion.
+ *
+ * @param {unknown} chunk one stream chunk
+ * @returns {string} the text to append
+ */
+export function predictionChunkText(chunk) {
+  if (chunk === null || typeof chunk !== 'object') return ''
+  if (chunk.type !== 'text-delta') return ''
+  return typeof chunk.text === 'string' ? chunk.text : ''
+}
+
+/**
+ * Remove inline reasoning envelopes from model text.
+ *
+ * THE SECOND LINE OF DEFENCE. Even with thinking switched off, a route can hand
+ * back reasoning inside the text body — an OpenAI-compatible endpoint that only
+ * speaks `<thinking>…</thinking>`, or a model that imitates the envelope seen in
+ * its history. That text would otherwise become the ghost (and, after Tab, the
+ * user's message), so the envelope is removed here rather than trusted.
+ *
+ * An UNCLOSED opening tag drops everything after it: a model that starts a
+ * scratchpad and dies mid-stream has not produced a suggestion, and keeping the
+ * tail would show half a thought as grey text.
+ *
+ * @param {unknown} raw the assistant text
+ * @returns {string} the text with reasoning envelopes removed
+ */
+export function stripThinking(raw) {
+  if (typeof raw !== 'string' || raw === '') return ''
+  return raw
+    // Closed envelopes: <thinking>…</thinking>, <reasoning>…</reasoning>, etc.
+    .replace(/<\s*(thinking|think|reasoning)\s*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+    // An unterminated envelope swallows the rest of the answer.
+    .replace(/<\s*(thinking|think|reasoning)\s*>[\s\S]*$/gi, '')
+    // A stray closing tag is noise, not a boundary.
+    .replace(/<\s*\/\s*(thinking|think|reasoning)\s*>/gi, '')
+    .trim()
+}
+
+/**
  * Turn the model's raw output into a suggestion, or `null`.
  *
  * THE PARSING IS THE DEFENSIVE PART. Models wrap answers in quotes, prefix them
@@ -135,12 +256,15 @@ export function truncate(text, limit) {
 export function parseSuggestion(raw) {
   if (typeof raw !== 'string') return null
 
-  // A model that answers the QUESTION instead of predicting the next message
-  // usually does it in the first line after a label; drop common labels.
-  let text = raw
+  // Reasoning that arrived inside the text body is not a suggestion; see
+  // `stripThinking`. This runs before line splitting so a multi-line thinking
+  // block cannot contribute its first line as the "prediction".
+  let text = stripThinking(raw)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line !== '')
+    // A model that answers the QUESTION instead of predicting the next message
+    // usually does it in the first line after a label; drop common labels.
     .map((line) => line.replace(/^(suggestion|next message|next|user)\s*:\s*/i, ''))
     .filter((line) => line !== '')
 

@@ -5,6 +5,9 @@ import { createTableMarker } from './markdown.js'
 import { createAppearanceIconMarker } from './navicon.js'
 import { createPasteConverter } from './paste.js'
 import { createHeroRipple } from './ripple.js'
+import { createDiffNumberMarker } from './diffnumbers.js'
+import { installVariantHooks } from './varianthooks.js'
+import { createDiffView } from './diffview.js'
 import {
   appearanceSectionOptions, createAppearanceSection, registerSettingsRows,
 } from './section.js'
@@ -191,6 +194,53 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
       }
     }, 'dsh-cds-theme: markdown body mark')
 
+    // THE TWO HOOKS THE TOOL-CARD RULES EXPECT. `data-read` and `data-diff` do
+    // not exist in the shipped DOM (a live probe: 47 rows with `data-variant`,
+    // 0 with either of those), so `varianthooks.js` stamps the cards from
+    // `data-variant`. Same gate as the rules that consume them — a mark with no
+    // rules is a no-op either way.
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      let dispose = null
+      const sync = function () {
+        const state = settings.getState()
+        const wanted = state.enabled !== false && state.refine !== false
+        if (wanted && dispose === null) dispose = installVariantHooks(document)
+        else if (!wanted && dispose !== null) { dispose(); dispose = null }
+      }
+      sync()
+      const unsubscribe = settings.subscribe(sync)
+      return function () {
+        unsubscribe()
+        if (dispose !== null) { dispose(); dispose = null }
+      }
+    }, 'dsh-cds-theme: payload card variant hooks')
+
+    // The diff card's line numbers: `diffnumbers.js` re-seeds the CSS counters
+    // from a hunk start when the card publishes one, and does nothing when it
+    // does not. The rules that paint the gutter are inside `refine`, so the
+    // marker follows the same gate — a marker with no rules would write
+    // attributes nothing reads. The marker is idempotent and removes every mark
+    // on dispose, including the two inline custom properties.
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const marker = createDiffNumberMarker(document)
+      const wanted = function () {
+        const state = settings.getState()
+        return state.enabled !== false && state.refine !== false
+      }
+      const sync = function () {
+        if (wanted()) marker.start()
+        else marker.stop()
+      }
+      sync()
+      const unsubscribe = typeof settings.subscribe === 'function' ? settings.subscribe(sync) : null
+      return function () {
+        if (typeof unsubscribe === 'function') unsubscribe()
+        marker.stop()
+      }
+    }, 'dsh-cds-theme: diff line numbers')
+
     // The blank-session backdrop (ripple.js). One switch, one module, and the
     // stylesheet's layer promotion follows the same switch (styles.js
     // `heroRippleRules`), so a canvas can never outlive the rules that keep it
@@ -233,6 +283,62 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
       console.warn('dsh-cds-theme: slots/react/primitives unavailable; theme rows not registered')
       return
     }
+
+    // ------------------------------------------------- the diff card view
+    //
+    // `edit` and `write` are the two tools whose host card is the diff the
+    // theme cannot colour (see `diffview.js`). Registering their
+    // `tool.call.toolview` cells is what puts this plugin's card in the
+    // transcript; `priority: 100` outranks the host's own `FileMutationRow`,
+    // which registers without a rank.
+    //
+    // WHY IT FOLLOWS `refine`. The card's rules live in `diffCardRules()`,
+    // inside the component half of the sheet. A view that stayed registered
+    // with its rules switched off would REPLACE the host's styled card with a
+    // bare one — strictly worse than not having the view. So the registration
+    // and the rules travel on the same switch, and turning refinement off
+    // hands the conversation back to the host's card.
+    //
+    // The disposer from `slots.inject` removes both cells, so a disable/enable
+    // cycle cannot leave two registered occupants on one key.
+    ctx.effect(function () {
+      const DiffView = createDiffView({ React: React })
+      const wireNames = ['edit', 'write']
+      let off = null
+      const sync = function () {
+        const state = settings.getState()
+        const wanted = state.enabled !== false && state.refine !== false
+        if (wanted === (off !== null)) return
+        if (wanted) {
+          off = slots.inject('tool.call.toolview', function () {
+            return wireNames.map(function (key) {
+              return slots.register({
+                name: 'tool.call.toolview',
+                key: key,
+                // LOW WINS. The keyed seat elects by ASCENDING priority and keeps
+                // the first live entry, so a LOWER number shadows a higher one.
+                // The host's own FileMutationRow sits at 0; registering at 100
+                // lost to it (measured in the live registry: ours listed at
+                // priority 100 with active false, the host at 0 with active true,
+                // and no diff card ever rendered). -1 sorts ahead of it.
+                priority: -1,
+              }, DiffView)
+            })
+          })
+          return
+        }
+        const stop = off
+        off = null
+        if (typeof stop === 'function') stop()
+      }
+      sync()
+      const unsubscribe = typeof settings.subscribe === 'function' ? settings.subscribe(sync) : null
+      return function () {
+        if (typeof unsubscribe === 'function') unsubscribe()
+        if (typeof off === 'function') off()
+        off = null
+      }
+    }, 'dsh-cds-theme: diff card view')
 
     // ------------------------------------------------------ settings rows
     //

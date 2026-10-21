@@ -170,9 +170,26 @@ window.__ModuleLoader__.load({
       "markdown-code-block",
       "markdown-code-block-small"
     ];
+    var UI_FAMILY_VARIABLE = "--dsh-font-family-ui";
     var DEFAULT_STATE = {
       /** Shared UI + content family. Empty = the host's own stack. 空 = 宿主默认字体栈。 */
       uiFamily: "",
+      /**
+       * The UI family override. Empty means "follow the body", which is the
+       * default; a value writes `--dsh-font-family-ui` and only chrome moves.
+       */
+      uiFontFamily: "",
+      /**
+       * The UI font size in PIXELS, like the host's own 字号大小 row (14 px, 11 px)
+       * and the two size rows inside the font group. 0 means "not set": the row
+       * shows the host's 14 px chrome base and nothing is written. A value writes
+       * `--dsh-font-size-ui` (the token ladder) and drives `uiscale.js`, which
+       * enlarges the chrome's TEXT in place: font-size and pixel line-height are
+       * written inline on text nodes inside the sidebar and settings dialog. No
+       * container is resized and no `zoom` is used — the user asked for bigger
+       * interface text, not a scaled layout.
+       */
+      uiFontSize: 0,
       codeFamily: "",
       /**
        * Terminal family — committed through `theme.setFontFamily('terminal')`
@@ -206,10 +223,27 @@ window.__ModuleLoader__.load({
       if (!isFinite(n)) return 0;
       return Math.min(30, Math.max(-30, n));
     }
+    function clampUiFontSize(value) {
+      const n = Math.round(Number(value));
+      if (!isFinite(n) || n <= 0) return 0;
+      return Math.min(20, Math.max(10, n));
+    }
+    var UI_FONT_BASE_PX = 14;
+    function uiScaleFactor(state) {
+      const size = clampUiFontSize(state === null || state === void 0 ? 0 : state.uiFontSize);
+      return size > 0 ? size / UI_FONT_BASE_PX : 1;
+    }
     function sanitize(raw) {
       const source = raw && typeof raw === "object" ? raw : {};
       return {
         uiFamily: typeof source.uiFamily === "string" ? source.uiFamily : "",
+        // THE UI ROLE MUST BE WHITELISTED HERE. `sanitize` rebuilds the state object
+        // from this list, so a key it does not name is dropped on every save — the
+        // row then read `undefined` forever and kept re-rendering, which React
+        // reported as error #185 (maximum update depth) and the host swallowed into
+        // an empty `data-slot-error` box.
+        uiFontFamily: typeof source.uiFontFamily === "string" ? source.uiFontFamily : "",
+        uiFontSize: clampUiFontSize(source.uiFontSize),
         codeFamily: typeof source.codeFamily === "string" ? source.codeFamily : "",
         terminalFamily: typeof source.terminalFamily === "string" ? source.terminalFamily : "",
         lineHeightPct: clampLineHeight(source.lineHeightPct),
@@ -452,6 +486,10 @@ window.__ModuleLoader__.load({
       lines.push(":root, body {");
       if (uiStack !== null) lines.push("  --dsw-font-family: " + uiStack + " !important;");
       if (codeStack !== null) lines.push("  --ds-font-family-code: " + codeStack + " !important;");
+      const uiSize = clampUiFontSize(current.uiFontSize);
+      if (uiSize > 0) {
+        lines.push("  --dsh-font-size-ui: " + uiSize + "px !important;");
+      }
       if (lhRatio !== 1) {
         const skip = typeof document === "undefined" ? null : document.getElementById(STYLE_ID);
         const declared = collectDeclaredTokens(sourceTokens(), skip);
@@ -763,7 +801,7 @@ window.__ModuleLoader__.load({
     var zh_default = {
       meta: {
         title: "\u7CFB\u7EDF\u5B57\u4F53",
-        description: "\u4E3A\u300C\u8BBE\u7F6E \u2192 \u901A\u7528\u300D\u589E\u52A0\u5185\u5BB9\u5B57\u4F53\u3001\u4EE3\u7801\u5B57\u4F53\u3001\u7EC8\u7AEF\u5B57\u4F53\u4E09\u4E2A\u7CFB\u7EDF\u5B57\u4F53\u9009\u62E9\u5668\uFF0C\u9644\u884C\u8DDD\u4E0E\u5B57\u8DDD\u63A7\u5236\uFF1B\u4ECE Windows \u5DF2\u5B89\u88C5\u5B57\u4F53\u679A\u4E3E\uFF0C\u5B57\u53F7\u4E0E\u5B57\u91CD\u4ECD\u7531\u5BBF\u4E3B\u4E3B\u9898\u7BA1\u7406\u3002"
+        description: "\u4E3A\u300C\u8BBE\u7F6E \u2192 \u901A\u7528\u300D\u589E\u52A0\u5185\u5BB9\u5B57\u4F53\u3001\u4EE3\u7801\u5B57\u4F53\u3001\u7EC8\u7AEF\u5B57\u4F53\u4E09\u4E2A\u7CFB\u7EDF\u5B57\u4F53\u9009\u62E9\u5668\uFF0C\u9644\u884C\u8DDD\u4E0E\u5B57\u8DDD\u63A7\u5236\uFF1B\u4ECE Windows \u5DF2\u5B89\u88C5\u5B57\u4F53\u679A\u4E3E\u3002\u6B63\u6587/\u4EE3\u7801/\u7EC8\u7AEF\u7684\u5B57\u53F7\u4E0E\u5B57\u91CD\u4ECD\u7531\u5BBF\u4E3B\u4E3B\u9898\u7BA1\u7406\uFF1B\u754C\u9762\u5B57\u4F53\u7684\u5B57\u53F7\u9ED8\u8BA4\u8DDF\u968F\u6B63\u6587\u3002"
       },
       strings: {
         "row.text.title": "\u5185\u5BB9\u5B57\u4F53",
@@ -784,7 +822,13 @@ window.__ModuleLoader__.load({
         "menu.use": "\u4F7F\u7528\u201C{name}\u201D",
         "search.placeholder": "\u641C\u7D22\u5B57\u4F53\u6216\u8F93\u5165\u5B57\u4F53\u540D\u79F0",
         "menu.builtin": "\u5185\u7F6E\u5B57\u4F53",
-        "menu.default.effective": "\u9ED8\u8BA4\u5B57\u4F53\uFF08{family}\uFF09"
+        "menu.default.effective": "\u9ED8\u8BA4\u5B57\u4F53\uFF08{family}\uFF09",
+        "row.ui.title": "\u754C\u9762\u5B57\u4F53",
+        "row.ui.desc": "\u53EA\u6539\u754C\u9762\u63A7\u4EF6\uFF1B\u5B57\u53F7\u9ED8\u8BA4\u8DDF\u968F\u6B63\u6587\u3002",
+        "row.uiSize.title": "\u754C\u9762\u5B57\u53F7",
+        "row.uiSize.desc": "\u754C\u9762\u6587\u5B57\u5927\u5C0F\uFF1B\u9ED8\u8BA4 14px\uFF0C\u53EA\u653E\u5927\u6587\u5B57\uFF0C\u4E0D\u6539\u5E03\u5C40\u3002",
+        "row.uiSize.increase": "\u589E\u5927\u754C\u9762\u5B57\u53F7",
+        "row.uiSize.decrease": "\u51CF\u5C0F\u754C\u9762\u5B57\u53F7"
       }
     };
 
@@ -792,7 +836,7 @@ window.__ModuleLoader__.load({
     var en_default = {
       meta: {
         title: "System fonts",
-        description: "Adds system-font pickers for text, code and terminal fonts to Settings \u2192 General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Font size and weight stay with the host theme."
+        description: "Adds system-font pickers for text, code and terminal fonts to Settings \u2192 General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Size and weight of the content roles stay with the host theme; the interface font's size follows the body by default."
       },
       strings: {
         "row.text.title": "Text font",
@@ -813,7 +857,13 @@ window.__ModuleLoader__.load({
         "menu.use": "Use \u201C{name}\u201D",
         "search.placeholder": "Search fonts or type a family name",
         "menu.builtin": "Built-in",
-        "menu.default.effective": "Default font ({family})"
+        "menu.default.effective": "Default font ({family})",
+        "row.ui.title": "Interface font",
+        "row.ui.desc": "Chrome only; size follows the body by default.",
+        "row.uiSize.title": "Interface size",
+        "row.uiSize.desc": "Interface text size; 14px by default, text only \u2014 the layout does not move.",
+        "row.uiSize.increase": "Increase interface font size",
+        "row.uiSize.decrease": "Decrease interface font size"
       }
     };
 
@@ -861,7 +911,10 @@ window.__ModuleLoader__.load({
       ".dsf-trigger:hover { background: var(--dsw-alias-interactive-bg-hover); }",
       ".dsf-trigger .dsf-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }",
       ".dsf-trigger .dsf-chevron { flex: none; margin-left: auto; }",
-      ".dsf-trigger .dsf-placeholder { color: var(--dsw-alias-label-tertiary); }",
+      // NO placeholder grey. An UNSET family means "the host's own stack", which is
+      // a real value the trigger names, not an empty field waiting for input — and a
+      // dimmed trigger next to a bright one reads as "this row is disabled". All three
+      // (four, with the UI row) now share the trigger's own `label-primary`.
       ".dsf-family { width: 220px; max-width: 100%; }",
       ".dsf-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; }",
       ".dsf-item .dsf-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }",
@@ -893,6 +946,15 @@ window.__ModuleLoader__.load({
       ".dsf-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--dsw-alias-state-business-primary, #4c72e0); }",
       ".dsf-slider::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--dsw-alias-state-business-primary, #4c72e0); }",
       ".dsf-slider-value { flex: none; min-width: 52px; text-align: right; color: var(--dsw-alias-label-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }",
+      // Same read-out + arrows shape and geometry as the host's own size rows:
+      // a 72×36 rounded plate, the value right-aligned before the arrow column,
+      // `px` outside the plate. Measured from the host (字号大小) on 2026-10-20.
+      ".dsf-stepper { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 72px; height: 36px; padding-right: 27px; box-sizing: border-box; border-radius: 10px; background: var(--dsw-alias-bg-module-platform); }",
+      ".dsf-stepper-value { color: var(--dsw-alias-label-primary); font-size: 14px; line-height: 22px; font-variant-numeric: tabular-nums; }",
+      ".dsf-stepper-unit { color: var(--dsw-alias-label-secondary); font-size: 14px; line-height: 22px; }",
+      ".dsf-stepper-arrows { position: absolute; right: 8px; top: 5px; display: flex; flex-direction: column; gap: 2px; }",
+      ".dsf-stepper-arrow { display: flex; align-items: center; justify-content: center; width: 17px; height: 12px; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }",
+      ".dsf-stepper-arrow:hover { color: var(--dsw-alias-label-primary); }",
       "@media (max-width: 600px) { .dsf-row { flex-wrap: wrap; } .dsf-row-text { padding-right: 0; } .dsf-control { flex-wrap: wrap; } .dsf-family { width: 100%; } }"
     ].join("\n");
     function installPanelCss() {
@@ -912,7 +974,13 @@ window.__ModuleLoader__.load({
     var SLOTS = [
       { id: "dsh-system-fonts-content", order: 12, role: "text", titleKey: "row.text.title", descKey: "row.text.desc", familyKey: "uiFamily" },
       { id: "dsh-system-fonts-code", order: 13, role: "code", titleKey: "row.code.title", descKey: "row.code.desc", familyKey: "codeFamily" },
-      { id: "dsh-system-fonts-terminal", order: 14, role: "terminal", titleKey: "row.terminal.title", descKey: "row.terminal.desc", familyKey: "terminalFamily" }
+      { id: "dsh-system-fonts-terminal", order: 14, role: "terminal", titleKey: "row.terminal.title", descKey: "row.terminal.desc", familyKey: "terminalFamily" },
+      // THE UI ROLE. The host exposes three font roles (`text`, `code`,
+      // `terminal`) and no fourth, so this row does NOT go through
+      // `setFontFamily(role, …)`: the bridge writes `--dsh-font-family-ui`
+      // directly, and cds-theme's `--dsw-font-family-ui` falls back to
+      // `--dsw-font-family`, which is what "follows the body by default" means.
+      { id: "dsh-system-fonts-ui", order: 15, role: "ui", titleKey: "row.ui.title", descKey: "row.ui.desc", familyKey: "uiFontFamily" }
     ];
     var BUILTIN_FAMILIES = [
       { family: "anthropic-sans", display: "Anthropic Sans" },
@@ -929,12 +997,21 @@ window.__ModuleLoader__.load({
     var EFFECTIVE_FONT_VAR = {
       text: "--dsw-font-family",
       code: "--ds-font-family-code",
-      terminal: "--dsw-font-family-terminal"
+      terminal: "--dsw-font-family-terminal",
+      // The UI role resolves through cds-theme's `--dsw-font-family-ui`, whose own
+      // fallback is `--dsw-font-family`. Reading it means an unset UI family shows
+      // the family that is ACTUALLY rendering the chrome (Anthropic Sans by default)
+      // instead of the word "Default" — a placeholder that told the user nothing.
+      ui: "--dsw-font-family-ui"
     };
     var HOST_DEFAULT_VAR = {
       text: "--dsh-font-family-text-default",
       code: "--dsh-font-family-code-default",
-      terminal: "--dsh-font-family-terminal-default"
+      terminal: "--dsh-font-family-terminal-default",
+      // There is no host baseline for a role the host does not have, so the UI row
+      // compares against the TEXT baseline: "same as the body" is exactly the state
+      // this row calls its default, and an empty string there means "follows it".
+      ui: "--dsh-font-family-text-default"
     };
     function firstFamilyOf(value) {
       if (typeof value !== "string") return "";
@@ -958,7 +1035,7 @@ window.__ModuleLoader__.load({
     var SLIDER_SLOTS = [
       {
         id: "dsh-system-fonts-line-height",
-        order: 15,
+        order: 17,
         titleKey: "row.lineHeight.title",
         descKey: "row.lineHeight.desc",
         key: "lineHeightPct",
@@ -974,7 +1051,7 @@ window.__ModuleLoader__.load({
       },
       {
         id: "dsh-system-fonts-tracking",
-        order: 16,
+        order: 18,
         titleKey: "row.tracking.title",
         descKey: "row.tracking.desc",
         key: "trackingEm",
@@ -987,6 +1064,28 @@ window.__ModuleLoader__.load({
         display: function(v) {
           return (v > 0 ? "+" : "") + (v / 100).toFixed(2) + "em";
         }
+      }
+    ];
+    var STEPPER_SLOTS = [
+      {
+        id: "dsh-system-fonts-ui-size",
+        order: 16,
+        titleKey: "row.uiSize.title",
+        descKey: "row.uiSize.desc",
+        key: "uiFontSize",
+        min: 10,
+        max: 20,
+        step: 1,
+        normalize: function(v) {
+          return clampUiFontSize(v);
+        },
+        // 0 is "unset": display the host chrome's base size in px.
+        display: function(v) {
+          const n = clampUiFontSize(v);
+          return n > 0 ? n : UI_FONT_BASE_PX;
+        },
+        increaseKey: "row.uiSize.increase",
+        decreaseKey: "row.uiSize.decrease"
       }
     ];
     function createPanel({ React: React2, primitives: primitives2, settings: settings2, catalogue: catalogue2, bridge: bridge2, locale: locale2, merger: merger2 }) {
@@ -1070,9 +1169,12 @@ window.__ModuleLoader__.load({
               }
             }
           },
+          // NO conditional class. An unset family is "the host's own stack" — a real
+          // value, not an empty field — and dimming it made the un-configured rows
+          // look disabled next to the configured one.
           React2.createElement(
             "span",
-            { className: "dsf-value" + (family === "" ? " dsf-placeholder" : "") },
+            { className: "dsf-value" },
             valueText
           ),
           IconChevron ? React2.createElement(IconChevron, { size: 12, className: "dsf-chevron" }) : null
@@ -1244,6 +1346,65 @@ window.__ModuleLoader__.load({
           )
         );
       }
+      function StepperRow({ slot, t, bindRef }) {
+        const state = useStoreValue(settings2, settings2.getState);
+        const raw = slot.normalize(state[slot.key]);
+        const value = slot.display(raw);
+        const stepBy = function(delta) {
+          const from = raw > 0 ? raw : value;
+          const next = slot.normalize(from + delta);
+          if (next !== raw) settings2.setState({ [slot.key]: next });
+        };
+        const chevron = function(up) {
+          return React2.createElement("svg", {
+            width: 9,
+            height: 9,
+            viewBox: "0 0 16 16",
+            fill: "none",
+            strokeWidth: 1,
+            "aria-hidden": "true"
+          }, React2.createElement("path", {
+            d: up ? "M12 10L8.70711 6.70711C8.31658 6.31658 7.68342 6.31658 7.29289 6.70711L4 10" : "M4 6L7.29289 9.29289C7.68342 9.68342 8.31658 9.68342 8.70711 9.29289L12 6",
+            stroke: "currentColor"
+          }));
+        };
+        const arrow = function(delta, label) {
+          return React2.createElement("button", {
+            type: "button",
+            className: "dsf-stepper-arrow",
+            "aria-label": t(label),
+            onClick: function() {
+              stepBy(delta);
+            }
+          }, chevron(delta > 0));
+        };
+        return React2.createElement(
+          "div",
+          { className: "dsf-row", "data-dsf-row": slot.id, ref: bindRef },
+          React2.createElement(
+            "div",
+            { className: "dsf-row-text" },
+            React2.createElement("div", { className: "dsf-title" }, t(slot.titleKey)),
+            React2.createElement("div", { className: "dsf-desc" }, t(slot.descKey))
+          ),
+          React2.createElement(
+            "div",
+            { className: "dsf-control" },
+            React2.createElement(
+              "div",
+              { className: "dsf-stepper" },
+              React2.createElement("span", { className: "dsf-stepper-value" }, String(value)),
+              React2.createElement(
+                "span",
+                { className: "dsf-stepper-arrows" },
+                arrow(slot.step, slot.increaseKey),
+                arrow(-slot.step, slot.decreaseKey)
+              )
+            ),
+            React2.createElement("span", { className: "dsf-stepper-unit" }, "px")
+          )
+        );
+      }
       const fontSlots = SLOTS.map(function(slot) {
         return Object.assign({}, slot, { component: makeRow(slot) });
       });
@@ -1255,7 +1416,15 @@ window.__ModuleLoader__.load({
           }
         });
       });
-      const slots = fontSlots.concat(sliderSlots);
+      const stepperSlots = STEPPER_SLOTS.map(function(slot) {
+        const bindRef = rowRef(slot);
+        return Object.assign({}, slot, {
+          component: function BoundStepper(props) {
+            return React2.createElement(StepperRow, { slot, t: tFor(props), bindRef });
+          }
+        });
+      });
+      const slots = fontSlots.concat(stepperSlots, sliderSlots);
       return {
         slots,
         locale: handle,
@@ -1359,6 +1528,18 @@ window.__ModuleLoader__.load({
          * 把族名写入委托给宿主管线；服务缺失时返回 false，由调用方保留本地写入。
          */
         setFamily(role, name2) {
+          if (role === "ui") {
+            try {
+              const value = normalizeFontFamily(name2);
+              const body = typeof document === "undefined" ? void 0 : document.body;
+              if (body === void 0) return false;
+              if (value === "") body.style.removeProperty(UI_FAMILY_VARIABLE);
+              else body.style.setProperty(UI_FAMILY_VARIABLE, value);
+              return true;
+            } catch (error) {
+              return false;
+            }
+          }
           if (!this.live) return false;
           try {
             svc.setFontFamily(role, normalizeFontFamily(name2));
@@ -1371,7 +1552,7 @@ window.__ModuleLoader__.load({
     }
 
     // client/src/lifecycle.js
-    function createLifecycle({ settings: settings2, typography: typography2, chrome: chrome2, catalogue: catalogue2, panel: panel2, merger: merger2, locale: locale2, React: React2, primitives: primitives2, onTheme }) {
+    function createLifecycle({ settings: settings2, typography: typography2, chrome: chrome2, uiScaler: uiScaler2, catalogue: catalogue2, panel: panel2, merger: merger2, locale: locale2, React: React2, primitives: primitives2, onTheme }) {
       let applied = false;
       function scheduleRebuild() {
         if (typeof window === "undefined") return function() {
@@ -1381,6 +1562,7 @@ window.__ModuleLoader__.load({
           if (stopped) return;
           typography2.apply();
           if (chrome2) chrome2.apply();
+          if (uiScaler2) uiScaler2.refresh();
         };
         const cancel = [];
         if (typeof window.requestAnimationFrame === "function") {
@@ -1412,9 +1594,14 @@ window.__ModuleLoader__.load({
           typography2.activate();
           catalogue2.activate();
           if (chrome2) chrome2.activate();
+          if (uiScaler2) {
+            uiScaler2.activate();
+            uiScaler2.setScale(uiScaleFactor(settings2.getState()));
+          }
           return function() {
             applied = false;
             catalogue2.dispose();
+            if (uiScaler2) uiScaler2.teardown();
             if (chrome2) chrome2.teardown();
             typography2.teardown();
             removePanelCss();
@@ -1538,7 +1725,12 @@ window.__ModuleLoader__.load({
     var ROLE_TITLES = [
       ["text", ["\u6B63\u6587\u5B57\u4F53", "Text font"]],
       ["code", ["\u4EE3\u7801\u5B57\u4F53", "Code font"]],
-      ["terminal", ["\u7EC8\u7AEF\u5B57\u4F53", "Terminal font"]]
+      ["terminal", ["\u7EC8\u7AEF\u5B57\u4F53", "Terminal font"]],
+      // The UI role. It has no HOST row to replace (the host has three font inputs),
+      // so it is only ever OUR row — but it still has to be in this list, or the
+      // merge drops it while moving rows into the host's collapsible group, and the
+      // row silently never appears.
+      ["ui", ["\u754C\u9762\u5B57\u4F53", "Interface font"]]
     ];
     var ROLE_ORDER = ROLE_TITLES.map(function(entry) {
       return entry[0];
@@ -2038,6 +2230,193 @@ window.__ModuleLoader__.load({
       };
     }
 
+    // client/src/uiscale.js
+    var UI_SCALE_SCOPES = [
+      '[data-slot="sidebar"]',
+      '[data-shortcut-modal="settings"]'
+    ];
+    var VALUE_TEXT = /^(INPUT|TEXTAREA)$/;
+    function createUiScaler({ document: doc, getScale, window: win }) {
+      if (!doc || typeof doc.querySelectorAll !== "function") return emptyScaler();
+      const view = win ?? doc.defaultView;
+      if (!view || typeof view.getComputedStyle !== "function") return emptyScaler();
+      const bases = /* @__PURE__ */ new WeakMap();
+      const touched = /* @__PURE__ */ new Set();
+      const observedRoots = /* @__PURE__ */ new WeakSet();
+      const rootObservers = /* @__PURE__ */ new Set();
+      let bodyObserver = null;
+      let scale = 1;
+      let scheduled = false;
+      let active = false;
+      const raf = typeof view.requestAnimationFrame === "function" ? (fn) => view.requestAnimationFrame(fn) : (fn) => setTimeout(fn, 16);
+      function hasDirectText(el) {
+        const nodes = el.childNodes;
+        if (!nodes) return false;
+        for (let i = 0; i < nodes.length; i += 1) {
+          const node = nodes[i];
+          if (node.nodeType === 3 && String(node.textContent ?? "").trim() !== "") return true;
+        }
+        return false;
+      }
+      function record(el) {
+        const style = view.getComputedStyle(el);
+        const line = String(style.lineHeight ?? "");
+        const base = {
+          size: Number.parseFloat(style.fontSize),
+          linePx: /^-?\d+(\.\d+)?px$/.test(line) ? Number.parseFloat(line) : null,
+          ownSize: el.style.getPropertyValue("font-size"),
+          ownSizePriority: el.style.getPropertyPriority("font-size"),
+          ownLine: el.style.getPropertyValue("line-height"),
+          ownLinePriority: el.style.getPropertyPriority("line-height")
+        };
+        bases.set(el, base);
+        return base;
+      }
+      function write(el, base) {
+        if (!(base.size > 0)) return;
+        const size = Math.round(base.size * scale * 100) / 100;
+        if (el.style.getPropertyValue("font-size") !== size + "px") {
+          el.style.setProperty("font-size", size + "px", "important");
+        }
+        if (base.linePx !== null && base.linePx > 0) {
+          const line = Math.round(base.linePx * scale * 100) / 100;
+          if (el.style.getPropertyValue("line-height") !== line + "px") {
+            el.style.setProperty("line-height", line + "px", "important");
+          }
+        }
+        touched.add(el);
+      }
+      function applyTo(el) {
+        if (!el || el.nodeType !== 1) return;
+        if (scale === 1) return;
+        const cached = bases.get(el);
+        if (cached) {
+          write(el, cached);
+          return;
+        }
+        if (!hasDirectText(el) && !VALUE_TEXT.test(el.tagName)) return;
+        write(el, record(el));
+      }
+      function walk(root) {
+        applyTo(root);
+        const all = root.querySelectorAll("*");
+        for (let i = 0; i < all.length; i += 1) applyTo(all[i]);
+      }
+      function restore() {
+        for (const el of touched) {
+          const base = bases.get(el);
+          if (!base) continue;
+          if (base.ownSize !== "") el.style.setProperty("font-size", base.ownSize, base.ownSizePriority);
+          else el.style.removeProperty("font-size");
+          if (base.ownLine !== "") el.style.setProperty("line-height", base.ownLine, base.ownLinePriority);
+          else el.style.removeProperty("line-height");
+        }
+        touched.clear();
+      }
+      function observeRoot(root) {
+        if (observedRoots.has(root)) return;
+        const Observer = view.MutationObserver;
+        if (typeof Observer !== "function") return;
+        observedRoots.add(root);
+        const observer = new Observer(schedule);
+        try {
+          observer.observe(root, { childList: true, subtree: true });
+          rootObservers.add(observer);
+        } catch (error) {
+        }
+      }
+      function roots() {
+        const out = [];
+        for (const selector of UI_SCALE_SCOPES) {
+          const found = doc.querySelectorAll(selector);
+          for (let i = 0; i < found.length; i += 1) out.push(found[i]);
+        }
+        return out;
+      }
+      function refresh() {
+        scheduled = false;
+        if (!active) return;
+        if (scale === 1) return;
+        for (const root of roots()) {
+          observeRoot(root);
+          walk(root);
+        }
+      }
+      function schedule() {
+        if (!active || scheduled) return;
+        scheduled = true;
+        raf(refresh);
+      }
+      function setScale(next) {
+        const value = Number(next);
+        if (!Number.isFinite(value) || value <= 0) return;
+        const factor = Math.min(3, Math.max(0.5, value));
+        if (factor === scale) return;
+        if (factor === 1) {
+          scale = 1;
+          restore();
+          return;
+        }
+        scale = factor;
+        refresh();
+      }
+      function activate() {
+        if (active) return;
+        active = true;
+        const Observer = view.MutationObserver;
+        if (typeof Observer === "function" && doc.body) {
+          bodyObserver = new Observer((records) => {
+            for (const record2 of records) {
+              for (const node of record2.addedNodes ?? []) {
+                if (node.nodeType !== 1) continue;
+                if (UI_SCALE_SCOPES.some((selector) => node.matches?.(selector) || node.querySelector?.(selector))) {
+                  schedule();
+                  return;
+                }
+              }
+            }
+          });
+          try {
+            bodyObserver.observe(doc.body, { childList: true });
+          } catch (error) {
+          }
+        }
+        refresh();
+      }
+      function teardown() {
+        active = false;
+        restore();
+        for (const observer of rootObservers) {
+          try {
+            observer.disconnect();
+          } catch (error) {
+          }
+        }
+        rootObservers.clear();
+        if (bodyObserver !== null) {
+          try {
+            bodyObserver.disconnect();
+          } catch (error) {
+          }
+          bodyObserver = null;
+        }
+      }
+      return { activate, setScale, refresh, teardown, getScale: () => scale };
+    }
+    function emptyScaler() {
+      return {
+        activate() {
+        },
+        setScale() {
+        },
+        refresh() {
+        },
+        teardown() {
+        },
+        getScale: () => 1
+      };
+    }
+
     // client/src/index.js
     var React = null;
     try {
@@ -2060,9 +2439,16 @@ window.__ModuleLoader__.load({
     var settings = createSettingsStore(storage);
     var typography = createTypography({ getState: settings.getState });
     var chrome = createChrome({ getState: settings.getState });
+    var uiScaler = createUiScaler({
+      document: typeof document === "undefined" ? void 0 : document,
+      getScale: function() {
+        return uiScaleFactor(settings.getState());
+      }
+    });
     settings.onChange = function() {
       typography.apply();
       chrome.apply();
+      uiScaler.setScale(uiScaleFactor(settings.getState()));
     };
     var catalogue = createCatalogue();
     var bridge = createThemeBridge(null, settings);
@@ -2073,6 +2459,7 @@ window.__ModuleLoader__.load({
       settings,
       typography,
       chrome,
+      uiScaler,
       catalogue,
       panel,
       merger,
@@ -2098,6 +2485,7 @@ window.__ModuleLoader__.load({
       quoteFamily,
       clampLineHeight,
       clampTracking,
+      clampUiFontSize,
       loadState: settings.loadState,
       getState: settings.getState,
       setState: settings.setState,

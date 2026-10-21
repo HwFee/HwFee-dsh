@@ -956,6 +956,76 @@ panel).
 
 ---
 
+### F5 — `genui`: a generated card painted its own answer invisible
+
+Found by the user, who sent a screenshot of a comparison card and said the
+percentage looked "blocked". It was: the headline `99.5%` was painted at 8%
+opacity.
+
+`plugins/genui/client/src/{legibility.js, card.js, styles.js}`.
+
+**Root cause, measured from the screenshot's own pixels.** The card's snippet
+coloured the headline with `var(--dsw-alias-code-diff-deleted)`, chose it because
+the token's name means "red" — and it IS the red, at alpha 0.08, because the host
+uses it as a tint BEHIND diff lines. The sample: glyph core `rgb(247, 235, 234)`
+on a `rgb(252, 252, 251)` surface, i.e. a **1.05:1** contrast ratio (WCAG AA for
+body text is 4.5:1). The live theme confirms the resolution:
+
+```
+--dsw-alias-code-diff-deleted  rgba(186, 39, 35, 0.08)   <- a fill
+--dsw-alias-state-error-primary rgb(186, 39, 35)          <- the ink
+```
+
+Nothing was covering the number and no layout clipped it: the glyphs were
+complete and 26px tall, exactly like the two beside them. Only the alpha differed.
+
+**Why the skill warning was not enough.** `lib/skill.js` has forbidden this since
+the same mistake was first seen, and this card was drawn anyway — a prompt rule is
+advisory, and the model that drew it never read the file. A defect that silently
+produces an unreadable answer needs a check the renderer runs, not a sentence the
+model may skip.
+
+**Fix, two parts.**
+
+1. `legibility.js` — a pass over the card body after commit that reads
+   `getComputedStyle(el).color` for every element owning a text node and, when the
+   alpha is below `MIN_TEXT_ALPHA = 0.25`, rewrites it to the same RGB at full
+   alpha. The rule is a measurement, not a token deny-list: a list would drift with
+   the palette and could not see a class, an SVG `fill` or a computed style.
+   `observeInvisibleText` re-runs it once per frame while a snippet re-renders
+   (a tab switch replaces the whole body), and disconnects on unmount.
+2. `styles.js` — the plugin's OWN failure panel had the same defect: its 2px left
+   edge was `var(--dsw-alias-code-diff-deleted)`, i.e. a 2px rule at 8% opacity,
+   which is no edge at all. It now uses `state-error-primary`.
+
+**Why alpha and not contrast.** A real ratio needs the composited background,
+which changes with every gradient or image behind the card; alpha is a lower
+bound on the same defect and the two token families do not overlap — ink is 1.0
+(0.3 for the skeleton shimmer), fill is 0.05–0.24. The floor sits in that gap, so
+it fires on the mistake and never on deliberately faint text.
+
+**Cost.** One `getComputedStyle` per text-owning element per frame, only while the
+card is mutating; a static card measures once at mount. The card body is tens of
+nodes, not the transcript.
+
+**Test:** `test/legibility.test.mjs` (15 tests, driven through a fake DOM that
+reports the colour a browser would compute), plus one stylesheet contract in
+`test/typography.test.mjs`. Mutation-checked both ways: setting the floor to 0
+fails 8 of them, and restoring the fill token on the failure panel fails the CSS
+contract with the message naming the opaque sibling.
+
+**Budget.** `client/client.js` is **81.9 KB** after this fix (83,885 B), against a
+75,000 B ceiling that the artifact already exceeded before it (78,198 B at
+`f69ce2d`). The growth is the same kind the `usage-stats` ceiling documents:
+`legalComments: inline` keeps the reasoning comments every plugin in this repo
+ships, and the new module is 6 KB of that. No duplicated payload was found —
+React is still external (`require("react")`), there are zero `data:font` blobs, and
+the ported design system appears exactly once. The ceiling moves to 90 KB in
+`tools/audit.mjs`, which still stops the mistake it exists for: React at ~140 KB
+minified, or a second copy of the vendor CSS, both trip.
+
+---
+
 ## Patch list for the busy plugins
 
 Not applied. Ordered by expected payoff.

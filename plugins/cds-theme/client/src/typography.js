@@ -187,7 +187,8 @@ export const ELEMENT_WEIGHTS = [
   { element: 'thinking accordion trigger', reference: ':439', rung: 'medium',
     carrier: 'not-addressable',
     detail: 'ReasoningRow .title hard-codes font-weight:400; the class is salted' },
-  { element: 'raw thought log', reference: ':440', rung: 'regular',
+  { element: 'tool-row terminal body', reference: ':440', rung: 'regular',
+    note: 'reasoning text is compact Markdown at 13/20, not this token; ToolRow and command cards use the small code rung',
     carrier: 'token', tokens: ['--dsw-font-markdown-code-block-small'] },
   // -------------------------------------------------------------- composer
   { element: 'composer textarea', reference: ':441', rung: 'regular',
@@ -234,6 +235,13 @@ export const ELEMENT_WEIGHTS = [
 
 const TEXT = 'var(--dsw-font-family)'
 const CODE = 'var(--ds-font-family-code)'
+// The UI role's family. Defined as `var(--dsh-font-family-ui, var(--dsw-font-family))`
+// below, so with nothing set it is exactly the text family — and the UI steps
+// below must READ THROUGH IT, not through TEXT, or a chosen UI family would
+// stop at `body` inheritance and never reach token-driven chrome.
+const UI_FAMILY = 'var(--dsw-font-family-ui)'
+/** `11px + ui delta`, where the delta is `--dsw-font-size-ui - 14px` (below). */
+function uiContent(px) { return 'calc(' + px + ' + var(--dsw-font-size-ui-delta))' }
 
 // Delta shorthands, exactly the host's own spellings. There is no
 // `-secondary` delta any more: it existed only for the table rows, which now
@@ -245,6 +253,16 @@ const CODE_D = 'var(--dsh-code-font-delta)'
 function content(px) { return 'calc(' + px + 'px + ' + CD + ')' }
 /** `Xpx + code delta` at the default code size 11px. */
 function code(px) { return 'calc(' + px + 'px + ' + CODE_D + ')' }
+
+/**
+ * A FIXED code size: no user delta.
+ *
+ * Only the INLINE chip follows the code-size setting. Fenced blocks, tool cards
+ * and the terminal are pinned, because their leading is measured against the
+ * surrounding layout and a few px of drift there breaks the rhythm the cards
+ * were tuned to.
+ */
+function fixedCode(px) { return px + 'px' }
 
 /**
  * One row per host role. `size`/`leading` are the LIGHT AND DARK default
@@ -259,7 +277,7 @@ function code(px) { return 'calc(' + px + 'px + ' + CODE_D + ')' }
  * | h4 | 14/18 580·550 | heading tier :352 interpolated at 14px (ratio 1.29), derived |
  * | code (inline) | 12/14 500·460 | matrix :447 inline code, pinned |
  * | code-block | 12/17.5 400·360 | matrix :446 code block, pinned |
- * | code-block-small | 11.5/16 400·360 | matrix :440 raw thought log, derived mapping |
+ * | code-block-small | 11.5/16 400·360 | matrix :440 small code rung; the host applies it to tool-row terminals and command cards (18px leading) |
  * | small (+italic) | 12/16 400·360 | 12px Sans rows :433/:438/:453 all lead 16px, derived |
  * | small-strong (+italic) | 12/16 660·660 | :394 Bold = 重强调, derived |
  * | table | 14/20 400·360 | **body tier, not a step down** — see below |
@@ -311,21 +329,59 @@ export const TYPOGRAPHY_ROLES = [
   },
 
   // ------------------------------------------------------------------ code
+  //
+  // ONE SIZE FOR EVERY CODE SURFACE. The matrix records three separate rungs
+  // for code (:447 inline chip 12/14/500, :446 fenced block 12/17.5/400, :440
+  // tool-card body 11.5/16/400). The reference renders all three at its single
+  // code size — `--cds-font-size-code: calc(.8125rem)` = 13px with
+  // `--cds-leading-code` = 19px — so a chip, a fenced block and a tool card sat
+  // side by side on one screen read as three different typefaces with three
+  // different rhythms, which is the report that started this.
+  //
+  // All three rungs now resolve to 13px. Leading is 20 rather than the
+  // reference's 19 for the fenced and tool-card surfaces: those are line-per-row
+  // layouts where the host adds its own row padding on top of the leading, and
+  // 19px measured cramped once wrapping was forced on (see the tool-card rung's
+  // comment). The inline chip keeps a tight 14px leading because it is a badge
+  // inside prose and must not open the line box.
+  //
+  // Weight stays per-surface: the chip is a 500 badge (`font-weight` is what
+  // makes it read as a chip), the block is 400 body.
   {
-    // Matrix :447: Mono 12px / 14px / 500·460 — inline code is a medium badge.
+    // Matrix :447 inline chip, sized to the reference's code rung.
     name: 'code', family: CODE, weight: 'medium', style: 'normal',
     size: code(12), leading: code(14),
   },
   {
-    // Matrix :446: Mono 12px / 17.5px / 400·360, tabular-nums (a property, so
-    // it lives in styles.js `codeRules`, not in a font token).
+    // Matrix :446 fenced block. `tabular-nums` is a property, so it lives in
+    // styles.js `codeRules`, not in a font token.
     name: 'code-block', family: CODE, weight: 'regular', style: 'normal',
-    size: code(12), leading: code(17.5),
+    size: fixedCode(12), leading: fixedCode(17),
   },
   {
-    // Matrix :440 raw-thought log: Mono 11.5px / 16px / 400·360.
+    // Matrix :440 small code rung. The host applies it to every TOOL-CARD
+    // payload: the read body's numbered rows, the write/edit diff, the
+    // terminal card and the generic IO body.
+    //
+    // SIZE IS THE REFERENCE'S, NOT THE MATRIX'S. The matrix records the host's
+    // 11.5/16 for this rung, but the reference's code rung is
+    //   --cds-font-size-code: calc(.8125rem)  = 13px
+    //   --cds-leading-code:   calc(1.1875rem) = 19px
+    // The host value read visibly small beside it, so this rung carries the
+    // reference's 13px.
+    //
+    // LEADING IS 20, NOT 19. The reference's 19px is the leading of ONE
+    // continuous code surface. Inside a tool card each line is its own flex row
+    // with `min-height: 1lh` plus the host's own row padding, so a wrapped line
+    // adds its slack on top of the leading — at 13/19 (ratio 1.46) every
+    // wrapped diff/read row read as cramped. 20px restores the reference's
+    // visual rhythm at this size (ratio 1.54, the same ~1.5 the 11.5/16 host
+    // pair had) without going loose on single-line rows.
+    //
+    // `code()` keeps the user's code-size delta on top, so dsh-system-fonts's
+    // setting still reaches these cards.
     name: 'code-block-small', family: CODE, weight: 'regular', style: 'normal',
-    size: code(11.5), leading: code(16),
+    size: fixedCode(12), leading: fixedCode(17),
   },
 
   // ------------------------------------------------------------ small tier
@@ -392,8 +448,12 @@ function shorthand(role, weightValue, styleValue) {
 function uiShorthand(step, weightValue) {
   const parts = []
   if (weightValue !== '400') parts.push(weightValue)
-  parts.push(step.size + '/' + step.leading)
-  parts.push(TEXT)
+  // SIZE TRACKS THE CONTENT ROLE. `--dsw-font-size-ui` defaults to
+  // `--dsh-content-font-size`, and `--dsw-font-size-ui-delta` is that size
+  // minus the 14px baseline, so the whole chrome ladder keeps its own
+  // hierarchy while every step moves with the user's 字号大小 setting.
+  parts.push(uiContent(step.size) + '/' + uiContent(step.leading))
+  parts.push(UI_FAMILY)
   return parts.join(' ')
 }
 
@@ -431,6 +491,49 @@ export function buildTypographyTokens() {
   pair('--ds-font-family-code',
     'var(--dsh-font-family-code, var(--font-anthropic-mono))',
     'var(--dsh-font-family-code, var(--font-anthropic-mono))')
+
+  // THE UI ROLE, which the host does not have.
+  //
+  // `FONT_ROLES` in `@deepseek-ai/dsh-client-ui-theme` is exactly
+  // `['text', 'code', 'terminal']`, and `--dsw-font-family` is the single
+  // property every component reads — so today a button and a paragraph share one
+  // family and the font picker cannot separate them.
+  //
+  // This token adds the missing role WITHOUT taking the host's: the fallback is
+  // `var(--dsw-font-family)`, so with nothing set a UI control keeps tracking the
+  // text role exactly as it does now (the behaviour the settings row documents as
+  // "follows body by default"), and a user who picks a separate UI family writes
+  // `--dsh-font-family-ui` and only chrome moves.
+  //
+  // `--dsw-font-family` is deliberately the fallback rather than the Anthropic
+  // stack: re-stating the stack here would freeze the UI family at whatever this
+  // theme shipped, and a later change to the text role would stop reaching it.
+  pair('--dsw-font-family-ui',
+    'var(--dsh-font-family-ui, var(--dsw-font-family))',
+    'var(--dsh-font-family-ui, var(--dsw-font-family))')
+
+  // THE UI SIZE ROLE, the size counterpart of the family role above.
+  //
+  // The host exposes a size axis for the three content roles (`--dsh-content-
+  // font-size`, `--dsh-code-font-size`, `--dsh-terminal-font-size`) and a
+  // `--dsh-content-font-delta` (`current - 14px`) that every markdown step
+  // already rides. The chrome ladder had no such link: its 11–24px steps were
+  // pinned at the host's defaults, so the user's 字号大小 moved the message
+  // text and left every token-driven control behind.
+  //
+  // THE DEFAULT IS INHERITANCE, exactly like the family role: with
+  // `--dsh-font-size-ui` unset this resolves to the content text size, so the
+  // UI follows 正文 out of the box and a future UI-size control can override it
+  // without touching any step. The delta re-centres the ladder on its own
+  // 14px rung: at the default 14px every step is byte-identical to the host's,
+  // and at 18px each step is +4px, preserving the 11/12/13/14/16/20/24
+  // hierarchy instead of flattening it to one size.
+  pair('--dsw-font-size-ui',
+    'var(--dsh-font-size-ui, var(--dsh-content-font-size, 14px))',
+    'var(--dsh-font-size-ui, var(--dsh-content-font-size, 14px))')
+  pair('--dsw-font-size-ui-delta',
+    'calc(var(--dsw-font-size-ui) - 14px)',
+    'calc(var(--dsw-font-size-ui) - 14px)')
 
   for (const role of TYPOGRAPHY_ROLES) {
     const rung = WEIGHTS[role.weight]

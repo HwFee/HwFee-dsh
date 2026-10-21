@@ -106,11 +106,38 @@ export const SCALE_STEPS = [
   'markdown-code', 'markdown-code-block', 'markdown-code-block-small',
 ]
 
+/**
+ * The custom property the UI font role writes.
+ *
+ * NOT a host token: `FONT_ROLES` in `@deepseek-ai/dsh-client-ui-theme` is exactly
+ * `['text', 'code', 'terminal']`, so there is no `setFontFamily('ui', …)`. This
+ * variable is the plugin's own, and cds-theme publishes
+ * `--dsw-font-family-ui: var(--dsh-font-family-ui, var(--dsw-font-family))`, so
+ * leaving it unset means "the UI follows the body" — the documented default.
+ */
+export const UI_FAMILY_VARIABLE = '--dsh-font-family-ui'
+
 // ------------------------------------------------------------- state
 
 export const DEFAULT_STATE = {
   /** Shared UI + content family. Empty = the host's own stack. 空 = 宿主默认字体栈。 */
   uiFamily: '',
+  /**
+   * The UI family override. Empty means "follow the body", which is the
+   * default; a value writes `--dsh-font-family-ui` and only chrome moves.
+   */
+  uiFontFamily: '',
+  /**
+   * The UI font size in PIXELS, like the host's own 字号大小 row (14 px, 11 px)
+   * and the two size rows inside the font group. 0 means "not set": the row
+   * shows the host's 14 px chrome base and nothing is written. A value writes
+   * `--dsh-font-size-ui` (the token ladder) and drives `uiscale.js`, which
+   * enlarges the chrome's TEXT in place: font-size and pixel line-height are
+   * written inline on text nodes inside the sidebar and settings dialog. No
+   * container is resized and no `zoom` is used — the user asked for bigger
+   * interface text, not a scaled layout.
+   */
+  uiFontSize: 0,
   codeFamily: '',
   /**
    * Terminal family — committed through `theme.setFontFamily('terminal')`
@@ -154,6 +181,27 @@ export function clampTracking(value) {
   return Math.min(30, Math.max(-30, n))
 }
 
+/**
+ * The UI size is PIXELS, like every other size row. 0 means "not set" (the
+ * row shows the host's 14 px chrome base); a real value is 10–20 px. Below 10
+ * the chrome's fixed padding starts to swim; above 20 the settings rows no
+ * longer fit their hosts' line boxes.
+ */
+export function clampUiFontSize(value) {
+  const n = Math.round(Number(value))
+  if (!isFinite(n) || n <= 0) return 0
+  return Math.min(20, Math.max(10, n))
+}
+
+/** The host chrome's base text size — the 0/unset display value. */
+export const UI_FONT_BASE_PX = 14
+
+/** The text-scale factor for a state: 1 when unset, px / 14 otherwise. */
+export function uiScaleFactor(state) {
+  const size = clampUiFontSize(state === null || state === undefined ? 0 : state.uiFontSize)
+  return size > 0 ? size / UI_FONT_BASE_PX : 1
+}
+
 // ------------------------------------------------------------- locale
 //
 // Panel copy lives in `locale/zh.json` + `locale/en.json` (the `strings`
@@ -180,6 +228,13 @@ export function sanitize(raw) {
   const source = raw && typeof raw === 'object' ? raw : {}
   return {
     uiFamily: typeof source.uiFamily === 'string' ? source.uiFamily : '',
+    // THE UI ROLE MUST BE WHITELISTED HERE. `sanitize` rebuilds the state object
+    // from this list, so a key it does not name is dropped on every save — the
+    // row then read `undefined` forever and kept re-rendering, which React
+    // reported as error #185 (maximum update depth) and the host swallowed into
+    // an empty `data-slot-error` box.
+    uiFontFamily: typeof source.uiFontFamily === 'string' ? source.uiFontFamily : '',
+    uiFontSize: clampUiFontSize(source.uiFontSize),
     codeFamily: typeof source.codeFamily === 'string' ? source.codeFamily : '',
     terminalFamily: typeof source.terminalFamily === 'string' ? source.terminalFamily : '',
     lineHeightPct: clampLineHeight(source.lineHeightPct),

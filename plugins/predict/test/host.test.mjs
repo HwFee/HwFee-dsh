@@ -555,15 +555,22 @@ test('the request stream carries the prompt, ids, sources and no replayState', a
   const messages = captured.messages
   assert.equal(messages[0].role, 'system')
   assert.equal(messages[0].content[0].text, PREDICTION_PROMPT)
+  // THE TRANSCRIPT IS NOT REPLAYED. The request is the system prompt plus ONE
+  // user message holding the subject (last assistant tail), the last user line
+  // and the turn's anchors — supi's ADR 0011 shape, chosen so an unrelated
+  // suggestion cannot be built out of six turns of fragmentary history.
+  assert.equal(messages.length, 2)
+  assert.equal(messages[1].role, 'user')
+  const body = messages[1].content[0].text
+  assert.ok(body.includes('The assistant replied'), 'the assistant tail is the subject')
+  assert.ok(body.includes('d'), 'the last assistant text is carried')
+  assert.ok(body.includes('The user just said'), 'the last user line sets the language')
   for (const message of messages) {
     assert.equal(typeof message.id, 'string')
     assert.equal(typeof message.source, 'object')
     assert.notEqual(message.source, null)
+    assert.equal('replayState' in message.source, false)
   }
-  const assistant = messages.find((m) => m.role === 'assistant')
-  assert.equal(assistant.source.provider, 'orig-p')
-  assert.equal(assistant.source.model, 'orig-m')
-  assert.equal('replayState' in assistant.source, false)
   assert.deepEqual(llm.calls.at(-1), { provider: 'pin', model: 'pinned' })
 })
 

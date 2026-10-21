@@ -29,6 +29,11 @@ export const en = {
   'shell.reason.pwsh-not-found': 'PowerShell not found. Install PowerShell 7 or Windows PowerShell.',
   'shell.reason.no-shell-for-platform': 'Windows PowerShell is only available on Windows.',
   'shell.reason.no-shell-found': 'No usable shell was found. Install Git for Windows, or set DSH_GIT_BASH.',
+  // The tool card's header: the reference names the action, not the tool.
+  'run.done': 'Ran a command',
+  'run.running': 'Running a command',
+  'run.stopped': 'Stopped running the command',
+  'run.copy': 'Copy command',
 }
 
 export const zh = {
@@ -48,4 +53,8 @@ export const zh = {
   'shell.reason.pwsh-not-found': '没找到 PowerShell。请安装 PowerShell 7 或 Windows PowerShell。',
   'shell.reason.no-shell-for-platform': 'Windows PowerShell 只在 Windows 上可用。',
   'shell.reason.no-shell-found': '没有可用的 shell。请安装 Git for Windows，或设置 DSH_GIT_BASH。',
+  'run.done': '已运行命令',
+  'run.running': '正在运行命令',
+  'run.stopped': '已停止运行命令',
+  'run.copy': '复制命令',
 }

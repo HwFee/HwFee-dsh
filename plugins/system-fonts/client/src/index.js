@@ -57,7 +57,7 @@
 
 import {
   PLUGIN_ID, DEFAULT_STATE, SCALE_STEPS,
-  clampLineHeight, clampTracking,
+  clampLineHeight, clampTracking, clampUiFontSize, uiScaleFactor,
 } from './constants.js'
 import { createSettingsStore } from './settings.js'
 import { createTypography, buildCss, buildStack, rewriteLineHeight, quoteFamily, splitFontTail, readDeclaredToken } from './typography.js'
@@ -67,6 +67,7 @@ import { createPanel } from './panel.js'
 import { createLifecycle } from './lifecycle.js'
 import { createThemeBridge } from './bridge.js'
 import { createHostMerger } from './merge.js'
+import { createUiScaler } from './uiscale.js'
 import { createLocaleHandle, createTranslator, LOCALE_NS, DEFAULT_LOCALE } from './locales.js'
 
 // React comes from the host's frozen platform module table. Absent in a
@@ -83,7 +84,18 @@ try { storage = typeof window === 'undefined' ? null : window.localStorage } cat
 const settings = createSettingsStore(storage)
 const typography = createTypography({ getState: settings.getState })
 const chrome = createChrome({ getState: settings.getState })
-settings.onChange = function () { typography.apply(); chrome.apply() }
+// Text-only scaling for the chrome. It reads the SAME setting as the token
+// ladder, but writes inline font sizes instead of `zoom`: the sidebar must get
+// bigger text without its column moving.
+const uiScaler = createUiScaler({
+  document: typeof document === 'undefined' ? undefined : document,
+  getScale: function () { return uiScaleFactor(settings.getState()) },
+})
+settings.onChange = function () {
+  typography.apply()
+  chrome.apply()
+  uiScaler.setScale(uiScaleFactor(settings.getState()))
+}
 const catalogue = createCatalogue()
 
 // The bridge starts offline (no theme service). The panel binds this one
@@ -107,7 +119,7 @@ const merger = createHostMerger()
 const panel = createPanel({ React, primitives, settings, catalogue, bridge, locale, merger })
 
 const apply = createLifecycle({
-  settings, typography, chrome, catalogue, panel, merger, locale, React, primitives,
+  settings, typography, chrome, uiScaler, catalogue, panel, merger, locale, React, primitives,
   onTheme: function (theme) { bridge.attach(theme) },
 })
 
@@ -134,6 +146,7 @@ export const __internals = {
   quoteFamily,
   clampLineHeight,
   clampTracking,
+  clampUiFontSize,
   loadState: settings.loadState,
   getState: settings.getState,
   setState: settings.setState,

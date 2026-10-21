@@ -160,6 +160,25 @@ grep -A2 '__ModuleLoader__.load' client/client.js   # id 应等于新包名
 
 违反会怎样：你以为只是刷新一下，代价是一个起不来的应用和一份被削过的 profile，而用户无法分辨这跟「插件坏了」有什么区别。**改完 bundle 就退出应用重开，不要按 F5。**
 
+### 反引号：构建能过，运行期才炸
+
+`client/src/styles.js`（以及其他把整张 CSS 放进模板字符串的模块）里的注释**不能出现反引号**。一个 `` ` `` 会提前结束模板字符串，后面的文字变成 JavaScript。
+
+两种形态都要认得：
+
+| 形态 | 构建 | 运行期 |
+|---|---|---|
+| 注释里单个反引号，后面是普通单词（如 `` `text-code` `` 的其中半个） | **esbuild 报错** `Expected ";" but found "text"`，指向注释行 | 到不了运行期 |
+| 注释里有**成对**反引号，中间是合法表达式（如 `` `.text - code` ``） | **构建成功** | 宿主报 `@hwfee/dsh-git-bash: import failed: code is not defined`，**整个 web boot 挂掉**，用户看到「应用无法启动」 |
+
+第二种最贵：退出码是 0，产物是新的，`--check` 也过（它只比对内容是否最新）。实测发生在 2026-10-21。
+
+**守卫已经进了构建脚本**：`tools/build-client.mjs` 在 `--check` 与正式构建**两条路径**上都会把产物写进临时文件、按宿主的 `__ModuleLoader__.load({id, factory})` 契约注册并**执行 factory**。factory 抛出就 `exit 1` 并打印「修源码，不要发」。已反向验证：把 `` `.text - code` `` 塞回注释后，`node tools/build-client.mjs --check` 输出 `client/client.js does not load: code is not defined`、退出码 1。
+
+**为什么不能靠静态搜索。** 同一个文件里合法地存在反引号（模板字符串本身、`querySelector` 的模板参数），搜出反引号没有意义；只有真正执行 factory 才能分辨。
+
+违反会怎样：截图里的那种红框。它看起来像「插件坏了」，实际是一个注释里的两个字符。
+
 ---
 
 ## 五、改插件时的硬规则

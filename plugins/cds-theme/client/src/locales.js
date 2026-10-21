@@ -53,6 +53,25 @@ export const en = {
   'heroRipple.desc': 'On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.',
   'enabled.title': 'Enable CDS theme',
   'enabled.desc': 'Off releases every token override and restores the host skin.',
+  // ---- the theme's own edit / write card (diffview.js) ------------------
+  //
+  // The row name is the reference's sentence: the verb plus the file, never the
+  // tool name ("Edited index.js", not "Edit"). The failure and stopped forms
+  // exist because a row that still says "Edited" after a rejected edit is a
+  // lie the host's own card also refuses to tell.
+  'diff.edit.done': 'Edited {name}',
+  'diff.edit.running': 'Editing {name}',
+  'diff.edit.failed': 'Failed to edit {name}',
+  'diff.write.done': 'Wrote {name}',
+  'diff.write.running': 'Writing {name}',
+  'diff.write.failed': 'Failed to write {name}',
+  'diff.stopped': 'Stopped editing {name}',
+  'diff.copy': 'Copy diff',
+  'diff.copied': 'Copied',
+  'diff.expand': '… {count} more lines',
+  'diff.expandAria': 'Expand the remaining {count} diff lines',
+  'diff.collapse': 'Collapse',
+  'diff.empty': 'No changes were recorded for this call',
 }
 
 export const zh = {
@@ -88,6 +107,20 @@ export const zh = {
   'heroRipple.desc': '新会话时，问候语与输入框背后浮出一层淡的代码字形，每次点击从光标处荡开水波。输入框会略透，让波纹从底下透出来。关闭即整层移除。',
   'enabled.title': '启用 CDS 主题',
   'enabled.desc': '关闭即释放全部令牌覆盖，界面回到宿主原样式。',
+  // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------
+  'diff.edit.done': '已编辑 {name}',
+  'diff.edit.running': '正在编辑 {name}',
+  'diff.edit.failed': '编辑失败 {name}',
+  'diff.write.done': '已写入 {name}',
+  'diff.write.running': '正在写入 {name}',
+  'diff.write.failed': '写入失败 {name}',
+  'diff.stopped': '已停止编辑 {name}',
+  'diff.copy': '复制差异',
+  'diff.copied': '已复制',
+  'diff.expand': '… 其余 {count} 行',
+  'diff.expandAria': '展开其余 {count} 行差异',
+  'diff.collapse': '收起',
+  'diff.empty': '这次调用没有记录任何改动',
 }
 
 /**

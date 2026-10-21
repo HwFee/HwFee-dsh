@@ -60,7 +60,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/predict.test.mjs && node test/settings.test.mjs && node test/ghost.test.mjs && node test/host.test.mjs && node test/client.test.mjs && node test/picker.test.mjs && node test/request.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/predict.test.mjs && node test/settings.test.mjs && node test/ghost.test.mjs && node test/host.test.mjs && node test/client.test.mjs && node test/picker.test.mjs && node test/request.test.mjs && node test/reasoning.test.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.2",

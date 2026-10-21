@@ -50,18 +50,59 @@ function Warn($msg)     { Write-Host "    WARN $msg" -ForegroundColor Yellow }
 function Die($msg)      { Write-Host "    FAIL $msg" -ForegroundColor Red; exit 1 }
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path -Parent $here
 $catalogEntries = Join-Path $here 'catalog'
 
 # One entry file, read the way the catalog reads it: category + description.en
-# are what the PR body quotes, and the slug comes from the file name convention
-# `Owner__repo--plugins-<slug>.yml`.
+# are what the PR body quotes, the URL is what the submission gate resolves
+# against the published repository, and the slug comes from the file name
+# convention `Owner__repo--plugins-<slug>.yml`.
 function Read-Entry([System.IO.FileInfo]$file) {
   $text = Get-Content $file.FullName -Raw
+  $url = [regex]::Match($text, '(?m)^url:\s*(\S+)').Groups[1].Value
   $category = [regex]::Match($text, '(?m)^category:\s*(\S+)').Groups[1].Value
   $en = [regex]::Match($text, '(?ms)^\s{2}en:\s*(.+?)\s*$').Groups[1].Value.Trim()
   $en = $en.Trim("'").Trim('"')
   $slug = $file.BaseName -replace '^.*--plugins-', ''
-  [pscustomobject]@{ File = $file; FileName = $file.Name; Slug = $slug; Category = $category; En = $en }
+  [pscustomobject]@{ File = $file; FileName = $file.Name; Slug = $slug; Url = $url; Category = $category; En = $en }
+}
+
+# A URL in an entry is a promise that a directory exists in the PUBLISHED
+# repository. The submission gate resolves it against the default branch and
+# fails the whole PR when it 404s — which is exactly what happened on PR #8392:
+# three plugins were built, published to npm and installable from the working
+# tree, but had never been committed, so `plugins/genui` did not exist on
+# master. Checking here turns a twelve-minute CI round trip into an error
+# before the PR is opened.
+function Assert-EntryTarget([pscustomobject]$entry) {
+  $match = [regex]::Match($entry.Url, '^https://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$')
+  if (-not $match.Success) {
+    Die "$($entry.FileName): url must be https://github.com/<owner>/<repo>/tree/<ref>/<dir>"
+  }
+  $owner = $match.Groups[1].Value
+  $name = $match.Groups[2].Value
+  $ref = $match.Groups[3].Value
+  $path = $match.Groups[4].Value.TrimEnd('/')
+
+  if ("$owner/$name" -eq $Repo) {
+    git -C $repoRoot ls-files --error-unmatch "$path/package.json" *> $null
+    if ($LASTEXITCODE -ne 0) {
+      Die "$($entry.FileName): $path/package.json is not tracked - commit the plugin before submitting"
+    }
+  }
+
+  $raw = "https://raw.githubusercontent.com/$owner/$name/$ref/$path/package.json"
+  try {
+    $text = (Invoke-WebRequest -Uri $raw -UseBasicParsing -Headers @{ 'User-Agent' = 'dsh-market-submit' }).Content
+    $manifest = $text | ConvertFrom-Json
+  } catch {
+    $status = try { [int]$_.Exception.Response.StatusCode } catch { 0 }
+    Die "$($entry.FileName): $raw is not readable (HTTP $status) - commit and push the plugin source first"
+  }
+  if (-not $manifest.dsh.bundle) {
+    Die "$($entry.FileName): $raw declares no dsh.bundle - the catalog rejects it"
+  }
+  Ok "$($entry.Slug): $raw"
 }
 
 # ---------------------------------------------------------------- 1. the gate
@@ -123,6 +164,11 @@ if ($pending.Count -gt 3) {
 
 Write-Host "    pending:" -ForegroundColor Cyan
 $pending | ForEach-Object { Write-Host ("      {0,-20} {1}" -f $_.Slug, $_.Category) }
+
+# ------------------------------------------------- 2b. targets must resolve
+
+Step '2b' 'Every pending entry resolves on its published repository'
+foreach ($entry in $pending) { Assert-EntryTarget $entry }
 
 if (-not $Apply) {
   Write-Host "`nDRY RUN — nothing was changed. Re-run with -Apply." -ForegroundColor Yellow

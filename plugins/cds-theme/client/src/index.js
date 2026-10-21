@@ -107,12 +107,22 @@ import {
 } from './paste.js'
 import { TABLE_ATTR, findTableWrappers, sweepMarkdownTables, createTableMarker } from './markdown.js'
 import {
+  START_ATTR, OLD_START_ATTR, NUMBERED_ATTR, RESET_VAR, OLD_RESET_VAR,
+  NEW_START_ATTRS, OLD_START_ATTRS, normalizeStartLine, resolveStart, isCodeRow,
+  segmentsOf, findDiffBodies, numberBody, sweepDiffNumbers, createDiffNumberMarker,
+} from './diffnumbers.js'
+import {
   RIPPLE_ATTR, GLYPH_TOKENS, TUNING, FALLBACK_PALETTE,
   createRng, gridFor, layoutGlyphs, glyphCount, rippleProgress, rippleRadius,
   easeOutCubic, waveStrength, totalWave, restingAlpha, readPalette,
   findHeroHost, createHeroRipple,
 } from './ripple.js'
 import { LOCALE_NS, en as EN_STRINGS, zh as ZH_STRINGS, makeT, makeTranslator } from './locales.js'
+import {
+  LINE_LIMIT, MAX_TOKEN_DIFF_CHARS, createDiffView, buildDiffModel, buildHunk,
+  decorateHunk, diffTokens, diffText, displayPath, baseName,
+} from './diffview.js'
+import { TOKEN_KINDS, languageForPath, scanTokens, scanLines } from './tokenscan.js'
 import {
   SECTION_NAME, APPEARANCE_SECTION_ID, APPEARANCE_SECTION_ORDER, APPEARANCE_SLOT,
   GENERAL_SLOT, SECTION_ATTR, SECTION_WAIT_MS, appearanceSectionOptions,
@@ -255,6 +265,21 @@ export const __internals = {
   findTableWrappers,
   sweepMarkdownTables,
   createTableMarker,
+  START_ATTR,
+  OLD_START_ATTR,
+  NUMBERED_ATTR,
+  RESET_VAR,
+  OLD_RESET_VAR,
+  NEW_START_ATTRS,
+  OLD_START_ATTRS,
+  normalizeStartLine,
+  resolveStart,
+  isCodeRow,
+  segmentsOf,
+  findDiffBodies,
+  numberBody,
+  sweepDiffNumbers,
+  createDiffNumberMarker,
   RIPPLE_ATTR,
   GLYPH_TOKENS,
   TUNING,
@@ -277,6 +302,22 @@ export const __internals = {
   ZH_STRINGS,
   makeT,
   makeTranslator,
+  // The edit / write diff card (diffview.js + tokenscan.js), exported so a
+  // console probe can render a model or scan a line without mounting the card.
+  LINE_LIMIT,
+  MAX_TOKEN_DIFF_CHARS,
+  createDiffView,
+  buildDiffModel,
+  buildHunk,
+  decorateHunk,
+  diffTokens,
+  diffText,
+  displayPath,
+  baseName,
+  TOKEN_KINDS,
+  languageForPath,
+  scanTokens,
+  scanLines,
   SECTION_NAME,
   APPEARANCE_SECTION_ID,
   APPEARANCE_SECTION_ORDER,
