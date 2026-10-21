@@ -114,7 +114,11 @@ pwsh market/verify-mount.ps1
 | 文件 | 更新什么 |
 |---|---|
 | `market/catalog/*.yml` | 新插件一条一个文件，文件名 `Owner__repo--plugins-<slug>.yml`；`url` 指子目录，`name` 是 `owner/repo#subname` |
-| `market/index.json` | 插件清单、版本、发布时间与源码 commit |
+| `market/index.json` | 用 `node market/build-index.mjs` 重新生成：它按清单版本向 npm 读发布时间，用 `{ type: "npm" }` 源 |
+
+索引里的 `source` 必须是 npm，不能是 git——git 子目录装不了（pnpm 只装仓库根），而 npm 源生成的安装参数就是 `包名@版本`。索引只列**清单里的当前版本**，不复列历史版本：`@hwfee/dsh-usage-stats@0.1.1` 用的是改名前的 bundle id，装上会让整个 web boot 挂掉，市场索引不该提供它。
+
+新增插件时要在 `market/build-index.mjs` 的 `categories` 里给它选一个分类，脚本不会替你猜；分类标题在同文件的 `categoryTitles`。
 
 **描述必须与代码一致。** 这是唯一会被维护者逐句核对的东西，也是本仓库真实被打回过一次的原因：`system-fonts` 的条目写了「plus weight / 另加字重」，而插件明确**从不写 `font-weight`**（字重归宿主主题）。维护者改正后直接收录，PR 关闭。写条目时按代码与 README 写，不要按「听起来更完整」写；含 `: ` 的英文描述要加引号。
 

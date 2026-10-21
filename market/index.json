@@ -5,22 +5,26 @@
     "zh": "HwFee 插件集"
   },
   "description": {
-    "en": "A Claude Design System theme for DeepSeek Harness, with a font plugin and a usage panel. Design language derived from open-claude-ui.",
-    "zh": "DeepSeek Harness 的 Claude 设计系统主题，另含字体插件与用量面板。设计语言取自 open-claude-ui。"
+    "en": "Generative UI, a prompt predictor, a Git Bash shell, a Claude Design System theme, system fonts and a usage panel for DeepSeek Harness.",
+    "zh": "DeepSeek Harness 的生成式界面、下一句预测、Git Bash shell、Claude 设计系统主题、系统字体与用量面板。"
   },
   "metadata": {
     "categories": {
       "appearance": {
-        "title": {
-          "en": "Appearance",
-          "zh": "外观"
-        }
+        "en": "Appearance",
+        "zh": "外观"
+      },
+      "interface": {
+        "en": "Interface",
+        "zh": "界面"
+      },
+      "tools": {
+        "en": "Tools",
+        "zh": "工具"
       },
       "usage": {
-        "title": {
-          "en": "Usage & cost",
-          "zh": "用量与费用"
-        }
+        "en": "Usage & cost",
+        "zh": "用量与费用"
       }
     },
     "labels": {},
@@ -31,12 +35,12 @@
       "name": "dsh-cds-theme",
       "title": {
         "en": "Claude Design System Theme",
-        "zh": "Claude 设计系统主题"
+        "zh": "Claude Design System 主题"
       },
       "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/cds-theme/icon.svg",
       "description": {
-        "en": "Remaps the host's --dsw-* tokens onto CDS warm-grey surfaces and the clay accent, refines the composer, sidebar, message rows, code blocks and markdown body, and adds a serif hero greeting plus a click-ripple home backdrop.",
-        "zh": "把宿主的 --dsw-* 令牌整体重映射到 CDS 暖灰表面与陶土强调色，细化输入框、侧栏、消息行、代码块与 Markdown 正文，并加入首页衬线问候语与点击波纹背景。"
+        "en": "Re-maps the interface onto CDS: warm-gray surfaces, clay brand accent, dual-ring focus and organic motion, with component-level refinement of the composer, sidebar, message rows and code blocks.",
+        "zh": "把界面重映射到 CDS：暖灰表面、陶土橙品牌色、双环焦点与有机动效，并对输入框、侧栏、消息行与代码块做组件级细化。"
       },
       "repository": {
         "url": "https://github.com/HwFee/HwFee-dsh",
@@ -45,9 +49,10 @@
       "metadata": {
         "category": "appearance",
         "keywords": [
+          "deepseek",
+          "deepseek-harness",
           "dsh",
           "dsh-plugin",
-          "deepseek-harness",
           "theme",
           "claude",
           "design-system",
@@ -59,13 +64,137 @@
       },
       "versions": [
         {
-          "version": "0.1.0",
-          "publishTimestamp": 1792395730,
+          "version": "0.1.5",
+          "publishTimestamp": 1792545574,
           "source": {
-            "type": "git",
-            "url": "https://github.com/HwFee/HwFee-dsh.git",
-            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
-            "path": "/plugins/cds-theme"
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "@hwfee/dsh-genui",
+      "title": {
+        "en": "Generative UI",
+        "zh": "生成式界面"
+      },
+      "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/genui/icon.svg",
+      "description": {
+        "en": "Let the model answer with a live React card. render_ui runs the snippet in a plugin-owned sandbox and renders it inline in the conversation; one built-in skill teaches when a card beats prose.",
+        "zh": "让模型用一张可交互的 React 卡片来回答。render_ui 在插件自有沙箱里执行代码并就地渲染；附一个内置 skill，教模型什么时候该用界面、什么时候一段文字就够。"
+      },
+      "repository": {
+        "url": "https://github.com/HwFee/HwFee-dsh",
+        "directory": "plugins/genui"
+      },
+      "metadata": {
+        "category": "interface",
+        "keywords": [
+          "deepseek",
+          "deepseek-harness",
+          "dsh",
+          "dsh-plugin",
+          "generative-ui",
+          "intelligent-ui",
+          "react",
+          "skill"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1792544661,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "@hwfee/dsh-git-bash",
+      "title": {
+        "en": "Git Bash as default shell",
+        "zh": "Git Bash 默认 shell"
+      },
+      "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/git-bash/icon.svg",
+      "description": {
+        "en": "Run shell commands in Git Bash instead of PowerShell. Resolves the real Git for Windows bash (not the WSL stub), exposes a run_shell tool, and shows which shell is in effect.",
+        "zh": "用 Git Bash 而不是 PowerShell 执行 shell 命令。自动定位真正的 Git for Windows bash（不用 WSL 的替身），提供 run_shell 工具，并在设置里显示当前用的是哪个 shell。"
+      },
+      "repository": {
+        "url": "https://github.com/HwFee/HwFee-dsh",
+        "directory": "plugins/git-bash"
+      },
+      "metadata": {
+        "category": "tools",
+        "keywords": [
+          "deepseek",
+          "deepseek-harness",
+          "dsh",
+          "dsh-plugin",
+          "git-bash",
+          "shell",
+          "windows"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1792544704,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
+        }
+      ]
+    },
+    {
+      "name": "@hwfee/dsh-predict",
+      "title": {
+        "en": "Next Prompt",
+        "zh": "下一句"
+      },
+      "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/predict/icon.svg",
+      "description": {
+        "en": "After each reply, a quiet grey suggestion of what you might type next appears in the composer. Press Tab to accept it into the box.",
+        "zh": "每轮回答结束后，输入框里用浅色文字预测你接下来会说什么。按 Tab 填入，不会发送。"
+      },
+      "repository": {
+        "url": "https://github.com/HwFee/HwFee-dsh",
+        "directory": "plugins/predict"
+      },
+      "metadata": {
+        "category": "interface",
+        "keywords": [
+          "deepseek",
+          "deepseek-harness",
+          "dsh",
+          "dsh-plugin",
+          "prediction",
+          "ghost-text",
+          "autocomplete"
+        ],
+        "labels": [],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1792544728,
+          "source": {
+            "type": "npm"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
@@ -76,13 +205,13 @@
     {
       "name": "dsh-system-fonts",
       "title": {
-        "en": "System Fonts",
+        "en": "System fonts",
         "zh": "系统字体"
       },
       "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/system-fonts/icon.svg",
       "description": {
-        "en": "One slot each for content, code and terminal fonts, with weight, line height and tracking. Typography only — it never touches colour.",
-        "zh": "内容字体 / 代码字体 / 终端字体各一槽，可选字重、行距、字距。只改排印，不动配色。"
+        "en": "Adds system-font pickers for text, code and terminal fonts to Settings → General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Size and weight of the content roles stay with the host theme; the interface font's size follows the body by default.",
+        "zh": "为「设置 → 通用」增加内容字体、代码字体、终端字体三个系统字体选择器，附行距与字距控制；从 Windows 已安装字体枚举。正文/代码/终端的字号与字重仍由宿主主题管理；界面字体的字号默认跟随正文。"
       },
       "repository": {
         "url": "https://github.com/HwFee/HwFee-dsh",
@@ -91,25 +220,25 @@
       "metadata": {
         "category": "appearance",
         "keywords": [
+          "deepseek",
+          "deepseek-harness",
           "dsh",
           "dsh-plugin",
-          "deepseek-harness",
+          "font",
           "fonts",
           "typography",
-          "appearance"
+          "appearance",
+          "windows"
         ],
         "labels": [],
         "sortKeys": {}
       },
       "versions": [
         {
-          "version": "0.1.0",
-          "publishTimestamp": 1792395730,
+          "version": "0.1.2",
+          "publishTimestamp": 1792544877,
           "source": {
-            "type": "git",
-            "url": "https://github.com/HwFee/HwFee-dsh.git",
-            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
-            "path": "/plugins/system-fonts"
+            "type": "npm"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
@@ -120,13 +249,13 @@
     {
       "name": "@hwfee/dsh-usage-stats",
       "title": {
-        "en": "Usage Stats",
+        "en": "Usage statistics",
         "zh": "用量统计"
       },
       "icon": "https://raw.githubusercontent.com/HwFee/HwFee-dsh/master/plugins/usage-stats/icon.svg",
       "description": {
-        "en": "Sessions, messages, total tokens, active days, peak hour, favourite model and a contribution heatmap, over all time, 30 days or 7 days, aggregated from the session logs under ~/.dsh/sessions.",
-        "zh": "会话数、消息数、总 token、活跃天数、高峰时段、常用模型与热力图，范围可选全部 / 30 天 / 7 天，数据从 ~/.dsh/sessions 的会话日志聚合。"
+        "en": "A usage panel under the blank-session headline: sessions, messages, total tokens, active days, peak hour, favourite model, an activity heatmap, and a token comparison against a Chinese novel.",
+        "zh": "在新对话页的标题下方显示一张用量面板：会话数、消息数、总 token、活跃天数、高峰时段、常用模型、活跃度热力图，以及按中文字数折算的趣味对比。"
       },
       "repository": {
         "url": "https://github.com/HwFee/HwFee-dsh",
@@ -135,11 +264,12 @@
       "metadata": {
         "category": "usage",
         "keywords": [
+          "deepseek",
+          "deepseek-harness",
           "dsh",
           "dsh-plugin",
-          "deepseek-harness",
           "usage",
-          "tokens",
+          "stats",
           "analytics",
           "heatmap"
         ],
@@ -148,13 +278,10 @@
       },
       "versions": [
         {
-          "version": "0.1.0",
-          "publishTimestamp": 1792395730,
+          "version": "0.1.2",
+          "publishTimestamp": 1792462129,
           "source": {
-            "type": "git",
-            "url": "https://github.com/HwFee/HwFee-dsh.git",
-            "commit": "e2c4c10c4cba35af9dab38117408265a9fd3f708",
-            "path": "/plugins/usage-stats"
+            "type": "npm"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.2"
