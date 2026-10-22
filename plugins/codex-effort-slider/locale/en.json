@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Reasoning effort slider",
+    "description": "Turns the model menu's effort row into a Codex-style continuous slider that lights up a blue-to-violet energy layer with starfield particles at high effort."
+  }
+}

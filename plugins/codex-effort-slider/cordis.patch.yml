@@ -1,0 +1,9 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# `name` MUST equal the package's own `name` field. When the two drift apart the
+# Loader cannot resolve the row to a package, the row never activates, and the
+# plugin disappears with no error anywhere — a failure this repository has
+# already shipped once (see AGENTS.md §四).
+- insert:
+    - id: codex-effort-slider
+      name: '@hwfee/dsh-codex-effort-slider'

@@ -1,0 +1,74 @@
+{
+  "name": "@hwfee/dsh-codex-effort-slider",
+  "version": "0.1.0",
+  "description": "Codex 风格的推理等级滑条：把 DSH 模型菜单里的「推理等级」那一行换成一条可拖动的连续滑条，拖到高档位时轨道亮起蓝紫能量层与星尘粒子。 / A Codex-style reasoning-effort slider for DeepSeek Harness: turns the model menu's effort row into a draggable continuous slider that lights up a blue-to-violet energy layer with starfield particles at high effort.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "HwFee <1744567281@qq.com>",
+  "contributors": [
+    "dsh-codex-effort-slider contributors (upstream: https://github.com/Microqian2th/dsh-codex-effort-slider)"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "reasoning-effort",
+    "slider",
+    "codex",
+    "ui"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client/client.js",
+    "locale",
+    "licenses",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/host.test.mjs && node test/levels.test.mjs && node test/motion.test.mjs && node test/energy.test.mjs && node test/settings.test.mjs && node test/bridge.test.mjs && node test/component.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "jsdom": "^30.1.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
