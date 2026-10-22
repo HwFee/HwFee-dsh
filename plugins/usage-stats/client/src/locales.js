@@ -36,8 +36,15 @@ export const en = {
   'note.loading': 'Crunching the numbers…',
   'note.noActivity': 'No activity recorded in this period',
   'note.noModels': 'No model calls recorded in this period',
-  // The settings rows (both live on the 主题定制 page, General list as fallback).
-  // The height edits the shared tab body `.dus-body` through `--dus-body-height`.
+  // The settings rows (all three live on the 主题定制 page, General list as
+  // fallback). The height edits the shared tab body `.dus-body` through
+  // `--dus-body-height`, and it sizes whichever style is selected — each style
+  // keeps its own height.
+  'settings.style.title': 'Panel style',
+  'settings.style.desc': 'Compact: a 480px flat card. Classic: full composer width.',
+  'settings.style.classic': 'Classic',
+  'settings.style.compact': 'Compact',
+  'settings.style.aria': 'Panel style',
   'settings.height.title': 'Stats panel height',
   'settings.height.desc': 'Height of the panel body, 240–520 px; applies immediately',
   // The unit row is a SWITCH now: on = 万/亿, off = K/M/B. The description names
@@ -80,8 +87,14 @@ export const zh = {
   'note.loading': '正在统计…',
   'note.noActivity': '这段时间还没有活跃记录',
   'note.noModels': '这段时间还没有模型调用记录',
-  // 两行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
-  // `--dus-body-height` 改两个标签页共用的 `.dus-body`。
+  // 三行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
+  // `--dus-body-height` 改两个标签页共用的 `.dus-body`，并且只改**当前样式**的高度：
+  // 两种样式各存各的高度。
+  'settings.style.title': '面板样式',
+  'settings.style.desc': '参考：480px 紧凑平面卡片。现有：跟随输入框宽度。',
+  'settings.style.classic': '现有',
+  'settings.style.compact': '参考',
+  'settings.style.aria': '面板样式',
   'settings.height.title': '用量面板高度',
   'settings.height.desc': '面板正文高度，240–520 px，拖动即时生效',
   // 单位行现在是开关：开 = 万/亿，关 = K/M/B。描述里两端都给了例子，因为

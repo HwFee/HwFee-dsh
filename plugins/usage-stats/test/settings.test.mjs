@@ -20,25 +20,43 @@ import {
   BODY_HEIGHT_STEP,
   BODY_HEIGHT_VAR,
   DEFAULT_BODY_HEIGHT,
+  DEFAULT_STYLE,
   DEFAULT_UNITS,
   MAX_BODY_HEIGHT,
   MIN_BODY_HEIGHT,
+  PANEL_STYLES,
   UNIT_MODES,
+  bodyHeightKey,
+  bodyHeightOf,
   bodyHeightStyle,
   clampBodyHeight,
+  clampStyle,
   clampUnits,
   createSettingsStore,
+  isCompact,
   loadSettings,
   sanitizeSettings,
   saveSettings,
   unitsForSwitch,
   unitsIsOn,
 } from '../client/src/settings.js'
+import {
+  COMPACT_CELL_CEIL,
+  COMPACT_CELL_FLOOR,
+  COMPACT_DEFAULT_BODY_HEIGHT,
+  COMPACT_HEAT_ROWS,
+  COMPACT_PANEL_WIDTH,
+  compactCellForHeight,
+  compactFixedHeight,
+  compactLayout,
+  compactVars,
+} from '../client/src/compact-layout.js'
 import { PANEL_CSS } from '../client/src/styles.js'
 import { createPanel, overviewElement } from '../client/src/panel.js'
 import { createLifecycle } from '../client/src/lifecycle.js'
 import {
-  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, STORAGE_KEY, UNITS_ROW_ID, UNITS_ROW_ORDER,
+  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, STORAGE_KEY,
+  STYLE_ROW_ID, STYLE_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
 } from '../client/src/constants.js'
 import { en, zh } from '../client/src/locales.js'
 
@@ -139,43 +157,71 @@ test('malformed values fall back to the default', function () {
 // ------------------------------------------------------------ sanitize + load
 
 test('sanitizeSettings coerces the schema and drops everything else', function () {
+  // The schema is style + two per-style heights + units. `compactBodyHeight`
+  // exists so picking the compact style does not inherit classic's 344px.
+  const defaults = {
+    style: DEFAULT_STYLE,
+    bodyHeight: DEFAULT_BODY_HEIGHT,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'myriad',
+  }
   assert.deepEqual(sanitizeSettings({ bodyHeight: 300 }),
-    { bodyHeight: 300, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings({}), { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings(null), { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings('nope'), { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings({ bodyHeight: 'abc' }),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
+    Object.assign({}, defaults, { bodyHeight: 300 }))
+  assert.deepEqual(sanitizeSettings({}), defaults)
+  assert.deepEqual(sanitizeSettings(null), defaults)
+  assert.deepEqual(sanitizeSettings('nope'), defaults)
+  assert.deepEqual(sanitizeSettings({ bodyHeight: 'abc' }), defaults)
   assert.deepEqual(sanitizeSettings({ bodyHeight: 9999 }),
-    { bodyHeight: MAX_BODY_HEIGHT, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings({ units: 'myriad' }),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
-  assert.deepEqual(sanitizeSettings({ units: 'wat' }),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' }, 'unknown unit mode → the default')
+    Object.assign({}, defaults, { bodyHeight: MAX_BODY_HEIGHT }))
+  assert.deepEqual(sanitizeSettings({ units: 'myriad' }), defaults)
+  assert.deepEqual(sanitizeSettings({ units: 'wat' }), defaults, 'unknown unit mode → the default')
+  // An unknown style falls back to classic: the value the panel had before the
+  // option existed, so a corrupt payload cannot silently change the look.
+  assert.deepEqual(sanitizeSettings({ style: 'fancy' }), defaults, 'unknown style → classic')
+  assert.deepEqual(sanitizeSettings({ style: null }), defaults)
+  assert.deepEqual(sanitizeSettings({ style: 'compact' }),
+    Object.assign({}, defaults, { style: 'compact' }))
+  // Each height clamps against its OWN default and range, so a malformed compact
+  // height cannot borrow classic's fallback.
+  assert.deepEqual(sanitizeSettings({ compactBodyHeight: 'abc' }),
+    defaults, 'a malformed compact height falls back to the compact default')
+  assert.deepEqual(sanitizeSettings({ compactBodyHeight: 9999 }),
+    Object.assign({}, defaults, { compactBodyHeight: MAX_BODY_HEIGHT }))
   // A payload from an older build or a hand-edited document keeps only the
   // known fields; unknown keys cannot leak into the store.
   assert.deepEqual(
     sanitizeSettings({ range: '7d', tab: 'models', bodyHeight: 400, units: 'short', junk: true }),
-    { bodyHeight: 400, units: 'short' })
+    Object.assign({}, defaults, { bodyHeight: 400, units: 'short' }))
 })
 
 test('loadSettings reads localStorage and survives garbage', function () {
-  assert.deepEqual(loadSettings(null),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' }, 'no storage')
-  assert.deepEqual(loadSettings(makeStorage()),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' }, 'empty storage')
+  const defaults = {
+    style: DEFAULT_STYLE,
+    bodyHeight: DEFAULT_BODY_HEIGHT,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'myriad',
+  }
+  assert.deepEqual(loadSettings(null), defaults, 'no storage')
+  assert.deepEqual(loadSettings(makeStorage()), defaults, 'empty storage')
 
-  const seeded = makeStorage({ [STORAGE_KEY]: JSON.stringify({ bodyHeight: 400, units: 'myriad' }) })
-  assert.deepEqual(loadSettings(seeded), { bodyHeight: 400, units: 'myriad' })
+  const seeded = makeStorage({
+    [STORAGE_KEY]: JSON.stringify({
+      style: 'compact', bodyHeight: 400, compactBodyHeight: 260, units: 'myriad',
+    }),
+  })
+  assert.deepEqual(loadSettings(seeded),
+    { style: 'compact', bodyHeight: 400, compactBodyHeight: 260, units: 'myriad' })
 
   const broken = makeStorage({ [STORAGE_KEY]: '{not json' })
-  assert.deepEqual(loadSettings(broken),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' }, 'unparseable JSON')
+  assert.deepEqual(loadSettings(broken), defaults, 'unparseable JSON')
 
-  // A payload written before the unit row existed has no `units` field.
+  // A payload written before the unit row existed has no `units` field, and one
+  // written before the style existed has neither `style` nor a compact height:
+  // both keep the user's classic height and land on the defaults for the rest.
   const legacy = makeStorage({ [STORAGE_KEY]: JSON.stringify({ bodyHeight: 360 }) })
-  assert.deepEqual(loadSettings(legacy), { bodyHeight: 360, units: 'myriad' },
-    'legacy payload → auto')
+  assert.deepEqual(loadSettings(legacy),
+    Object.assign({}, defaults, { bodyHeight: 360 }),
+    'legacy payload → classic at its own height')
 })
 
 test('saveSettings persists the schema and never throws on a broken storage', function () {
@@ -194,14 +240,24 @@ test('the store clamps, persists and notifies only on a real change', function (
   const storage = makeStorage()
   const store = createSettingsStore(storage)
   assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
+  assert.equal(store.getState().style, DEFAULT_STYLE)
   assert.equal(store.getState().units, 'myriad')
 
   const seen = []
   const unsubscribe = store.subscribe(function (state) { seen.push(state.bodyHeight) })
 
+  // The store is in classic, so a write without an explicit style lands on the
+  // classic field — the one the slider for the visible panel is bound to.
   assert.equal(store.setBodyHeight(400), 400)
   assert.equal(store.getState().bodyHeight, 400)
-  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), { bodyHeight: 400, units: 'myriad' })
+  assert.equal(store.getState().compactBodyHeight, COMPACT_DEFAULT_BODY_HEIGHT,
+    'writing the classic height leaves the compact one alone')
+  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), {
+    style: 'classic',
+    bodyHeight: 400,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'myriad',
+  })
   assert.deepEqual(seen, [400], 'subscribers hear about the change')
 
   const before = store.getState()
@@ -233,8 +289,12 @@ test('the unit mode lives in the same store and persists with the height', funct
 
   assert.equal(store.setUnits('myriad'), 'myriad')
   assert.equal(store.getState().units, 'myriad')
-  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)),
-    { bodyHeight: DEFAULT_BODY_HEIGHT, units: 'myriad' })
+  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), {
+    style: 'classic',
+    bodyHeight: DEFAULT_BODY_HEIGHT,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'myriad',
+  })
   assert.deepEqual(seen, ['short', 'myriad'])
 
   const before = store.getState()
@@ -246,10 +306,15 @@ test('the unit mode lives in the same store and persists with the height', funct
   assert.equal(store.getState().units, 'myriad')
   assert.deepEqual(seen, ['short', 'myriad'], 'a no-op write notifies nobody')
 
-  // The two preferences share one storage key without clobbering each other.
+  // The preferences share one storage key without clobbering each other.
   store.setBodyHeight(400)
   store.setUnits('short')
-  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), { bodyHeight: 400, units: 'short' })
+  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), {
+    style: 'classic',
+    bodyHeight: 400,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'short',
+  })
   const remounted = createSettingsStore(storage)
   assert.equal(remounted.getState().bodyHeight, 400)
   assert.equal(remounted.getState().units, 'short')
@@ -270,10 +335,16 @@ test('a malformed stored payload boots at the default instead of throwing', func
   const storage = makeStorage({ [STORAGE_KEY]: '{"bodyHeight":"tall","units":42}' })
   const store = createSettingsStore(storage)
   assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
+  assert.equal(store.getState().style, DEFAULT_STYLE)
   assert.equal(store.getState().units, 'myriad', 'a malformed unit mode is not fatal')
   // The first write repairs the payload.
   store.setBodyHeight(360)
-  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), { bodyHeight: 360, units: 'myriad' })
+  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), {
+    style: 'classic',
+    bodyHeight: 360,
+    compactBodyHeight: COMPACT_DEFAULT_BODY_HEIGHT,
+    units: 'myriad',
+  })
 })
 
 test('a broken storage still serves the in-memory value', function () {
@@ -592,7 +663,7 @@ test('the panel reads the shared store and rewrites the variable live', function
   assert.equal(after.props.style[BODY_HEIGHT_VAR], '456px')
   assert.equal(after.props.style['--dus-heat-cell-max'], '22px',
     'a taller body hands the band the full 22px cap')
-  assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), { bodyHeight: 456, units: 'myriad' })
+  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).bodyHeight, 456)
 })
 
 test('the overview tab renders one .dus-overview wrapper around its sections', function () {

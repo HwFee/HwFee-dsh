@@ -53,12 +53,13 @@
     "locale",
     "cordis.patch.yml",
     "icon.svg",
+    "licenses",
     "README.md"
   ],
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/stats.test.mjs && node test/layout.test.mjs && node test/tooltip.test.mjs && node test/settings.test.mjs && node test/settings-slot.test.mjs && node test/summary-cache.test.mjs && node test/usage-store.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/stats.test.mjs && node test/layout.test.mjs && node test/input-budget.test.mjs && node test/style-option.test.mjs && node test/tooltip.test.mjs && node test/settings.test.mjs && node test/settings-slot.test.mjs && node test/summary-cache.test.mjs && node test/usage-store.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10"

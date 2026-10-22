@@ -17,9 +17,12 @@
  */
 
 import { DEFAULT_STATE, RANGES } from './constants.js'
+import { attachInputBudget } from './input-budget.js'
 import { TIP_INSET, TIP_MAX_WIDTH, tipCentre } from './layout.js'
 import { en as FALLBACK_DICT } from './locales.js'
-import { DEFAULT_UNITS, bodyHeightStyle, createSettingsStore } from './settings.js'
+import {
+  DEFAULT_UNITS, bodyHeightOf, bodyHeightStyle, createSettingsStore, isCompact,
+} from './settings.js'
 import { STALE_RETRY_MS } from './summary-cache.js'
 import {
   bookComparison, buildHeatmap, favoriteModel, formatHour, formatNumber, resolveUnitScale, summarize,
@@ -205,7 +208,12 @@ export function createPanel({ React, primitives, settings }) {
 
   function renderCards(view, t, unitScale) {
     const cards = metricCards(view, t, unitScale).map(function (card) {
-      return React.createElement('div', { className: 'dus-card', key: card.key },
+      // `data-card` names the metric. The compact style reads it to set the
+      // model tile at the label weight (a name is not a figure), and it is also
+      // what makes a metric findable in a test without matching on its text.
+      return React.createElement('div', {
+        className: 'dus-card', key: card.key, 'data-card': card.key,
+      },
         React.createElement('div', { className: 'dus-card-label' }, card.label),
         React.createElement('div', { className: 'dus-card-value', title: card.value }, card.value))
     })
@@ -402,10 +410,21 @@ export function createPanel({ React, primitives, settings }) {
       return function () { window.removeEventListener('resize', onResize) }
     }, [])
 
-    // `layout.js` compares the width against the same breakpoint, so it only
-    // needs a representative width per band; passing the band's own midpoint
-    // keeps the layout module's contract (a number) unchanged.
+    // `layout.js` and `compact-layout.js` compare the width against the same
+    // breakpoint, so they only need a representative width per band; passing the
+    // band's own midpoint keeps the layout modules' contract (a number) unchanged.
     const viewportWidth = viewportBand === 'narrow' ? NARROW_VIEWPORT_PX - 1 : NARROW_VIEWPORT_PX + 1
+
+    // THE PANEL STYLE. `classic` is the shipped look and the default; `compact`
+    // is the reference's 480px card. It rides `data-dus-style` on the root, and
+    // the stylesheet keeps every compact rule inside `[data-dus-style="compact"]`
+    // — so the classic rules are byte-identical to what shipped, and switching is
+    // one attribute flip with no remount and no reload.
+    const styleId = settingsState.style
+    const compact = isCompact(styleId)
+    // The height the style in view actually uses. Each style keeps its own value
+    // (see `sanitizeSettings`), so switching never rewrites the other one.
+    const bodyHeight = bodyHeightOf(settingsState)
 
     // Hover bubble for the heatmap. Positioned inside `.dus-panel` (not
     // `position: fixed`, which a transformed ancestor would re-anchor) and
@@ -540,6 +559,17 @@ export function createPanel({ React, primitives, settings }) {
       return hoistAboveWorkspaceRow(rootRef.current)
     }, [visible])
 
+    // The input's height budget, on the same condition as the panel itself: it
+    // exists only while the hero panel is on screen, and its disposer removes
+    // every attribute, custom property and observer it added. `bodyHeight` is a
+    // dependency because resizing the panel changes the chrome the budget is
+    // measured against — re-attaching re-measures immediately instead of waiting
+    // for the next resize.
+    React.useEffect(function () {
+      if (!visible) return undefined
+      return attachInputBudget(rootRef.current)
+    }, [visible, bodyHeight])
+
     // ---- the two tab bodies are ELEMENTS, memoised.
     //
     // WHY THIS IS A PERFORMANCE RULE. The tooltip is `useState` on this
@@ -631,17 +661,24 @@ export function createPanel({ React, primitives, settings }) {
       style: { left: tip.left + 'px', top: tip.top + 'px' },
     }, tip.text))
 
-    return React.createElement('div', { className: 'dus-root', ref: rootRef },
+    return React.createElement('div', {
+      className: 'dus-root',
+      ref: rootRef,
+      // The style switch rides ONE attribute. Every compact rule in `styles.js`
+      // is scoped to `[data-dus-style="compact"]`, so the classic look and its
+      // own rules are untouched by the option existing.
+      'data-dus-style': compact ? 'compact' : 'classic',
+    },
       React.createElement('div', {
         className: 'dus-panel',
         ref: panelRef,
         // `--dus-body-height` is what `.dus-body` consumes
         // (`height: var(--dus-body-height, 344px)`); setting it on the panel
         // root means both tabs resolve the live preference, so the panel is one
-        // fixed height no matter which tab is showing. The Overview tab's shrink
-        // lengths ride the same inline style (`layout.js`), so a shorter setting
-        // draws smaller graphics instead of a scrollbar.
-        style: bodyHeightStyle(settingsState.bodyHeight, viewportWidth),
+        // fixed height no matter which tab is showing. The style's own derived
+        // lengths ride the same inline object (the layout modules), so a shorter
+        // setting draws smaller graphics instead of a scrollbar.
+        style: bodyHeightStyle(bodyHeight, viewportWidth, styleId),
       },
         renderHead(t, tab, setTab, range.id, setRangeId),
         sliding,

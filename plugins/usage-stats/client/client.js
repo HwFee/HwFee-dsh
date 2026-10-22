@@ -86,6 +86,8 @@ window.__ModuleLoader__.load({
     var USAGE_MARKER_HEADER = "x-dsh-usage-stats";
     var USAGE_MARKER_VALUE = "1";
     var STORAGE_KEY = "dsh-usage-stats/settings";
+    var STYLE_ROW_ID = "dsh-usage-stats-panel-style";
+    var STYLE_ROW_ORDER = 39;
     var SETTINGS_ROW_ID = "dsh-usage-stats-panel-height";
     var SETTINGS_ROW_ORDER = 40;
     var UNITS_ROW_ID = "dsh-usage-stats-units";
@@ -106,6 +108,206 @@ window.__ModuleLoader__.load({
       range: "all",
       tab: "overview"
     };
+
+    // client/src/input-budget.js
+    var INPUT_BUDGET_VAR = "--dus-input-budget";
+    var CARD_ATTR = "data-dus-input-budget";
+    var SCROLL_ATTR = "data-dus-hero-scroll";
+    var HOST_TEXT_MAX = 336;
+    var SINGLE_LINE_FALLBACK = 36;
+    var SINGLE_LINE_MAX = 56;
+    var BUDGET_RESERVE = 12;
+    function inputBudgetFor(spec) {
+      const source = spec && typeof spec === "object" ? spec : {};
+      const ceiling = Number.isFinite(source.ceiling) ? source.ceiling : HOST_TEXT_MAX;
+      const fallbackFloor = Number.isFinite(source.floor) ? source.floor : SINGLE_LINE_FALLBACK;
+      const floor = Math.min(fallbackFloor, ceiling);
+      const available = Number(source.available);
+      if (!Number.isFinite(available) || available <= 0) return ceiling;
+      const chrome = Math.max(0, Number(source.chrome) || 0);
+      const reserve = Number.isFinite(source.reserve) ? source.reserve : BUDGET_RESERVE;
+      const raw = Math.floor(available - chrome - reserve);
+      if (!Number.isFinite(raw)) return ceiling;
+      return Math.max(floor, Math.min(ceiling, raw));
+    }
+    function lineFloorFor(spec) {
+      const source = spec && typeof spec === "object" ? spec : {};
+      const lineHeight = Number(source.lineHeight);
+      const top = Number(source.paddingTop);
+      const bottom = Number(source.paddingBottom);
+      const padding = (Number.isFinite(top) ? Math.max(0, top) : 0) + (Number.isFinite(bottom) ? Math.max(0, bottom) : 0);
+      if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+        return Math.round(clamp(SINGLE_LINE_FALLBACK + padding, SINGLE_LINE_FALLBACK, SINGLE_LINE_MAX));
+      }
+      const extra = padding > 0 ? padding : 8;
+      return Math.round(clamp(lineHeight + extra, SINGLE_LINE_FALLBACK, SINGLE_LINE_MAX));
+    }
+    function clamp(value, low, high) {
+      return Math.max(low, Math.min(high, value));
+    }
+    function chromeFrom(spec) {
+      const source = spec && typeof spec === "object" ? spec : {};
+      const stack = Math.max(0, Number(source.stackHeight) || 0);
+      const text = Math.max(0, Number(source.textPortHeight) || 0);
+      if (stack <= 0) return 0;
+      return Math.max(0, stack - text);
+    }
+    function attributeOf(node, name2) {
+      if (!node || typeof node.getAttribute !== "function") return null;
+      const value = node.getAttribute(name2);
+      return value === void 0 ? null : value;
+    }
+    function childrenOf(node) {
+      if (!node || !node.children) return [];
+      return Array.prototype.slice.call(node.children);
+    }
+    function findByAttr(root, name2) {
+      const queue = childrenOf(root);
+      while (queue.length > 0) {
+        const node = queue.shift();
+        if (attributeOf(node, name2) !== null) return node;
+        const kids = childrenOf(node);
+        for (let i = 0; i < kids.length; i += 1) queue.push(kids[i]);
+      }
+      return null;
+    }
+    function heightOf(node) {
+      if (!node || typeof node.getBoundingClientRect !== "function") return 0;
+      const box = node.getBoundingClientRect();
+      return box && Number.isFinite(box.height) ? box.height : 0;
+    }
+    function attachInputBudget(rootEl, options) {
+      const opts = options && typeof options === "object" ? options : {};
+      const view = opts.view || (typeof window === "undefined" ? null : window);
+      if (rootEl === null || rootEl === void 0 || !rootEl.parentNode) return void 0;
+      const outlet = rootEl.parentNode;
+      const stack = outlet && outlet.parentNode;
+      if (!stack) return void 0;
+      const card = findByAttr(stack, "data-composer-card");
+      if (card === null) return void 0;
+      const textPort = findByAttr(card, "data-input-scroll");
+      if (textPort === null) return void 0;
+      let scroller = stack;
+      while (scroller && attributeOf(scroller, "data-conversation-scroll") === null) {
+        scroller = scroller.parentNode;
+      }
+      if (!scroller || !Number.isFinite(Number(scroller.clientHeight))) return void 0;
+      const cardStyle = card.style;
+      if (!cardStyle || typeof cardStyle.setProperty !== "function") return void 0;
+      let written = null;
+      let disposed = false;
+      let frame = null;
+      const styleOf = typeof view === "object" && view && typeof view.getComputedStyle === "function" ? view.getComputedStyle : null;
+      const usableHeight = function(element) {
+        const raw = Number(element.clientHeight);
+        if (!Number.isFinite(raw)) return 0;
+        if (typeof styleOf !== "function") return raw;
+        let style = null;
+        try {
+          style = styleOf.call(view, element);
+        } catch (error) {
+          style = null;
+        }
+        if (!style) return raw;
+        const top = parseFloat(style.paddingTop);
+        const bottom = parseFloat(style.paddingBottom);
+        const padding = (Number.isFinite(top) ? top : 0) + (Number.isFinite(bottom) ? bottom : 0);
+        return Math.max(0, raw - padding);
+      };
+      const sync = function() {
+        if (disposed) return null;
+        let margins = 0;
+        if (typeof styleOf === "function") {
+          let style = null;
+          try {
+            style = styleOf.call(view, stack);
+          } catch (error) {
+            style = null;
+          }
+          if (style) {
+            const mt = parseFloat(style.marginTop);
+            const mb = parseFloat(style.marginBottom);
+            margins = (Number.isFinite(mt) ? mt : 0) + (Number.isFinite(mb) ? mb : 0);
+          }
+        }
+        const textPortHeight = heightOf(textPort);
+        const chrome = chromeFrom({
+          stackHeight: heightOf(stack),
+          textPortHeight
+        }) + margins;
+        let floor = SINGLE_LINE_FALLBACK;
+        if (typeof styleOf === "function") {
+          let portStyle = null;
+          try {
+            portStyle = styleOf.call(view, textPort);
+          } catch (error) {
+            portStyle = null;
+          }
+          if (portStyle) {
+            floor = lineFloorFor({
+              lineHeight: parseFloat(portStyle.lineHeight),
+              paddingTop: parseFloat(portStyle.paddingTop),
+              paddingBottom: parseFloat(portStyle.paddingBottom)
+            });
+          }
+        }
+        const budget = inputBudgetFor({
+          available: usableHeight(scroller),
+          chrome,
+          floor,
+          reserve: opts.reserve,
+          ceiling: opts.ceiling
+        });
+        const value = budget + "px";
+        if (value === written) return budget;
+        written = value;
+        cardStyle.setProperty(INPUT_BUDGET_VAR, value);
+        if (typeof card.setAttribute === "function") card.setAttribute(CARD_ATTR, "");
+        if (typeof scroller.setAttribute === "function") scroller.setAttribute(SCROLL_ATTR, "");
+        return budget;
+      };
+      sync();
+      const ResizeObserverCtor = opts.ResizeObserver || view && view.ResizeObserver || (typeof ResizeObserver === "undefined" ? null : ResizeObserver);
+      const requestFrame = view && typeof view.requestAnimationFrame === "function" ? function(callback) {
+        return view.requestAnimationFrame(callback);
+      } : null;
+      const cancelFrame = view && typeof view.cancelAnimationFrame === "function" ? function(handle) {
+        view.cancelAnimationFrame(handle);
+      } : view && typeof view.clearTimeout === "function" ? function(handle) {
+        view.clearTimeout(handle);
+      } : function() {
+      };
+      let observer = null;
+      if (typeof ResizeObserverCtor === "function" && requestFrame) {
+        observer = new ResizeObserverCtor(function() {
+          if (frame !== null || disposed) return;
+          frame = requestFrame(function() {
+            frame = null;
+            sync();
+          });
+        });
+        if (typeof observer.observe === "function") {
+          const watch = observer.observe.bind(observer);
+          watch(stack);
+          watch(textPort);
+          watch(card);
+          watch(scroller);
+        }
+      }
+      return function dispose() {
+        disposed = true;
+        if (frame !== null) {
+          cancelFrame(frame);
+          frame = null;
+        }
+        if (observer && typeof observer.disconnect === "function") observer.disconnect();
+        observer = null;
+        if (typeof cardStyle.removeProperty === "function") cardStyle.removeProperty(INPUT_BUDGET_VAR);
+        if (typeof card.removeAttribute === "function") card.removeAttribute(CARD_ATTR);
+        if (typeof scroller.removeAttribute === "function") scroller.removeAttribute(SCROLL_ATTR);
+        written = null;
+      };
+    }
 
     // client/src/layout.js
     var HEAT_CELL_MAX = 22;
@@ -282,8 +484,15 @@ window.__ModuleLoader__.load({
       "note.loading": "Crunching the numbers\u2026",
       "note.noActivity": "No activity recorded in this period",
       "note.noModels": "No model calls recorded in this period",
-      // The settings rows (both live on the 主题定制 page, General list as fallback).
-      // The height edits the shared tab body `.dus-body` through `--dus-body-height`.
+      // The settings rows (all three live on the 主题定制 page, General list as
+      // fallback). The height edits the shared tab body `.dus-body` through
+      // `--dus-body-height`, and it sizes whichever style is selected — each style
+      // keeps its own height.
+      "settings.style.title": "Panel style",
+      "settings.style.desc": "Compact: a 480px flat card. Classic: full composer width.",
+      "settings.style.classic": "Classic",
+      "settings.style.compact": "Compact",
+      "settings.style.aria": "Panel style",
       "settings.height.title": "Stats panel height",
       "settings.height.desc": "Height of the panel body, 240\u2013520 px; applies immediately",
       // The unit row is a SWITCH now: on = 万/亿, off = K/M/B. The description names
@@ -325,8 +534,14 @@ window.__ModuleLoader__.load({
       "note.loading": "\u6B63\u5728\u7EDF\u8BA1\u2026",
       "note.noActivity": "\u8FD9\u6BB5\u65F6\u95F4\u8FD8\u6CA1\u6709\u6D3B\u8DC3\u8BB0\u5F55",
       "note.noModels": "\u8FD9\u6BB5\u65F6\u95F4\u8FD8\u6CA1\u6709\u6A21\u578B\u8C03\u7528\u8BB0\u5F55",
-      // 两行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
-      // `--dus-body-height` 改两个标签页共用的 `.dus-body`。
+      // 三行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
+      // `--dus-body-height` 改两个标签页共用的 `.dus-body`，并且只改**当前样式**的高度：
+      // 两种样式各存各的高度。
+      "settings.style.title": "\u9762\u677F\u6837\u5F0F",
+      "settings.style.desc": "\u53C2\u8003\uFF1A480px \u7D27\u51D1\u5E73\u9762\u5361\u7247\u3002\u73B0\u6709\uFF1A\u8DDF\u968F\u8F93\u5165\u6846\u5BBD\u5EA6\u3002",
+      "settings.style.classic": "\u73B0\u6709",
+      "settings.style.compact": "\u53C2\u8003",
+      "settings.style.aria": "\u9762\u677F\u6837\u5F0F",
       "settings.height.title": "\u7528\u91CF\u9762\u677F\u9AD8\u5EA6",
       "settings.height.desc": "\u9762\u677F\u6B63\u6587\u9AD8\u5EA6\uFF0C240\u2013520 px\uFF0C\u62D6\u52A8\u5373\u65F6\u751F\u6548",
       // 单位行现在是开关：开 = 万/亿，关 = K/M/B。描述里两端都给了例子，因为
@@ -344,12 +559,73 @@ window.__ModuleLoader__.load({
       "book.more": "\u4F60\u7528\u6389\u7684 token \u7EA6\u662F\u300A{title}\u300B\u7684 {ratio} \u500D\u3002"
     };
 
-    // client/src/settings.js
-    var DEFAULT_BODY_HEIGHT = 344;
+    // client/src/compact-layout.js
+    var COMPACT_DEFAULT_BODY_HEIGHT = 252;
     var MIN_BODY_HEIGHT2 = 240;
     var MAX_BODY_HEIGHT2 = 520;
+    var COMPACT_TILE_HEIGHT = 46;
+    var COMPACT_TILE_GAP = 4;
+    var COMPACT_BLOCK_GAP = 12;
+    var COMPACT_FOOT_HEIGHT = 16;
+    var COMPACT_HEAT_GAP = 3;
+    var COMPACT_HEAT_ROWS = 7;
+    var COMPACT_CELL_FLOOR = 8;
+    var COMPACT_CELL_CEIL = 15;
+    function compactFixedHeight() {
+      return COMPACT_TILE_HEIGHT * 2 + COMPACT_TILE_GAP + COMPACT_BLOCK_GAP * 2 + COMPACT_FOOT_HEIGHT;
+    }
+    function heatChrome() {
+      return COMPACT_HEAT_GAP * (COMPACT_HEAT_ROWS - 1);
+    }
+    function clampHeight2(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return COMPACT_DEFAULT_BODY_HEIGHT;
+      return Math.min(MAX_BODY_HEIGHT2, Math.max(MIN_BODY_HEIGHT2, Math.round(n)));
+    }
+    function compactCellForHeight(bodyHeight) {
+      const height = clampHeight2(bodyHeight);
+      const budget = height - compactFixedHeight() - heatChrome();
+      return Math.floor(budget / COMPACT_HEAT_ROWS);
+    }
+    function compactLayout(bodyHeight) {
+      const height = clampHeight2(bodyHeight);
+      const raw = compactCellForHeight(height);
+      const cell = Math.min(COMPACT_CELL_CEIL, Math.max(COMPACT_CELL_FLOOR, raw));
+      return {
+        height,
+        cell,
+        band: cell * COMPACT_HEAT_ROWS + heatChrome(),
+        // True when the height setting is what bounds the columns (rather than the
+        // 480px width or the ceiling). The settings copy and the tests read it.
+        heightBound: raw < COMPACT_CELL_CEIL
+      };
+    }
+    function compactVars(bodyHeight) {
+      const layout = compactLayout(bodyHeight);
+      return {
+        "--dus-compact-cell": layout.cell + "px",
+        "--dus-compact-tile-h": COMPACT_TILE_HEIGHT + "px",
+        "--dus-compact-tile-gap": COMPACT_TILE_GAP + "px",
+        "--dus-compact-block-gap": COMPACT_BLOCK_GAP + "px",
+        "--dus-compact-foot-h": COMPACT_FOOT_HEIGHT + "px",
+        "--dus-compact-heat-gap": COMPACT_HEAT_GAP + "px"
+      };
+    }
+
+    // client/src/settings.js
+    var DEFAULT_BODY_HEIGHT = 344;
+    var MIN_BODY_HEIGHT3 = 240;
+    var MAX_BODY_HEIGHT3 = 520;
     var BODY_HEIGHT_STEP = 4;
+    var DEFAULT_STYLE = "classic";
+    var PANEL_STYLES = ["classic", "compact"];
     var BODY_HEIGHT_VAR = "--dus-body-height";
+    function clampStyle(value) {
+      return PANEL_STYLES.indexOf(value) >= 0 ? value : DEFAULT_STYLE;
+    }
+    function isCompact(style) {
+      return clampStyle(style) === "compact";
+    }
     var DEFAULT_UNITS = "myriad";
     function clampUnits(value, language) {
       if (value === "short" || value === "myriad") return value;
@@ -362,22 +638,33 @@ window.__ModuleLoader__.load({
     function unitsForSwitch(on) {
       return on ? "myriad" : "short";
     }
-    function clampBodyHeight(value) {
+    function clampBodyHeight(value, style) {
+      const fallback = isCompact(style) ? COMPACT_DEFAULT_BODY_HEIGHT : DEFAULT_BODY_HEIGHT;
       let n = Number.NaN;
       if (typeof value === "number") n = value;
       else if (typeof value === "string" && value.trim() !== "") n = Number(value);
-      if (!Number.isFinite(n)) return DEFAULT_BODY_HEIGHT;
-      const clamped = Math.min(MAX_BODY_HEIGHT2, Math.max(MIN_BODY_HEIGHT2, Math.round(n)));
-      const snapped = MIN_BODY_HEIGHT2 + Math.round((clamped - MIN_BODY_HEIGHT2) / BODY_HEIGHT_STEP) * BODY_HEIGHT_STEP;
-      return Math.min(MAX_BODY_HEIGHT2, Math.max(MIN_BODY_HEIGHT2, snapped));
+      if (!Number.isFinite(n)) return fallback;
+      const clamped = Math.min(MAX_BODY_HEIGHT3, Math.max(MIN_BODY_HEIGHT3, Math.round(n)));
+      const snapped = MIN_BODY_HEIGHT3 + Math.round((clamped - MIN_BODY_HEIGHT3) / BODY_HEIGHT_STEP) * BODY_HEIGHT_STEP;
+      return Math.min(MAX_BODY_HEIGHT3, Math.max(MIN_BODY_HEIGHT3, snapped));
     }
     function sanitizeSettings(raw) {
       const source = raw && typeof raw === "object" ? raw : {};
+      const style = clampStyle(source.style);
       return {
-        bodyHeight: clampBodyHeight(source.bodyHeight),
+        style,
+        bodyHeight: clampBodyHeight(source.bodyHeight, "classic"),
+        compactBodyHeight: clampBodyHeight(source.compactBodyHeight, "compact"),
         // An old payload (from before the unit row existed) has no field → auto.
         units: clampUnits(source.units)
       };
+    }
+    function bodyHeightOf(state) {
+      const source = state && typeof state === "object" ? state : {};
+      return isCompact(source.style) ? source.compactBodyHeight : source.bodyHeight;
+    }
+    function bodyHeightKey(style) {
+      return isCompact(style) ? "compactBodyHeight" : "bodyHeight";
     }
     function loadSettings(storage2) {
       try {
@@ -394,12 +681,11 @@ window.__ModuleLoader__.load({
       } catch (error) {
       }
     }
-    function bodyHeightStyle(height, viewportWidth) {
-      const clamped = clampBodyHeight(height);
-      return Object.assign(
-        { [BODY_HEIGHT_VAR]: clamped + "px" },
-        overviewVars(clamped, { viewportWidth })
-      );
+    function bodyHeightStyle(height, viewportWidth, style) {
+      const compact = isCompact(style);
+      const clamped = clampBodyHeight(height, compact ? "compact" : "classic");
+      const derived = compact ? compactVars(clamped) : overviewVars(clamped, { viewportWidth });
+      return Object.assign({ [BODY_HEIGHT_VAR]: clamped + "px" }, derived);
     }
     function createSettingsStore(storage2) {
       let state = Object.freeze(Object.assign({}, loadSettings(storage2)));
@@ -418,11 +704,31 @@ window.__ModuleLoader__.load({
         getState() {
           return state;
         },
-        /** Clamp + persist + notify; returns the value actually stored. */
-        setBodyHeight(height) {
-          const next = clampBodyHeight(height);
-          if (next === state.bodyHeight) return next;
-          commit(Object.assign({}, state, { bodyHeight: next }));
+        /** Switch the panel style; returns the value actually stored. */
+        setStyle(style) {
+          const next = clampStyle(style);
+          if (next === state.style) return next;
+          commit(Object.assign({}, state, { style: next }));
+          return next;
+        },
+        /**
+         * Clamp + persist + notify; returns the value actually stored.
+         *
+         * The write lands on the field of the style in view unless `forStyle` names
+         * one explicitly, so a slider dragged while compact is showing edits
+         * `compactBodyHeight` and leaves the classic height alone. A caller that
+         * knows the target style (the settings row does) passes it, which keeps the
+         * write correct even if the two trees ever disagree about the current style
+         * for a frame.
+         */
+        setBodyHeight(height, forStyle) {
+          const style = clampStyle(forStyle === void 0 ? state.style : forStyle);
+          const key = bodyHeightKey(style);
+          const next = clampBodyHeight(height, style);
+          if (next === state[key]) return next;
+          const patch = {};
+          patch[key] = next;
+          commit(Object.assign({}, state, patch));
           return next;
         },
         /** Switch the unit mode (`auto` | `short` | `myriad`); returns what was stored. */
@@ -821,7 +1127,11 @@ window.__ModuleLoader__.load({
         const cards = metricCards(view, t, unitScale).map(function(card) {
           return React2.createElement(
             "div",
-            { className: "dus-card", key: card.key },
+            {
+              className: "dus-card",
+              key: card.key,
+              "data-card": card.key
+            },
             React2.createElement("div", { className: "dus-card-label" }, card.label),
             React2.createElement("div", { className: "dus-card-value", title: card.value }, card.value)
           );
@@ -964,6 +1274,9 @@ window.__ModuleLoader__.load({
           };
         }, []);
         const viewportWidth = viewportBand === "narrow" ? NARROW_VIEWPORT_PX2 - 1 : NARROW_VIEWPORT_PX2 + 1;
+        const styleId = settingsState.style;
+        const compact = isCompact(styleId);
+        const bodyHeight = bodyHeightOf(settingsState);
         const panelRef = React2.useRef(null);
         const tipState = React2.useState(null);
         const tip = tipState[0];
@@ -1058,6 +1371,10 @@ window.__ModuleLoader__.load({
           if (!visible) return void 0;
           return hoistAboveWorkspaceRow(rootRef.current);
         }, [visible]);
+        React2.useEffect(function() {
+          if (!visible) return void 0;
+          return attachInputBudget(rootRef.current);
+        }, [visible, bodyHeight]);
         const cardsBody = React2.useMemo(function() {
           if (view === null) return null;
           return renderCards(view, t, unitScale);
@@ -1104,7 +1421,14 @@ window.__ModuleLoader__.load({
         }, tip.text));
         return React2.createElement(
           "div",
-          { className: "dus-root", ref: rootRef },
+          {
+            className: "dus-root",
+            ref: rootRef,
+            // The style switch rides ONE attribute. Every compact rule in `styles.js`
+            // is scoped to `[data-dus-style="compact"]`, so the classic look and its
+            // own rules are untouched by the option existing.
+            "data-dus-style": compact ? "compact" : "classic"
+          },
           React2.createElement(
             "div",
             {
@@ -1113,10 +1437,10 @@ window.__ModuleLoader__.load({
               // `--dus-body-height` is what `.dus-body` consumes
               // (`height: var(--dus-body-height, 344px)`); setting it on the panel
               // root means both tabs resolve the live preference, so the panel is one
-              // fixed height no matter which tab is showing. The Overview tab's shrink
-              // lengths ride the same inline style (`layout.js`), so a shorter setting
-              // draws smaller graphics instead of a scrollbar.
-              style: bodyHeightStyle(settingsState.bodyHeight, viewportWidth)
+              // fixed height no matter which tab is showing. The style's own derived
+              // lengths ride the same inline object (the layout modules), so a shorter
+              // setting draws smaller graphics instead of a scrollbar.
+              style: bodyHeightStyle(bodyHeight, viewportWidth, styleId)
             },
             renderHead(t, tab, setTab, range.id, setRangeId),
             sliding,
@@ -1413,7 +1737,185 @@ window.__ModuleLoader__.load({
       // The panel's own bottom margin is re-seated here for its new neighbour: the
       // stack gap is 6px and the row carries a 4px top margin of its own, so 8px
       // keeps the panel-to-chip spacing at the rhythm it had against the composer.
-      ".dus-root { margin-bottom: 8px; }"
+      ".dus-root { margin-bottom: 8px; }",
+      // — The input height budget (see `input-budget.js`) -------------------------
+      //
+      // WHY THIS IS A COMBINATION AND NOT A NEW NUMBER. The host caps the editor's
+      // scrollport at `--dsh-composer-text-max-height` (336px, declared on the
+      // composer seat); cds-theme's hero rules lower that same variable. Neither
+      // knows how tall OUR panel is, so on a blank session a long draft plus a
+      // 344/520px panel can exceed the hero scrollport — and the host's centred
+      // stack then splits the overflow above and below the fold, leaving the panel
+      // at a negative offset where scrolling cannot reach it.
+      //
+      // `min()` of the two caps is the fix: whichever is tighter wins, so the input
+      // follows an installed theme without duplicating its numbers, and there is no
+      // second wrapper to keep in sync with the host's own scrolling. The right-hand
+      // operand is OUR property (written in px by `attachInputBudget`), so this is
+      // one fixed declaration: it cannot reference itself, and re-syncing writes the
+      // same custom property instead of nesting `min()` deeper each time.
+      "[data-composer-card] [data-input-scroll] {",
+      "  max-height: min(var(--dsh-composer-text-max-height, 336px), var(--dus-input-budget, 336px)); }",
+      //
+      // The page's own scrollport, marked only while this panel is mounted. `safe
+      // center` centres the stack when it fits and start-aligns it when it does not,
+      // so the top of the stack (this panel) stays reachable from scroll position 0
+      // instead of being pushed above it. `flex-start` is the explicit fallback for
+      // engines without `safe`; both are declared together so the invalid value is
+      // dropped and the valid one wins. `!important` because the host's own hero rule
+      // (`.root[data-phase=hero] .scrollBody`) outranks a single attribute selector
+      // and this plugin owns no stylesheet-order guarantee.
+      "[data-conversation-scroll][data-dus-hero-scroll] {",
+      "  justify-content: flex-start !important;",
+      "  justify-content: safe center !important; }",
+      // — Compact style -----------------------------------------------------------
+      //
+      // The second selectable look, from the usage panel of the Claude-style
+      // reference (github.com/Nwflower/dsh-claude-style, MIT for everything this
+      // block uses). WHAT IS NOT TAKEN FROM IT: the Sodium engine (PolyForm Shield),
+      // Anthropic's commercial typefaces and the crab artwork are outside that
+      // licence, and none of them appears here — this block is plain CSS over host
+      // tokens. Nor does it bring the reference's page treatment (hero pinned to the
+      // top, 20px greeting, composer glued to the bottom): that belongs to the whole
+      // new-session screen, and this option only changes the panel.
+      //
+      // EVERY RULE IS SCOPED to the root attribute the panel writes, so the classic
+      // look above is byte-identical to what shipped and the option can be removed
+      // by deleting this block. The reference is a 480px plain card: one tone of
+      // wash for the panel, tiles one tone deeper, the heat grid directly on the
+      // card with no band of its own, and no divider above the caption.
+      //
+      // THE FIRST RULE MATCHES THE ROOT ITSELF, NOT A DESCENDANT. `data-dus-style`
+      // is written ON `.dus-root` (panel.js), so a `[data-dus-style] .dus-root`
+      // selector would need an ancestor carrying the attribute and would never
+      // match — the width would silently stay classic while every descendant rule
+      // worked. That is why this one is `.dus-root[data-dus-style="compact"]` and
+      // the rest keep the descendant form.
+      '.dus-root[data-dus-style="compact"] { width: 480px;',
+      "  max-width: calc(100% - var(--dsh-composer-side-clearance, 0px) - var(--dsh-composer-side-clearance, 0px));",
+      "  margin: 4px auto 8px; }",
+      // A flat wash, no outline and no elevation: the reference card is a fill, not
+      // a raised surface. 4% of the label ink over the layer-2 tone is the whole
+      // recipe — it flips with the theme on its own, so no dark override is needed.
+      '[data-dus-style="compact"] .dus-panel { gap: 12px; padding: 12px;',
+      "  border-radius: 12px;",
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, var(--dsw-alias-bg-layer-2));",
+      "  --dsw-elevation-stroke-color: transparent;",
+      "  box-shadow: none; }",
+      // The head keeps the same two clusters but Claude's smaller chip: 12/18 type
+      // with a 1px vertical pad, and a 5px radius on a 20px control (half its
+      // height, the same rounding rule the reference states).
+      '[data-dus-style="compact"] .dus-tab,',
+      '[data-dus-style="compact"] .dus-range { padding: 1px 8px; border-radius: 5px;',
+      "  font-size: 12px; line-height: 18px; font-weight: 400; }",
+      '[data-dus-style="compact"] .dus-range[data-active="true"],',
+      '[data-dus-style="compact"] .dus-tab[data-active="true"] { font-weight: 500;',
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, var(--dsw-alias-bg-layer-2)); }",
+      '[data-dus-style="compact"] .dus-range:hover:not([data-active="true"]),',
+      '[data-dus-style="compact"] .dus-tab:hover:not([data-active="true"]) {',
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); }",
+      '[data-dus-style="compact"] .dus-body { gap: 12px; }',
+      // Overview: the reference's own rhythm — tiles, grid, caption, 12px apart.
+      '[data-dus-style="compact"] .dus-overview { gap: var(--dus-compact-block-gap, 12px); }',
+      // Tiles: three across at EVERY width (the reference's own arrangement). They
+      // hold a short label and a 13px figure, so they stay legible well below the
+      // classic style's 560px breakpoint, which is why that breakpoint is overridden
+      // here rather than inherited.
+      '[data-dus-style="compact"] .dus-grid { grid-template-columns: repeat(3, minmax(0, 1fr));',
+      "  gap: var(--dus-compact-tile-gap, 4px); }",
+      '[data-dus-style="compact"] .dus-card { gap: 2px; padding: 5px 8px; border-radius: 8px;',
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 15%, var(--dsw-alias-bg-layer-2)); }",
+      // The figure sits barely above its own label, which is also what keeps a long
+      // model id on one line instead of cutting it. Both truncate rather than wrap.
+      '[data-dus-style="compact"] .dus-card-label { letter-spacing: 0;',
+      "  font-size: 12px; line-height: 16px; white-space: nowrap;",
+      "  overflow: hidden; text-overflow: ellipsis; }",
+      '[data-dus-style="compact"] .dus-card-value { font-size: 13px; line-height: 18px;',
+      "  font-weight: 600; }",
+      // The favourite model is a NAME, not a figure: the reference sets it at the
+      // label weight so it does not read as another count.
+      '[data-dus-style="compact"] .dus-card[data-card="model"] .dus-card-value { font-weight: 400; }',
+      // The grid: no band behind it, no padding, 3px gaps. Columns share whatever
+      // the card's inner width gives them and stop growing at the cap the layout
+      // module derives from the body height, so the panel's height setting still
+      // decides how large a square is. The grid has NO fixed height — every one of
+      // the seven rows is always drawn.
+      '[data-dus-style="compact"] .dus-heat { padding: 0; gap: var(--dus-compact-heat-gap, 3px);',
+      "  background: transparent; border-radius: 0; }",
+      '[data-dus-style="compact"] .dus-heat-week { gap: var(--dus-compact-heat-gap, 3px);',
+      "  flex: 1 0 8px; max-width: var(--dus-compact-cell, 15px); }",
+      // Level 0 is the faintest step of the label ink, on the card itself rather
+      // than on a band. Every lit level mixes the project accent by the reference
+      // ramp shares (20 / 40 / 65 / 100%), so the grid follows the theme's accent
+      // colour instead of pinning the reference's data blue.
+      '[data-dus-style="compact"] .dus-heat-cell { border-radius: 3px;',
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 11%, transparent); }",
+      '[data-dus-style="compact"] .dus-heat-cell[data-level="1"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-bg-layer-2)); }',
+      '[data-dus-style="compact"] .dus-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, var(--dsw-alias-bg-layer-2)); }',
+      '[data-dus-style="compact"] .dus-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 65%, var(--dsw-alias-bg-layer-2)); }',
+      '[data-dus-style="compact"] .dus-heat-cell[data-level="4"] { background: var(--dsw-alias-state-business-primary); }',
+      // The caption is a plain line on the card: no divider above it and no padding
+      // of its own, 12/16 in the tertiary tone exactly as the reference sets it.
+      //
+      // THE CAPTION IS ONE LINE, AND SAYS SO IN CSS. The compact arithmetic
+      // (`compact-layout.js`) reserves exactly `COMPACT_FOOT_HEIGHT` = 16px for it:
+      // 252 = 136 (tiles + gaps) + 116 (the 14px grid) + 16, with zero slack. A
+      // caption that wrapped — a longer sentence, or the English locale — needed two
+      // 16px lines, and `.dus-body { overflow: hidden }` cut the second one through
+      // the middle of its glyphs with no scrollbar to show it had happened.
+      //
+      // The alternative (shrink the caption's box and let the heat block absorb the
+      // difference) cannot work: at 252 the grid already takes every spare pixel, so
+      // a *smaller* reservation buys nothing for a longer text, and a *larger* one
+      // would have to come out of the grid's seven rows or out of the persisted 252.
+      // So the line is truncated visibly instead — one line, an ellipsis at the
+      // trailing edge, and the full sentence still in the DOM for a screen reader.
+      // `height` is pinned to the same token the arithmetic uses, so what is reserved
+      // and what is painted are the same number rather than merely usually equal.
+      '[data-dus-style="compact"] .dus-foot { padding-top: 0; border-top: 0; flex: none;',
+      "  height: var(--dus-compact-foot-h, 16px); overflow: hidden;",
+      "  font-size: 12px; line-height: var(--dus-compact-foot-h, 16px); }",
+      '[data-dus-style="compact"] .dus-foot-line { color: var(--dsw-alias-label-tertiary);',
+      "  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
+      // The models tab keeps the shared body, its silent scroll and its rows; only
+      // the row rhythm gets the compact spacing.
+      '[data-dus-style="compact"] .dus-model { gap: 4px; padding: 6px 0; }',
+      '[data-dus-style="compact"] .dus-model-id { font-size: 13px; line-height: 18px; }',
+      // The hover bubble rides the same card tone so it still reads as part of the
+      // panel when the panel has no border of its own.
+      '[data-dus-style="compact"] .dus-tip { border-radius: 8px;',
+      "  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2); }",
+      // — The style switcher (settings row 39) ------------------------------------
+      //
+      // Two flat buttons carrying the style names, in the same switch grammar as the
+      // panel's own tabs: no track, no ring, one soft fill on the chosen one. It sits
+      // ABOVE the height row so the page reads "pick a style, then size it", which is
+      // also the order the two settings actually interact in.
+      //
+      // THE TIMING IS THE PROJECT'S, NOT A GENERIC CURVE: the snap curve and the fast
+      // duration both come from the theme's own tokens (`--cds-ease-snap`,
+      // `--ds-transition-duration-fast`) with their values as fallbacks, so the
+      // control moves with the rest of the UI when cds-theme is installed and still
+      // animates sensibly without it. `ease` and `ease-in-out` are banned here for
+      // the same reason they are banned elsewhere in this repo.
+      ".dus-seg { display: inline-flex; align-items: center; gap: 2px; }",
+      ".dus-seg-btn { border: 0; border-radius: var(--dsw-radius-md);",
+      "  background: transparent; color: var(--dsw-alias-label-tertiary);",
+      "  cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; padding: 3px 12px;",
+      "  transition: color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),",
+      "    background-color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),",
+      "    transform var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)); }",
+      ".dus-seg-btn:hover { color: var(--dsw-alias-label-primary); }",
+      ".dus-seg-btn:active { transform: scale(.97); }",
+      '.dus-seg-btn[data-active="true"] { background: var(--dsw-alias-bg-module-platform);',
+      "  color: var(--dsw-alias-label-primary); font-weight: 500; }",
+      ".dus-seg-btn:focus-visible { outline: 2px solid var(--dsw-focus-ring-color); outline-offset: 2px; }",
+      // Reduced motion means STILL, not slower: the press feedback is the only thing
+      // this control animates, so it is dropped entirely when the user asked for no
+      // motion. Scoped to this control so the shipped tab/range rules keep exactly
+      // the behaviour they had.
+      "@media (prefers-reduced-motion: reduce) { .dus-seg-btn { transition: none; }",
+      "  .dus-seg-btn:active { transform: none; } }"
     ].join("\n");
     function installPanelCss() {
       if (typeof document === "undefined" || !document.head) return;
@@ -1589,9 +2091,10 @@ window.__ModuleLoader__.load({
       function PanelHeightRow(props) {
         const t = typeof props.t === "function" ? props.t : fallbackTranslate;
         const state = React2.useSyncExternalStore(settings2.subscribe, settings2.getState);
-        const height = state.bodyHeight;
-        const span = MAX_BODY_HEIGHT2 - MIN_BODY_HEIGHT2;
-        const fill = span > 0 ? Math.round((height - MIN_BODY_HEIGHT2) / span * 100) : 0;
+        const style = state.style;
+        const height = bodyHeightOf(state);
+        const span = MAX_BODY_HEIGHT3 - MIN_BODY_HEIGHT3;
+        const fill = span > 0 ? Math.round((height - MIN_BODY_HEIGHT3) / span * 100) : 0;
         return React2.createElement(
           "div",
           { className: "dus-row" },
@@ -1607,18 +2110,62 @@ window.__ModuleLoader__.load({
             React2.createElement("input", {
               type: "range",
               className: "dus-row-slider",
-              min: MIN_BODY_HEIGHT2,
-              max: MAX_BODY_HEIGHT2,
+              min: MIN_BODY_HEIGHT3,
+              max: MAX_BODY_HEIGHT3,
               step: BODY_HEIGHT_STEP,
               value: height,
               "aria-label": t("settings.height.title"),
               "aria-valuetext": height + " px",
+              // The style this slider was rendered for: the readout and the write
+              // then cannot disagree about which field they belong to.
+              "data-style": isCompact(style) ? "compact" : "classic",
               style: { "--dus-fill": fill + "%" },
               onChange: function(event) {
-                settings2.setBodyHeight(parseInt(event.target.value, 10));
+                settings2.setBodyHeight(parseInt(event.target.value, 10), style);
               }
             }),
             React2.createElement("span", { className: "dus-row-value" }, height + " px")
+          )
+        );
+      }
+      function StyleRow(props) {
+        const t = typeof props.t === "function" ? props.t : fallbackTranslate;
+        const state = React2.useSyncExternalStore(settings2.subscribe, settings2.getState);
+        const current = state.style;
+        const options = [
+          { id: "classic", label: t("settings.style.classic") },
+          { id: "compact", label: t("settings.style.compact") }
+        ];
+        return React2.createElement(
+          "div",
+          { className: "dus-row" },
+          React2.createElement(
+            "div",
+            { className: "dus-row-text" },
+            React2.createElement("div", { className: "dus-row-title" }, t("settings.style.title")),
+            React2.createElement("div", { className: "dus-row-desc" }, t("settings.style.desc"))
+          ),
+          React2.createElement(
+            "div",
+            { className: "dus-row-control" },
+            React2.createElement("div", {
+              className: "dus-seg",
+              role: "group",
+              "aria-label": t("settings.style.aria")
+            }, options.map(function(option) {
+              const active = option.id === current;
+              return React2.createElement("button", {
+                key: option.id,
+                type: "button",
+                className: "dus-seg-btn",
+                "data-active": active ? "true" : "false",
+                "data-style": option.id,
+                "aria-pressed": active,
+                onClick: function() {
+                  settings2.setStyle(option.id);
+                }
+              }, option.label);
+            }))
           )
         );
       }
@@ -1692,6 +2239,7 @@ window.__ModuleLoader__.load({
             const placement = registerSettingsRows({
               slots,
               rows: [
+                { id: STYLE_ROW_ID, order: STYLE_ROW_ORDER, component: StyleRow },
                 { id: SETTINGS_ROW_ID, order: SETTINGS_ROW_ORDER, component: PanelHeightRow },
                 { id: UNITS_ROW_ID, order: UNITS_ROW_ORDER, component: UnitRow }
               ],

@@ -11,11 +11,12 @@
 import { installPanelCss, removePanelCss } from './styles.js'
 import { LOCALE_NS, en, zh } from './locales.js'
 import {
-  BODY_HEIGHT_STEP, MAX_BODY_HEIGHT, MIN_BODY_HEIGHT, unitsForSwitch, unitsIsOn,
+  BODY_HEIGHT_STEP, MAX_BODY_HEIGHT, MIN_BODY_HEIGHT,
+  bodyHeightOf, isCompact, unitsForSwitch, unitsIsOn,
 } from './settings.js'
 import { registerSettingsRows } from './settings-slot.js'
 import {
-  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
+  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, STYLE_ROW_ID, STYLE_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
 } from './constants.js'
 
 /**
@@ -85,11 +86,21 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
    * the registration's `locale:` field (re-rendered on a language switch), and
    * the store subscription is what makes the value shared: dragging here
    * re-renders the hero panel too, which rewrites `--dus-body-height`.
+   *
+   * IT SIZES THE STYLE IN VIEW, AND ONLY THAT ONE. Each style keeps its own
+   * height (`bodyHeight` / `compactBodyHeight`), so switching to compact shows
+   * the compact card's own 252px rather than inheriting classic's 344 — which
+   * would either squash the compact card or leave the slider editing a value
+   * the user cannot see. The row passes the style it read explicitly, so the
+   * write lands on the right field even if the two React trees disagree about
+   * the current style for a frame. The description names the range and the fact
+   * that it applies immediately; the readout is always the rendered height.
    */
   function PanelHeightRow(props) {
     const t = typeof props.t === 'function' ? props.t : fallbackTranslate
     const state = React.useSyncExternalStore(settings.subscribe, settings.getState)
-    const height = state.bodyHeight
+    const style = state.style
+    const height = bodyHeightOf(state)
     const span = MAX_BODY_HEIGHT - MIN_BODY_HEIGHT
     const fill = span > 0 ? Math.round(((height - MIN_BODY_HEIGHT) / span) * 100) : 0
     return React.createElement('div', { className: 'dus-row' },
@@ -106,12 +117,59 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
           value: height,
           'aria-label': t('settings.height.title'),
           'aria-valuetext': height + ' px',
+          // The style this slider was rendered for: the readout and the write
+          // then cannot disagree about which field they belong to.
+          'data-style': isCompact(style) ? 'compact' : 'classic',
           style: { '--dus-fill': fill + '%' },
           onChange: function (event) {
-            settings.setBodyHeight(parseInt(event.target.value, 10))
+            settings.setBodyHeight(parseInt(event.target.value, 10), style)
           },
         }),
         React.createElement('span', { className: 'dus-row-value' }, height + ' px')))
+  }
+
+  /**
+   * The style row: two flat buttons, `classic` and `compact`.
+   *
+   * A segmented pair rather than a switch, because the two looks are peer
+   * choices a reader compares — "on/off" would name neither. The chosen one
+   * carries `data-active` and `aria-pressed`, and the store write re-renders the
+   * hero panel in the same frame: switching is immediate, persists in
+   * localStorage, and never reloads anything.
+   *
+   * The style row is registered FIRST (order 39) so the page reads "pick a
+   * style, then size it" — the height row below it sizes whichever style is
+   * selected.
+   */
+  function StyleRow(props) {
+    const t = typeof props.t === 'function' ? props.t : fallbackTranslate
+    const state = React.useSyncExternalStore(settings.subscribe, settings.getState)
+    const current = state.style
+    const options = [
+      { id: 'classic', label: t('settings.style.classic') },
+      { id: 'compact', label: t('settings.style.compact') },
+    ]
+    return React.createElement('div', { className: 'dus-row' },
+      React.createElement('div', { className: 'dus-row-text' },
+        React.createElement('div', { className: 'dus-row-title' }, t('settings.style.title')),
+        React.createElement('div', { className: 'dus-row-desc' }, t('settings.style.desc'))),
+      React.createElement('div', { className: 'dus-row-control' },
+        React.createElement('div', {
+          className: 'dus-seg',
+          role: 'group',
+          'aria-label': t('settings.style.aria'),
+        }, options.map(function (option) {
+          const active = option.id === current
+          return React.createElement('button', {
+            key: option.id,
+            type: 'button',
+            className: 'dus-seg-btn',
+            'data-active': active ? 'true' : 'false',
+            'data-style': option.id,
+            'aria-pressed': active,
+            onClick: function () { settings.setStyle(option.id) },
+          }, option.label)
+        }))))
   }
 
   /**
@@ -206,19 +264,21 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
       }, UsagePanel)
     })
 
-    // Both settings rows prefer the 主题定制 / Theme page (`cds-theme` hosts it as
-    // the `appearance` settings section with the `settings.appearance.item`
+    // All three settings rows prefer the 主题定制 / Theme page (`cds-theme` hosts
+    // it as the `appearance` settings section with the `settings.appearance.item`
     // ledger) and fall back to the host's General list with a bounded wait when
     // that page is absent — see `settings-slot.js` for the full policy. They are
-    // registered as ONE list, so they always land on the same page (never one on
-    // each), with ids/orders 40 (height) and 41 (units). The stylesheet installed
-    // above supplies the `.dus-row` geometry (the host's row recipe: 14/22 title,
-    // 12/18 description, 16px padding, .5px hairline, control on the right).
+    // registered as ONE list, so they always land on the same page (never split
+    // across both), with ids/orders 39 (style), 40 (height) and 41 (units). The
+    // stylesheet installed above supplies the `.dus-row` geometry (the host's row
+    // recipe: 14/22 title, 12/18 description, 16px padding, .5px hairline,
+    // control on the right) and the `.dus-seg` control of the style row.
     if (settings) {
       ctx.effect(function () {
         const placement = registerSettingsRows({
           slots: slots,
           rows: [
+            { id: STYLE_ROW_ID, order: STYLE_ROW_ORDER, component: StyleRow },
             { id: SETTINGS_ROW_ID, order: SETTINGS_ROW_ORDER, component: PanelHeightRow },
             { id: UNITS_ROW_ID, order: UNITS_ROW_ORDER, component: UnitRow },
           ],

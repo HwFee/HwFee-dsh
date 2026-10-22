@@ -48,19 +48,25 @@ export const USAGE_MARKER_VALUE = '1'
 export const STORAGE_KEY = 'dsh-usage-stats/settings'
 
 /**
- * The two settings rows this plugin contributes, and where they sit.
+ * The three settings rows this plugin contributes, and where they sit.
  *
  * The 主题定制 page (cds-theme's section, `settings.appearance.item`) already
  * fills the low ladder — 18 accent, 19 warmth, 22 radius, 24 elevation, 26
  * refine, 29 thinking label, 30 master switch — and is still growing, so a
- * mid-ladder number would collide with the next theme row. 40 and 41 keep the
- * usage rows together at the end of that page whatever the theme adds; in the
- * General fallback they sit after the host's own rows and before the version
- * row (100). Both are normal single entries, not a nested group;
- * `settings-slot.js` owns the placement policy and moves them as one list.
- * 设置里的两行：「用量面板高度」(order 40) 与「数字单位」(order 41)，
- * 优先落在「主题定制」页，缺失时两行一起回退通用列表。
+ * mid-ladder number would collide with the next theme row. 39–41 keep the usage
+ * rows together at the end of that page whatever the theme adds; in the General
+ * fallback they sit after the host's own rows and before the version row (100).
+ *
+ * ORDER IS THE READING ORDER, NOT AN ACCIDENT: the style row (39) comes first
+ * because it decides which panel the height row below it is sizing, and the two
+ * rows that shipped first keep their own relative order (40 height, 41 units).
+ * Their ids and orders are unchanged — moving a row would reshuffle a user's
+ * existing settings page.
+ * 设置里的三行：面板样式 (39)、面板高度 (40)、数字单位 (41)。样式放在高度之前，
+ * 因为「先选样式、再调该样式的高度」；已发布两行的 id 与 order 一律不动。
  */
+export const STYLE_ROW_ID = 'dsh-usage-stats-panel-style'
+export const STYLE_ROW_ORDER = 39
 export const SETTINGS_ROW_ID = 'dsh-usage-stats-panel-height'
 export const SETTINGS_ROW_ORDER = 40
 export const UNITS_ROW_ID = 'dsh-usage-stats-units'
