@@ -273,6 +273,7 @@ node market/check-release-assets.mjs --only cds-theme
 | `dsh-cds-theme` | `0.1.2` | 2026-10-20 | 卡死，tarball 404，从未恢复 |
 | `dsh-cds-theme` | `0.1.3` | 2026-10-20 | 卡死，tarball 404，从未恢复 |
 | `dsh-cds-theme` | `0.1.4` | 2026-10-20 | 已发布，两分钟上线 |
+| `dsh-cds-theme` | `0.1.6` | 2026-10-22 | **已上传未见版本，未恢复**：`npm publish` 返回 `+ dsh-cds-theme@0.1.6`，日志有 "being processed"；官方 packument 的 `versions` 里始终没有 `0.1.6`，官方 tarball URL 404。等了约 25 分钟后换号 `0.1.7`。 |
 
 ---
 
