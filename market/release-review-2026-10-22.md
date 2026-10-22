@@ -280,14 +280,24 @@ Each fixes a failure mode that was observed, not a preference.
 | Asset gate green on final tarballs | `PASS` (§3.2) |
 | Pack determinism verified (the gate sees the uploaded bytes) | `PASS` (§3.3) |
 | Every packed file tracked in git | `PASS` after staging the licence files (§3.3) |
-| Published-vs-local comparison recorded for all six | `PASS` (§3.4) |
+| Published-vs-local comparison recorded for all six | `PASS` (§3.4, re-run post-publish in [published-vs-local.md](published-vs-local.md)) |
 | Versions bumped where content changed | `PASS` — six of six (§1.1) |
-| Commit + push | `PENDING` |
-| `npm view` shows the new version | `PENDING` |
-| tarball URL returns 200 | `PENDING` |
-| One GitHub Release per package, asset 200, shasum equals npm `dist.shasum` | `PENDING` |
-| Install matrix recorded | `PENDING` |
-| Mount verification green | `PENDING` |
-| Market catalog + `index.json` updated | `PENDING` — `build-index.mjs` reads npm publish times, so it runs after publishing |
-| Market PR opened or entry already present, link recorded | Entries present: #8392 merged 2026-10-21T17:27Z, #8189 closed. `system-fonts` description refresh: `PENDING` |
-| Final screenshots for UI-visible changes | `PENDING` |
+| Commit + push | `PASS` — `b04768a` then `6698565`; records committed separately |
+| `npm view` shows the new version | `PASS` — all six answer with the target version on the official registry |
+| tarball URL returns 200 | `PASS` — all six; `dsh-cds-theme` took ~19 min plus ~30 s for the CDN path |
+| One GitHub Release per package, asset 200, shasum equals npm `dist.shasum` | `PASS` — six Releases; every asset was downloaded back and its SHA-1 compared to npm's `dist.shasum`, all matched ([publish-record.md](publish-record.md)) |
+| Install matrix recorded | `PASS` — [install-matrix.md](install-matrix.md), run by hand with pinned versions against the official registry because the script's default registry is a stale mirror |
+| Mount verification green | `PASS` — six of six mount at the target version (§ in install-matrix.md); `verify-mount.ps1` was not used unchanged, see that file for why |
+| Market catalog + `index.json` updated | `PASS` — `build-index.mjs` succeeded after 0.1.7 landed (`6 plugins, 4 categories`); `system-fonts` and `genui` descriptions corrected to match the code |
+| Market PR opened or entry already present, link recorded | Entries present: #8392 merged 2026-10-21T17:27Z, #8189 closed. **No new PR opened** — entry structure unchanged, only wording and version progression; recorded in [SUBMISSION.md](SUBMISSION.md) |
+| Final screenshots for UI-visible changes | `PASS` with two dated caveats — nine screenshots re-taken in a real session; `screenshot-plugins.png` still shows the pre-iframe genui description because the running app loaded the older build, and is to be re-shot after a restart |
+
+### What this release did not verify
+
+| Item | State | Why |
+|---|---|---|
+| Online scanning / penetration testing | Not performed | Stopped by the user's decision; out of scope for this round |
+| `dsh-cds-theme@0.1.6` on npm | Never landed | 0.1.7 supersedes it with identical content; recorded in the stuck-version ledger |
+| Unpinned-install lag cause | Unidentified | Observed that an unpinned install can land the previous version; the config that would explain it (`minimumReleaseAge`) is not set on this machine |
+| `genui` uppercase-component-function wrap | No test | The assertion was in `test/sandbox.test.mjs`, deleted with the same-origin sandbox, and was not moved into `test/frame.test.mjs` |
+| Install matrix via `verify-mount.ps1` as written | Not used | It installs through the machine's default mirror, which serves the previous version; the same three checks were run directly against target-version installs instead |

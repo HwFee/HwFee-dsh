@@ -23,6 +23,33 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 脚本默认只提交上游没有的条目，正是为了避免 PR 去改动已有条目）。改写时要守住那条边界：
 插件**从不写 `font-weight`**，所以任何「字重」措辞都不能出现在描述里。
 
+**2026-10-22 更新：本地两条描述已改，尚未提交上游。**
+`system-fonts` 补上了界面字体、界面字号与行内代码字号，措辞刻意不含 weight；
+`genui` 原来写「网络、定时器、模块加载与 DOM 全局均被屏蔽」，那是同源求值时代的护栏描述——
+代码已改成 opaque-origin 沙箱 iframe（`sandbox="allow-scripts"` 且不带 `allow-same-origin`），
+所以描述改成「读不到宿主页面/存储/cookie、帧内 CSP 挡网络、发消息须用户确认」。
+两条都逐句对过代码。**本次不新开 PR**：条目结构没变，只是描述措辞与版本推进，
+而市场规则要求 PR 不碰与自己无关的条目；等确有结构性变更时再用 `-Update` 一次性提交。
+
+### 2026-10-22 发布记录
+
+| 包 | 版本 | npm | GitHub Release | 备注 |
+|---|---|---|---|---|
+| `dsh-cds-theme` | **0.1.7** | 已发布 | `cds-theme-v0.1.7` | 0.1.6 未在 npm 落地（见 `PUBLISHING.md` 卡死台账），0.1.7 为同内容换号；最终 npm `dist.shasum` 与 Release 资产**逐字节一致** |
+| `dsh-system-fonts` | **0.1.3** | 已发布 | `system-fonts-v0.1.3` | 界面字体 + 两个像素步进器 |
+| `@hwfee/dsh-git-bash` | **0.1.1** | 已发布 | `git-bash-v0.1.1` | 受限会话 spawn 前拒绝 + 进程树真正停止 |
+| `@hwfee/dsh-usage-stats` | **0.1.3** | 已发布 | `usage-stats-v0.1.3` | `lib/usage-ledger.js` 首次发布 |
+| `@hwfee/dsh-predict` | **0.1.1** | 已发布 | `predict-v0.1.1` | `lib/` 数据流改动首次发布 |
+| `@hwfee/dsh-genui` | **0.1.1** | 已发布 | `genui-v0.1.1` | opaque-origin iframe 隔离 + 发送需确认 |
+
+六个版本都已进 `market/index.json`（`node market/build-index.mjs` 生成，源类型全部 `npm`）。
+安装矩阵与挂载结果见 [install-matrix.md](install-matrix.md)。
+
+**cds-theme 在 npm 上的落地过程，如实记录**：0.1.6 发布返回成功但从未出现在 packument，
+官方 tarball 一直 404；换号 0.1.7 后，`npm view` 先返回 0.1.7 而 tarball 仍 404 约 30 秒，
+随后转为 200。**期间用 Release 资产验证过该包可安装**，所以交付不依赖 npm 通道。
+最终 `dist.shasum` 与 Release 资产的 SHA-1 一致，两者是同一份字节。
+
 第一次提交是 [PR #8189](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8189)：维护者读完代码后指出 `system-fonts` 的描述与实现相反——README 与代码都明确「从不写 `font-weight`，字重归宿主主题」，而条目写了「plus weight / 另加字重」。他删掉该词后把三个条目一起合入 main，PR 关闭。本地 `market/catalog` 已同步为改正后的文本。**这就是描述必须属实的实例**：市场的评审会逐句核对代码。
 
 ## 为什么是那个市场

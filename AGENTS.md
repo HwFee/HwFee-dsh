@@ -591,7 +591,7 @@ https://github.com/HwFee/HwFee-dsh/tree/<sha>/plugins/xxx
 - `market/test-install-paths.ps1` 生成的 `market/install-matrix.md` 与 `market/verify-mount.ps1` 的结果，必须随本次改动一起提交进仓库；
 - 完成后把版本、PR 链接记进 `market/SUBMISSION.md` 的状态表。
 
-文件里还记着两个容易被误判的现状：pnpm 的 `minimumReleaseAge` 会让**未锁定**安装落后一版（不是发布失败；但若回落到的版本本身有缺陷，用户装到的就是坏的），以及市场条目描述必须与代码一致——`system-fonts` 曾因写了「plus weight」被维护者核对后改正，而插件从不写 `font-weight`。
+文件里还记着两个容易被误判的现状：**未锁定**安装可能落到上一版（实测：显式指定官方源、不带版本号，装到的仍是前一版；**成因未定位**——该机 `npm config get minimum-release-age` 与 `pnpm config get minimumReleaseAge` 都是 `undefined`，profile 的 `pnpm-workspace.yaml` 也没有该键，所以不要沿用「pnpm 的 minimumReleaseAge 导致」这个旧归因；发布后可靠的只有锁定版本与 Release 资产），以及市场条目描述必须与代码一致——`system-fonts` 曾因写了「plus weight」被维护者核对后改正，而插件从不写 `font-weight`。
 
 违反会怎样：npm 显示成功但 tarball 404、安装成功但行永不激活、条目描述与代码不符被打回——这三种都发生在「命令看起来成功」之后，只有按顺序走到矩阵、挂载验证和条目核对才会暴露。
 
@@ -605,6 +605,25 @@ https://github.com/HwFee/HwFee-dsh/tree/<sha>/plugins/xxx
 - **改前先备份**到仓库外的临时目录。
 - `package.json` 与 `pnpm-lock.yaml` 必须一致，否则启动失败。改完依赖后跑 `pnpm install --lockfile-only`。
 - scoped 包的符号链接必须在 `node_modules/@scope/` 子目录里，不能直接放 `node_modules/` 下。
+
+### 用 `link:` 安装时，更换安装来源会清空工作区源码
+
+**现象（2026-10-22 实测）**：把六个插件从 `link:` 换成 npm/Release 实体后，`plugins/` 下 **245 个 tracked 文件全部变成删除**，六个插件目录**变空**，`git status` 满屏 ` D`。`plugins/*/node_modules` 也一并消失。
+
+**原因**：profile 的 `node_modules/<pkg>` 是指向工作区 `plugins/<pkg>` 的 **symlink**。`install_bundle` 实体化时先删除这个 symlink 指向的内容——也就是**仓库里的插件源码本身**，不只是那个链接。删除动作发生在工作区，不在 profile 副本里。
+
+**为什么这次没丢**：那 245 个文件此前已 commit 并 push 到远端，逐项核对 `git cat-file -e HEAD:<path>` **0 个不在 HEAD**，`git checkout -- plugins/` 全量恢复，恢复后 `git diff --stat -- plugins/` 为空（与 HEAD 逐字节一致）。`plugins/` 之外无任何删除。
+
+**违反会怎样**：如果当时源码没有 commit + push，这 245 个文件就是**不可恢复的丢失**——包括 `client/client.js` 这种已发布的构建产物，以及只存在于工作区的未提交修复。工作区里唯一的那份副本，会被一次"升级插件"抹掉。
+
+**正确做法**：
+
+1. **实体化安装、更换安装来源之前，先 `git add` + `commit` + `push`**。这是唯一让恢复成为可能的动作，不是可选的稳妥习惯。
+2. **不要在唯一的副本上做 `link:` 升级**。要么先把源码推到远端，要么在一个已有的实体安装（非 link）的 profile 上升级。
+3. **升级后立刻 `git status -- plugins/`**。出现成片 ` D` 就是它，`git checkout -- plugins/` 可全量恢复（前提见第 1 条）。
+4. 恢复 `node_modules` 要逐包 `npm install`（它是 gitignore 的，不在 git 里），然后用 `npm run build --check` 确认产物与提交版本一致——**产物与源不一致比缺依赖严重得多**。
+
+这条与「profile 不是仓库」是同一类危险的两面：profile 里的 link 让工作区成为 profile 的一部分，于是对 profile 的操作就是对工作区的操作。
 
 ---
 
