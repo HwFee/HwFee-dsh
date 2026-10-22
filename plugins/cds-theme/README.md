@@ -1,6 +1,6 @@
 # dsh-cds-theme
 
-给 DeepSeek Harness (DSH) 做的 **Claude Design System (CDS)** 主题插件。参考自开源项目 [open-claude-ui](https://github.com/Caho1/open-claude-ui)（MIT），按自己的审美和宿主实际情况做了不少调整。
+给 DeepSeek Harness (DSH) 做的 **Claude Design System (CDS)** 主题插件。参考自两个 MIT 开源项目：[open-claude-ui](https://github.com/Caho1/open-claude-ui)（CDS 规范取证）与 [dsh-claude-style](https://github.com/Nwflower/dsh-claude-style)（参考版外观），按自己的审美和宿主实际情况做了不少调整。两者的 MIT 归属与「只读、未内嵌代码/资产」的说明写在 [`licenses/NOTICE.md`](licenses/NOTICE.md)。
 
 ## 安装与卸载
 
@@ -31,8 +31,8 @@ dsh plugin --profile desktop remove dsh-cds-theme
 | **组件与正文细节** | 结构定位 + 自有属性 + 样式表 | 首页问候语改衬线 Display（38px / wght 330）；聊天表格闭合 `.5px` 发丝外框 + 浅底表头 + 等宽数字；代码块浅色下是白底、深色下 `#1a1a19` 暖黑；思考提示改柔和呼吸微光；消息操作栏悬停显现；滚动渐隐遮罩 |
 | **代码块默认换行** | `white-space: pre-wrap` + 隐藏 `aria-pressed` 按钮 | 所有代码块（含工具卡片里的 diff / 文件行）**默认自动换行**，并**移除**宿主右上角的「自动换行」开关——主题不再提供「不换行」这个状态。diff/read 的每一行是独立的行元素而不是 `<pre>`，所以单独有一条 `[data-code-wrap] [class*="_line_"]` 规则，并把 diff 的 `max-content` 网格列钉成 `minmax(0, 1fr)`，否则行内文字会溢出卡片被裁掉 |
 | **工具调用卡片** | `[data-slot="tool.call.toolview"]` + `[class*="_ioCard"]` | 统一成参考实现的「一张卡」：展开体缩进到行下方，`输入`/`输出` 标签与分隔线去掉；请求变成带 `.5px` 发丝描边、12px 圆角、代码底色的代码块，响应变成无框流淌的次要色文本（高 220/280px 后内部滚动）。diff / read / terminal 等自有卡片同样套上这张卡（发丝框 + 12px 圆角 + 代码底），语言标签收进悬停显示的复制按钮 |
-| **编辑 / 写入卡片（主题自绘 diff）** | `tool.call.toolview`，键 `edit` / `write`，`priority: 100` | 行和卡都由主题渲染：行号列（新增/上下文行印新文件行号，删除行回退旧文件行号）、`+`/`-`/空格字形、按语言分词的语法着色（`--shiki-token-*`）、以及**词级高亮**——配对的两行只把真正变化的 token 洗亮，看见的是「哪个词变了」而不是两行相像的文本。失败调用只渲染错误文本，行标题写成「编辑失败 <文件名>」；超长 hunk 收成 16 行 + 本地化展开器 |
-| **「主题定制」设置页** | `settings.section` (`order: 1`) | 设置侧栏独立一页（与「通用」同级，同心双框图标），包含 10 个外观调节项；总开关留在「通用」 |
+| **编辑 / 写入卡片（主题自绘 diff）** | `tool.call.toolview`，键 `edit` / `write`，`priority: -1` | 行和卡都由主题渲染：行号列（新增/上下文行印新文件行号，删除行回退旧文件行号）、`+`/`-`/空格字形、按语言分词的语法着色（`--shiki-token-*`）、以及**词级高亮**——配对的两行只把真正变化的 token 洗亮，看见的是「哪个词变了」而不是两行相像的文本。失败调用只渲染错误文本，行标题写成「编辑失败 <文件名>」；超长 hunk 收成 16 行 + 本地化展开器。**真实行号需要两个宿主补丁**（见下方说明），未应用时如实标 `data-numbered="false"` 并显示 hunk 内相对序号 |
+| **「主题定制」设置页** | `settings.section` (`order: 1`) | 设置侧栏独立一页（与「通用」同级，同心双框图标），包含 13 个外观调节项；总开关留在「通用」 |
 
 ---
 
@@ -51,9 +51,16 @@ dsh plugin --profile desktop remove dsh-cds-theme
 | **深度思考提示用原版蓝** | 开 / 关 | 只把「正在深度求索…」这一行和扫光恢复成 DSH 原版蓝，其余强调色保持不变 |
 | **长文本粘贴存为文件引用** | 开 / 关 | 粘贴纯文本超过 2000 字或 30 行时，自动存进工作区 `.dsh-paste/` 并转成 `@` 文件引用 chip，不再把输入框撑老高；失败则 2 秒内回退普通粘贴 |
 | **中文优先使用主题字体** | 开 / 关 | 正文和代码的中文优先走内嵌、校准过字重的思源黑体，问候语走思源宋体；手动选过字体时以手选为准 |
+| **助手正文的列表、强调与链接** | 开 / 关（默认**关**） | 助手的列表 / 任务列表、粗体 / 斜体 / 删除线与链接改用参考版的墨色、项目符号、下划线间距。**代码块与行内代码保持原样**：作用域限定在 `[data-chat-flow] [data-chat-flow-kind="assistant-step"]`，每条规则都排除 `pre` / `code` 及其内容、`[data-slot="tool.call.toolview"]` 与 `.dsh-genui-card` 及其内容；用户消息、设置页不在范围内。列表行距继承宿主正文，不钉死像素 |
+| **「对话 / 轨迹」用胶囊样式** | 开 / 关（默认**关**） | 关是宿主原本的下划线页签，开则两段收进一个胶囊（令牌取色，跟随明暗与阴影强度，`prefers-reduced-motion` 下不动画）。胶囊**只占两个页签那么宽**，不再横贯整个标题栏：宿主把这条 tablist 放在 grid 表头里，网格子项默认拉伸，`justify-self: start` 才让它收回去。**它不决定页签出不出现**——那两个页签只在宿主 **设置 → 通用 → 「显示代码工作视图」** 打开时才渲染，关掉就是零个页签；主题从不读写那个开关 |
+| **输入框分离：文本框在上，工具栏在下** | 开 / 关（默认**关**） | 文本框放进独立边框，宿主的整条控件行成为它下面的一行工具栏，轮步 / 速度 / token / 缓存 / 上下文环从卡片下方的 dock 提上来与权限、添加、模型、发送**同排**。DOM 一个节点都不搬：dock 仍是 card 的兄弟，靠共同祖先上的 `position: relative` + `absolute` 上带、`pointer-events` 穿透保住原按钮可点。左右留白按**实测**两侧 cluster 宽度写入 `--cds-dock-inset-*`，窄屏自动退回 dock 自己一行；**不改**宿主的 `--dsh-composer-text-max-height`，也不覆盖 usage-stats 的 `--dus-input-budget` |
 | **首页背景点击波纹（WIP）** | 开 / 关 | 新会话空白页背后的发光代码标点与点击水波。**目前还是半成品**，觉得碍眼可以直接关掉 |
 
 **设置 → 通用设置** 里只留一行 **「启用 CDS 主题」** 总开关。关掉它，所有令牌和样式规则当场撤回，回到宿主原样。
+
+> **「对话 / 轨迹」页签的前提。** 这两个页签是宿主的，不是主题的：只有 **设置 → 通用 → 「显示代码工作视图」** 打开时宿主才渲染它们（同一个开关还启用本轮代码差异与完整 Agent 预设）。关着的时候即使把上面的胶囊样式打开也看不到任何效果——这是宿主的决定，主题不会替你打开它。
+
+> **diff 卡片的真实行号需要两个宿主补丁。** 主题的 `edit` / `write` 卡片会读 `data-diff-new-start` / `data-diff-old-start` 并把行号印成**真实文件行号**；这两个属性由仓库自带的 `patches/dsh-tool-fs-hunk-lines.patch`（数据层：`computeHunkDiffs` 增加 `oldStart` / `newStart`）与 `patches/dsh-web-frontend-diff-start.patch`（渲染层：把 start 写到 DOM）产出。**当前安装未应用这两个补丁**，所以主题拿不到起点，只能显示 hunk 内的相对序号，并在卡片上如实标 `data-numbered="false"`——不会伪造文件行号。补丁属于宿主安装层面，主题不会自行改动 asar。
 
 ---
 
@@ -102,7 +109,7 @@ diff 卡片的所有规则都在 `diffCardRules()` 里，位于 `refine` 开关�
 ```bash
 npm ci           # 仅安装开发期打包工具 esbuild，零运行时依赖
 npm run build    # 编译客户端产物：client/src/* -> client/client.js
-npm test         # 产物新鲜度检查 + 清单契约 + 24 个测试文件（条数以输出为准）
+npm test         # 产物新鲜度检查 + 清单契约 + 25 个测试文件（条数以输出为准）
 npm run verify   # 打印令牌、排印、问候语、双语字典与规则表的核验报告（含 override map size）
 ```
 

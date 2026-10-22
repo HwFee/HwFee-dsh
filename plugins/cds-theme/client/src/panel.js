@@ -342,6 +342,13 @@ export function createPanel({ React, primitives, settings, themeMode }) {
   }
 
   // ---------------------------------------------------------- toggle row
+  //
+  // `state[key] !== false` is the reading every row shares: an absent key and an
+  // explicit `true` both show ON, which is right because `sanitize()` fills every
+  // key and the older rows all default ON. The two opt-in looks default to a
+  // stored `false`, so they render OFF through the same expression — no second
+  // convention, and the markdown/tabs suite drives the real component to prove
+  // it, including that one click flips and the next one flips back.
   function ToggleRow(props) {
     const slot = props.slot
     const t = makeT(props.t)
@@ -491,6 +498,83 @@ export function createPanel({ React, primitives, settings, themeMode }) {
             key: 'heroRipple',
             titleKey: 'heroRipple.title',
             descKey: 'heroRipple.desc',
+          },
+          t: props.t,
+        })
+      },
+    },
+    {
+      // A REPLICATION ITEM, so by docs/replication-toggles.md it ships WITH its
+      // comparison switch — and OFF at the start, because installing this version
+      // must not change the interface on its own. Off is the host's own list
+      // markers, emphasis and link colour; on is the reference's.
+      //
+      // ORDER 45 is free: 44 is the backdrop above, 42 is retired. The row is a
+      // look-only switch — the rules it gates live in `markdown-scope.js` and are
+      // emitted inside `refine` (styles.js), so turning refinement off removes
+      // the look without touching this setting.
+      id: 'dsh-cds-theme-markdown-scope',
+      order: 45,
+      key: 'markdownScope',
+      titleKey: 'markdownScope.title',
+      descKey: 'markdownScope.desc',
+      component: function BoundToggle(props) {
+        return React.createElement(ToggleRow, {
+          slot: {
+            key: 'markdownScope',
+            titleKey: 'markdownScope.title',
+            descKey: 'markdownScope.desc',
+          },
+          t: props.t,
+        })
+      },
+    },
+    {
+      // The 「对话 / 轨迹」 strip's look. The switch decides the LOOK only: the
+      // strip appears or disappears on the host's own 「显示代码工作视图」
+      // setting, which this plugin never writes. Off (the default) is the host's
+      // underline tabs.
+      //
+      // ORDER 46, after the markdown row. The body mark this gates is written by
+      // lifecycle.js; the rules live in `viewtabs.js`.
+      id: 'dsh-cds-theme-view-tabs-pill',
+      order: 46,
+      key: 'viewTabsPill',
+      titleKey: 'viewTabsPill.title',
+      descKey: 'viewTabsPill.desc',
+      component: function BoundToggle(props) {
+        return React.createElement(ToggleRow, {
+          slot: {
+            key: 'viewTabsPill',
+            titleKey: 'viewTabsPill.title',
+            descKey: 'viewTabsPill.desc',
+          },
+          t: props.t,
+        })
+      },
+    },
+    {
+      // The composer's layout: false keeps the shipped single card; true puts
+      // the text box in its own frame, the host's control row on a band beneath
+      // it, and the statistics dock one line under both. The key existed in this
+      // wave WITHOUT a row — the repository audit flags exactly that ("a switch
+      // the user cannot compare against the host treatment"), and this row is
+      // the fix.
+      //
+      // ORDER 47, after the markdown (45) and pill (46) rows. What it gates is a
+      // body attribute plus pure CSS (`composer-layout.js`): no node is moved,
+      // cloned or measured, and no observer is added.
+      id: 'dsh-cds-theme-composer-split',
+      order: 47,
+      key: 'composerSplit',
+      titleKey: 'composerSplit.title',
+      descKey: 'composerSplit.desc',
+      component: function BoundToggle(props) {
+        return React.createElement(ToggleRow, {
+          slot: {
+            key: 'composerSplit',
+            titleKey: 'composerSplit.title',
+            descKey: 'composerSplit.desc',
           },
           t: props.t,
         })

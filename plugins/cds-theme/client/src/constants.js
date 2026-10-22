@@ -32,6 +32,18 @@ export const BUBBLE_RADIUS = 18
  *            the hero with a water ripple spreading from every click. On by
  *            default because it is a replication of the shipped look; off
  *            removes the canvas, the listener and the see-through composer card.
+ * `markdownScope` the three markdown families the user asked this theme to
+ *            paint — lists and task lists, bold/italic/strikethrough, links —
+ *            scoped to `[data-chat-flow-kind="assistant-step"]` alone. Off
+ *            leaves those three exactly as the host draws them.
+ * `viewTabsPill` the 「对话 / 轨迹」 strip's look: false is the host's own
+ *            underline tabs (the default), true is the reference's segmented
+ *            pill. It does NOT decide whether the strip exists — the host's
+ *            「显示代码工作视图」 setting does, and this theme never writes it.
+ * `composerSplit` the composer's layout: false keeps the shipped single card
+ *            (the default); true lifts the controls onto a line outside the
+ *            text box as the reference does. No node moves; see
+ *            `composer-layout.js`.
  * `enabled`  master switch; off means the plugin releases its token layer.
  *
  * THERE ARE NO PER-ITEM REPLICATION SWITCHES ANY MORE. Seven shipped during the
@@ -79,6 +91,13 @@ export const DEFAULT_STATE = {
   pasteAsFile: true,
   preferThemeCjk: true,
   heroRipple: true,
+  // The three looks the user asked for, each OFF at the start so installing
+  // this version cannot change the interface on its own: the scope rules paint
+  // the assistant's lists/emphasis/links, the pill restyles the view tabs, and
+  // the split lifts the composer's toolbar out of the text box.
+  markdownScope: false,
+  viewTabsPill: false,
+  composerSplit: false,
 }
 
 export const ACCENT_IDS = ['clay', 'ochre', 'sand', 'graphite']
@@ -131,6 +150,11 @@ export function sanitize(raw) {
     preferThemeCjk: input.preferThemeCjk === undefined ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
     // The blank-session backdrop defaults on; a stored false turns it off.
     heroRipple: input.heroRipple === undefined ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
+    // The three new looks are opt-in: only an explicit `true` turns one on, so
+    // a payload written by an older version can never light them up.
+    markdownScope: input.markdownScope === true,
+    viewTabsPill: input.viewTabsPill === true,
+    composerSplit: input.composerSplit === true,
     // Any other key in an old payload is ignored. Every retired switch field is
     // dropped here: `compactHero` (its runtime is gone — the new-session layout
     // is CSS-only, see `newSessionInputRules` in styles.js, and a stored value

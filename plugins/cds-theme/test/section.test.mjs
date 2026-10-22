@@ -250,6 +250,11 @@ const APPEARANCE_ROW_IDS = [
   'dsh-cds-theme-paste-as-file',
   'dsh-cds-theme-prefer-theme-cjk',
   'dsh-cds-theme-hero-ripple',
+  // The two opt-in looks of this wave: the assistant markdown scope (45) and the
+  // view-tabs pill (46). Both ship OFF.
+  'dsh-cds-theme-markdown-scope',
+  'dsh-cds-theme-view-tabs-pill',
+  'dsh-cds-theme-composer-split',
 ]
 
 // The flat fallback concatenates the two ledgers: appearance rows first (in
@@ -378,7 +383,7 @@ test('every appearance row lands on the new slot and only enabled stays in Gener
   const onSection = slots.ids(APPEARANCE_SLOT)
   const onGeneral = slots.ids(GENERAL_SLOT)
 
-  assert.deepEqual(onSection, APPEARANCE_ROW_IDS, 'the theme-mode row plus the ten remaining appearance controls')
+  assert.deepEqual(onSection, APPEARANCE_ROW_IDS, 'the theme-mode row plus the twelve remaining appearance controls')
   assert.deepEqual(onGeneral, ['dsh-cds-theme-enabled'],
     'the master switch is a plugin on/off switch, not an appearance knob')
 
@@ -394,8 +399,8 @@ test('the row orders are the same numbers on the new page', function () {
   createRows({ slots })
 
   const orders = slots.entries(APPEARANCE_SLOT).map(function (entry) { return entry.options.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 44, 39, 43].sort(function (a, b) { return a - b }),
-    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39 and 43 and the backdrop 44 (40/41 are usage-stats on this page, 42 is vacated)')
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 44, 39, 43, 45, 46, 47].sort(function (a, b) { return a - b }),
+    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39/43/45/46 and the backdrop 44 (40/41 are usage-stats on this page, 42 is vacated)')
   const generalOrders = slots.entries(GENERAL_SLOT).map(function (entry) { return entry.options.order })
   assert.deepEqual(generalOrders, [30])
 })
@@ -408,7 +413,7 @@ test('the rows keep their components and locale namespace on the new slot', func
   const registered = slots.declarations.filter(function (opts) {
     return opts.name === APPEARANCE_SLOT || opts.name === GENERAL_SLOT
   })
-  assert.equal(registered.length, 11)
+  assert.equal(registered.length, 14)
   for (const options of registered) {
     assert.equal(options.locale, LOCALE_NS, options.id + ' must inject t')
     assert.equal(typeof options.component, 'function', options.id + ' must render')
@@ -428,7 +433,7 @@ test('without a settings.section ledger all ten rows use the General list', func
 
   assert.equal(rows.controller.mode, 'flat')
   assert.equal(rows.controller.appearanceRows(), 0)
-  assert.equal(rows.controller.generalRows(), 11)
+  assert.equal(rows.controller.generalRows(), 14)
   assert.match(rows.controller.reason(), /settings\.section/)
   assert.equal(rows.warnings.length, 1)
   assert.match(rows.warnings[0], /fall back to the General list/)
@@ -520,13 +525,13 @@ test('a late appearance declaration after the fallback does not double-register'
   slots.declare(GENERAL_SLOT)
   const rows = createRows({ slots })
   assert.equal(rows.controller.mode, 'flat')
-  assert.equal(slots.ids(GENERAL_SLOT).length, 11)
+  assert.equal(slots.ids(GENERAL_SLOT).length, 14)
 
   // The host finally declares the child slot; the flat list already owns the
   // rows, so the appearance mount must stay a no-op (duplicate ids would throw
   // inside the outlet).
   assert.doesNotThrow(function () { slots.declare(APPEARANCE_SLOT) })
-  assert.equal(slots.ids(GENERAL_SLOT).length, 11, 'still exactly one copy of every row')
+  assert.equal(slots.ids(GENERAL_SLOT).length, 14, 'still exactly one copy of every row')
   assert.deepEqual(slots.ids(APPEARANCE_SLOT), [])
 })
 
@@ -590,7 +595,7 @@ test('dispose of a flat fallback leaves the General list empty', function () {
   const slots = fakeSlots()
   slots.declare(GENERAL_SLOT)
   const rows = createRows({ slots, section: null })
-  assert.equal(slots.ids(GENERAL_SLOT).length, 11)
+  assert.equal(slots.ids(GENERAL_SLOT).length, 14)
   rows.controller.dispose()
   assert.deepEqual(slots.ids(GENERAL_SLOT), [])
 })
@@ -617,7 +622,7 @@ test('the lifecycle registers the section instead of the flat General list', fun
 
 test('the panel splits the rows the way the section expects', function () {
   const panel = createRowPanel()
-  assert.equal(panel.appearanceSlots.length, 10, 'theme-mode row + eight controls')
+  assert.equal(panel.appearanceSlots.length, 13, 'theme-mode row + thirteen controls')
   assert.equal(panel.generalSlots.length, 1)
   assert.equal(panel.generalSlots[0].id, 'dsh-cds-theme-enabled')
   assert.equal(panel.modeSlot.id, 'dsh-cds-theme-mode')
@@ -625,7 +630,7 @@ test('the panel splits the rows the way the section expects', function () {
   assert.equal(panel.appearanceSlots.length + panel.generalSlots.length, panel.slots.length)
   // `slots` keeps display order, so the fallback list reads top to bottom.
   const orders = panel.slots.map(function (slot) { return slot.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44])
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44, 45, 46, 47])
 })
 
 test('the two verified replication rows are gone from every slot', function () {

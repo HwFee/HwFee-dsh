@@ -7,6 +7,9 @@ import { scaleShadow } from './tokens.js'
 import { fontCss, preferredCjkStackCss } from './fonts.js'
 import { GREETING_DISPLAY, WEIGHTS } from './typography.js'
 import { RIPPLE_ATTR } from './ripple.js'
+import { markdownScopeRules } from './markdown-scope.js'
+import { tabsStyleRules } from './viewtabs.js'
+import { composerLayoutRules } from './composer-layout.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -1148,6 +1151,59 @@ function toolRowsRules() {
     // local name and the ONLY status cell a banner has, so it is safe to hit.
     '[data-slot="tool.call.toolview"] [data-code-block-banner] [class*="_status"] {',
     '  display: none;',
+    '}',
+    // The +N / −N counts are NOT styled here. They have to survive
+    // `refine: false` (where the host's own card is back on screen), so they
+    // live in `diffStatFamilyRules()`, emitted outside the component half.
+  ].join('\n')
+}
+
+/**
+ * The `+N` / `−N` change counts take the UI family, in BOTH card states.
+ *
+ * WHY TWO HOOKS. Which card draws those counts depends on `refine`:
+ *
+ *   refine ON   the theme replaces the host card (`diffview.js`, registered at
+ *               priority -1 in `lifecycle.js`), and its counts are
+ *               `[data-cds-diffrow-stats]` — a marker of our own.
+ *   refine OFF  the host's `FileMutationRow` draws them. Its cell carries
+ *               `.pFy1Ka_diffStat` (`web-frontend bundle, ToolRow module:
+ *               ".pFy1Ka_diffStat{font-family:var(--ds-font-family-code);…}"`),
+ *               so the salt-tolerant `[class*="diffStat"]` is the hook — the
+ *               same technique `[class*="_ioCard"]` and `[class*="markdown"]`
+ *               already use. The host's counter has no `data-*` attribute.
+ *
+ * WHY IT CANNOT LIVE INSIDE `refine`. The refine-OFF state is the one the host
+ * cell appears in; a rule inside the component half never reaches it. So this
+ * block is appended after the always-on group, outside the `refine` gate.
+ *
+ * WHY `!important` IS REQUIRED. `uiFontRules()` pins the TEXT family on every
+ * descendant of `[data-conversation-content]` with `!important`
+ * (`[data-conversation-content] :not(code):not(pre):not(kbd):not(samp)`,
+ * specificity (0,1,4)). A plain declaration loses to it even at (0,3,0), and
+ * the counts kept inheriting the conversation font — which is what the user
+ * saw as Mono. So this rule matches the `!important` AND outranks the selector,
+ * exactly like the code-family restore in `toolRowsRules()`.
+ *
+ * SCOPED TO A TOOL ROW, twice: `[data-slot="tool.call.toolview"]` is the host's
+ * outlet for the row, and `[data-tool]` is set on the row itself (and on the
+ * theme's own `[data-cds-diffrow]`). So this can reach a tool row's stat cell
+ * and nothing else — never a markdown block, a settings row, or the read card.
+ *
+ * WHAT IS *NOT* TOUCHED: the two colours. `+N` stays the host's green and `−N`
+ * its red, including their hover states — no `color`, no `opacity`. Only the
+ * family and the numeric alignment change, and `tabular-nums` keeps the two
+ * counts from jittering as their width changes while a file is being edited.
+ *
+ * @returns {string} the rules
+ */
+function diffStatFamilyRules() {
+  return [
+    '/* ---- the ±N change counts: UI family in both card states ----------- */',
+    '[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"],',
+    '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diffrow-stats] {',
+    '  font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;',
+    '  font-variant-numeric: tabular-nums;',
     '}',
   ].join('\n')
 }
@@ -2669,6 +2725,23 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
       motionRules(),
       settingsRules(),
     )
+
+    // ---- the opt-in looks (all OFF by default) ---------------------------
+    //
+    // THE MARKDOWN SCOPE paints only the assistant's lists/task lists,
+    // emphasis and links; code blocks, inline chips, tool cards and genui cards
+    // are excluded inside the rule text itself (`markdown-scope.js`). Everything
+    // there is plain CSS — no marker, no observer — so the switch is exactly the
+    // presence of these rules.
+    //
+    // THE VIEW-TABS PILL and THE COMPOSER SPLIT are each split in two halves on
+    // purpose: their rules are scoped to a `body` attribute that `lifecycle.js`
+    // writes. Emitting them while that mark is absent would be dead CSS, so each
+    // pair travels on one state key, and the host's own look stands whenever the
+    // key is false.
+    if (state.markdownScope === true) parts.push(markdownScopeRules())
+    if (state.viewTabsPill === true) parts.push(tabsStyleRules())
+    if (state.composerSplit === true) parts.push(composerLayoutRules())
   }
 
   // ---- the solidified replication items: ALWAYS ON -------------------------
@@ -2688,6 +2761,17 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
     buttonSpringRules(),
     statTypographyRules(),
   )
+
+  // The `+N` / `−N` change counts take the UI family. OUTSIDE `refine` for the
+  // same class of reason the block above is: the host's own card is what comes
+  // back when refinement is off, so a rule inside the component half would be
+  // emitted exactly in the state that does not need it. See
+  // `diffStatFamilyRules()`.
+  //
+  // APPENDED AT THE END on purpose: `motionTokenRules()` and the A/B-tier
+  // baselines (`test/rule-baseline.mjs`) are byte-pinned slices of the sheet,
+  // and inserting this block anywhere before them would break those slices.
+  parts.push(diffStatFamilyRules())
 
   return parts.join('\n\n')
 }

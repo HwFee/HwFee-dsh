@@ -8,6 +8,8 @@ import { createHeroRipple } from './ripple.js'
 import { createDiffNumberMarker } from './diffnumbers.js'
 import { installVariantHooks } from './varianthooks.js'
 import { createDiffView } from './diffview.js'
+import { createTabsStyleController } from './viewtabs.js'
+import { createComposerLayoutController } from './composer-layout.js'
 import {
   appearanceSectionOptions, createAppearanceSection, registerSettingsRows,
 } from './section.js'
@@ -276,6 +278,53 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
         ripple.stop()
       }
     }, 'dsh-cds-theme: blank-session backdrop')
+
+    // The 「对话 / 轨迹」 strip's look (`viewtabs.js`). ONE body attribute, no
+    // observer and no per-strip stamping: `[data-conversation-tabs]` is a public
+    // hook the sheet keys on directly, and the strip itself is React's and may
+    // be re-created at any moment — a body attribute is not, so a re-render
+    // cannot lose the look.
+    //
+    // NEITHER THE STRIP NOR THIS MARK DECIDES WHETHER THE TABS EXIST. The host
+    // draws them only while its own 「显示代码工作视图」 setting is on, and this
+    // plugin never reads or writes that setting. With it off the mark matches
+    // nothing and the theme simply has no tabs to restyle.
+    //
+    // The rules are emitted on the same state key (styles.js), so the attribute
+    // and the CSS can never disagree; `dispose` removes the attribute, which is
+    // all the cleanup there is.
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const tabs = createTabsStyleController({
+        doc: document,
+        getState: settings.getState,
+        subscribe: typeof settings.subscribe === 'function' ? settings.subscribe : null,
+      })
+      tabs.start()
+      return function () { tabs.stop() }
+    }, 'dsh-cds-theme: view tab style')
+
+    // The composer's split layout (`composer-layout.js`). ONE body attribute and
+    // pure CSS — no node is moved or cloned, nothing is measured, and no observer
+    // is created. The rules ride the same state key (styles.js), so the mark and
+    // the CSS cannot disagree, and `stop()` removes the mark.
+    //
+    // WHY NOTHING IS MEASURED ANY MORE: an earlier draft lifted the statistics
+    // dock onto the control row's band with `--cds-row-top`/`--cds-row-height`
+    // written on the CARD. The dock is the card's SIBLING, so the two properties
+    // never reached it and its containing block was never established; on top of
+    // that the observer watched only the row, so a growing input moved the band
+    // without a re-measure. The dock now keeps its own place in the flow.
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const layout = createComposerLayoutController({
+        doc: document,
+        getState: settings.getState,
+        subscribe: typeof settings.subscribe === 'function' ? settings.subscribe : null,
+      })
+      layout.start()
+      return function () { layout.stop() }
+    }, 'dsh-cds-theme: composer split layout')
 
     const slots = ctx.slots
     const uiReady = React && primitives && primitives.IconCheckOutlineRegular

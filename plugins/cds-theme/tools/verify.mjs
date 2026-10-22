@@ -815,10 +815,132 @@ const checks = [
     buildCssFor(sanitize({ refine: false }), { themeModeAvailable: true }).includes(CUBE_HIDER)],
   ['without the theme service the hide rules disappear',
     !buildCssFor(sanitize({}), { themeModeAvailable: false }).includes('settings.general.item"] > *:has(')],
-  ['the theme-mode row and the nine knobs live on the appearance page, only enabled in General',
-    verifyPanel.appearanceSlots.length === 10
+  ['the theme-mode row and the twelve knobs live on the appearance page, only enabled in General',
+    // 10 rows before this wave, plus the three opt-in looks it wired (markdown
+    // scope 45, view-tabs pill 46, composer split 47), all OFF by default.
+    verifyPanel.appearanceSlots.length === 13
     && verifyPanel.generalSlots.length === 1
     && verifyPanel.generalSlots[0].id === 'dsh-cds-theme-enabled'],
+  ['the two opt-in looks exist as rows, default OFF, and emit no CSS until flipped',
+    verifyPanel.appearanceSlots.some(function (slot) {
+      return slot.id === 'dsh-cds-theme-markdown-scope' && slot.order === 45 && slot.key === 'markdownScope'
+    })
+    && verifyPanel.appearanceSlots.some(function (slot) {
+      return slot.id === 'dsh-cds-theme-view-tabs-pill' && slot.order === 46 && slot.key === 'viewTabsPill'
+    })
+    && DEFAULT_STATE.markdownScope === false && DEFAULT_STATE.viewTabsPill === false
+    && sanitize({}).markdownScope === false && sanitize({}).viewTabsPill === false
+    && sanitize({ markdownScope: true }).markdownScope === true
+    && sanitize({ viewTabsPill: true }).viewTabsPill === true
+    && !defaultSheet.includes('markdown scope: lists')
+    && !defaultSheet.includes('view tabs: the reference pill')
+    && buildCssFor(sanitize({ markdownScope: true }), { omitFonts: true }).includes('markdown scope: lists')
+    && buildCssFor(sanitize({ viewTabsPill: true }), { omitFonts: true }).includes('view tabs: the reference pill')
+    && !buildCssFor(sanitize({ markdownScope: true, refine: false }), { omitFonts: true })
+      .includes('markdown scope: lists')
+    && !buildCssFor(sanitize({ viewTabsPill: true, enabled: false }), { omitFonts: true })
+      .includes('view tabs: the reference pill')],
+  ['the pill trough shrinks to its tabs instead of stretching as a grid item',
+    // The host renders the strip as a grid item in a grid header; a grid item
+    // stretches whatever its own `display` says, so the pill needs the
+    // grid-level `justify-self: start` or the trough spans the whole header.
+    (function () {
+      const sheet = buildCssFor(sanitize({ viewTabsPill: true }), { omitFonts: true })
+      const at = sheet.indexOf('/* ---- view tabs: the reference pill')
+      if (at < 0) return false
+      const block = sheet.slice(at, sheet.indexOf('\n\n', at))
+      const stripAt = block.indexOf('[data-conversation-tabs] {')
+      if (stripAt < 0) return false
+      const strip = block.slice(stripAt, block.indexOf('}', stripAt))
+      return strip.includes('justify-self: start;')
+        && strip.includes('display: inline-flex;')
+        && strip.includes('gap: 2px;')
+        && !strip.includes('!important')
+        // The host look carries none of it.
+        && !buildCssFor(sanitize({}), { omitFonts: true }).includes('justify-self: start')
+    }())],
+  ['the composer split is wired as a row, defaults OFF, and its rules name no budget owner',
+    // The audit's "boolean state key with no settings row" is the regression this
+    // covers: the key shipped before its row did.
+    verifyPanel.appearanceSlots.some(function (slot) {
+      return slot.id === 'dsh-cds-theme-composer-split' && slot.order === 47 && slot.key === 'composerSplit'
+    })
+    && DEFAULT_STATE.composerSplit === false
+    && sanitize({}).composerSplit === false
+    && sanitize({ composerSplit: true }).composerSplit === true
+    && !defaultSheet.includes('composer: split layout')
+    && buildCssFor(sanitize({ composerSplit: true }), { omitFonts: true })
+      .includes('composer: split layout')
+    && (function () {
+      const split = buildCssFor(sanitize({ composerSplit: true }), { omitFonts: true })
+      // Scope to the SPLIT block: the whole sheet legitimately carries
+      // `--dsh-composer-text-max-height` in `newSessionInputRules`, which is the
+      // host's cap this feature must leave alone — not borrow.
+      const at = split.indexOf('/* ---- composer: split layout')
+      if (at < 0) return false
+      const block = split.slice(at, split.indexOf('\n\n', at))
+      return !block.includes('--dus-input-budget')
+        && !block.includes('--dsh-composer-text-max-height')
+        && !/168/.test(block)
+    }())],
+  ['the split lifts the dock from the stack, and measures instead of assuming',
+    (function () {
+      const split = buildCssFor(sanitize({ composerSplit: true }), { omitFonts: true })
+      const at = split.indexOf('/* ---- composer: split layout')
+      if (at < 0) return false
+      const block = split.slice(at, split.indexOf('\n\n', at))
+      // The containing block must be the STACK (the dock's real ancestor), and
+      // the band numbers must come from properties written there.
+      if (!block.includes('[data-cds-composer-stack] {\n  position: relative;')) return false
+      if (!block.includes('[data-cds-composer-stack] > [data-composer-dock] {')) return false
+      if (!block.includes('position: absolute;')) return false
+      if (!block.includes('var(--cds-row-top')) return false
+      if (!block.includes('var(--cds-row-height')) return false
+      // Measured cluster insets, and a measured narrow mode.
+      if (!block.includes('var(--cds-dock-inset-left')) return false
+      if (!block.includes('var(--cds-dock-inset-right')) return false
+      if (!block.includes('[data-cds-composer-narrow] > [data-composer-dock] {')) return false
+      // Click-through: the dock is transparent to the pointer, its children are not.
+      if (!block.includes('pointer-events: none;')) return false
+      return block.includes('[data-composer-dock] > * {\n  pointer-events: auto;')
+    }())],
+  ['the file-change counts are SANS in both card states and keep the host colours',
+    (function () {
+      // The rule has to survive `refine: false` (the host card is what comes
+      // back then), so it is checked in BOTH states, and it must be `!important`
+      // — the conversation-content prose rule it beats is `!important` itself.
+      const on = buildCssFor(sanitize({}), { omitFonts: true })
+      const off = buildCssFor(sanitize({ refine: false }), { omitFonts: true })
+      const at = on.indexOf('[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"]')
+      if (at < 0) return false
+      // The selector is grouped: host cell AND the theme's own stats span.
+      const selector = on.slice(at, on.indexOf('{', at))
+      const body = on.slice(on.indexOf('{', at) + 1, on.indexOf('}', at))
+      return selector.includes('[data-cds-diffrow-stats]')
+        && off.includes('[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"]')
+        && body.includes('font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;')
+        && body.includes('font-variant-numeric: tabular-nums;')
+        && !body.includes('color:')
+        && !body.includes('opacity')
+    }())],
+  ['the markdown scope excludes code, tool cards and genui cards on every subject',
+    (function () {
+      const block = buildCssFor(sanitize({ markdownScope: true }), { omitFonts: true })
+        .split('/* ---- markdown scope')[1]
+      if (block === undefined) return false
+      const text = block.split('\n\n')[0]
+      const EXCLUDE = ':not(:where(pre, pre *, code, code *, '
+        + '[data-slot="tool.call.toolview"], [data-slot="tool.call.toolview"] *, '
+        + '.dsh-genui-card, .dsh-genui-card *))'
+      const subjects = text.split('\n').filter(function (line) { return line.trim().endsWith('{') })
+      return subjects.length > 5
+        && subjects.every(function (line) { return line.includes(EXCLUDE) })
+        && text.includes('[data-chat-flow-kind="assistant-step"]')
+        && !text.includes('[class*="markdown"]')
+        && !/a\[href\] code/.test(text)
+        && !/^\s*line-height:/m.test(text)
+    }()
+    )],
   ['the long-paste switch sits at 39 and the Chinese-font switch at 43, with 40/41/42 never taken',
     DEFAULT_STATE.pasteAsFile === true
     && Object.hasOwn(DEFAULT_STATE, 'compactHero') === false

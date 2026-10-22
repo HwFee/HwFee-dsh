@@ -5,6 +5,25 @@
 also carries a custom `avar` axis remap. Every string quoted below was read out
 of the shipped `.woff2` files' own `name` table, not copied from a catalogue page.
 
+## Reference implementations (MIT), consulted not vendored
+
+This theme is a from-scratch implementation for DeepSeek Harness, written against
+two MIT-licensed reference projects that were read for measurements and design
+values. **No source file from either is included in this package**, and neither
+project's licence is the licence of this plugin:
+
+| Project | Copyright | Licence | What was taken |
+|---|---|---|---|
+| [`Nwflower/dsh-claude-style`](https://github.com/Nwflower/dsh-claude-style) | © 2026 Nwflower | MIT | The Claude-Desktop look this theme replicates: the segmented 「对话 / 轨迹」 pill geometry, the composer's control row, the assistant prose treatment (list gutter, marker ink tiers, link underline offset), and the two reference motion curves. Values were re-derived and expressed through this host's own tokens; no code, assets or the sodium engine were copied. |
+| [`Caho1/open-claude-ui`](https://github.com/Caho1/open-claude-ui) | © 2026 Caho1 | MIT | The CDS specification behind the token map: palette values, the radius ladder, the elevation shadows and the reference typography matrix. Cited per-line in `docs/cds-spec.md`. |
+
+Both licences require this notice to travel with substantial portions of the
+work; this table is that notice. `dsh-claude-style` additionally ships a
+`PolyForm Shield 1.0.0`-licensed Sodium rendering engine and proprietary
+Anthropic typefaces — **neither is used, referenced or redistributed here**, and
+this plugin likewise ships no Anthropic font bytes (see "Not covered by this
+notice" below).
+
 ## What ships
 
 | File in this repository | Family (name ID 1) | Version (name ID 5) | Size |
