@@ -198,16 +198,42 @@ test('the composer interior adds no second ring', function () {
 
 // ----------------------------------------------------------------- code
 
-test('code content is padded evenly inside the block', function () {
-  // The host pads the pre 6px top / 20px bottom / 22px sides, which pins the
-  // code to the top edge and leaves a band below it. The real app centres the
-  // text; the theme mirrors that with symmetric padding.
+test('code content carries the table inset, with the toolbar reserved on the right', function () {
+  // 8 / 8 / 17.2 / 72.2, top / bottom / left / right. The right side is not a
+  // design choice: it reserves room for the absolutely positioned copy rail
+  // (24n + 3(n - 1) + 12 + 2 of rail, plus 1ch), or a long line runs underneath
+  // the button. This assertion pins the ARITHMETIC as well as the number, so a
+  // future change of button count has to update both together.
   const rules = parseRules(buildCssFor(sanitize({})))
   const pre = rules.find(function (r) {
     return r.selector.includes('.md-code-block pre')
   })
   assert.ok(pre, 'expected a code-content padding rule')
-  assert.match(pre.body, /padding:\s*14px 18px\s*!important/)
+
+  const raw = /padding:\s*([^;]+);/.exec(pre.body)
+  assert.ok(raw, 'expected a padding declaration')
+  const [top, right, bottom, left] = raw[1].trim().split(/\s+/).map(function (t) { return parseFloat(t) })
+  assert.equal(top, 8, 'top inset must be 8px')
+  assert.equal(bottom, 8, 'bottom inset must be 8px')
+  assert.equal(left, 17.2, 'left inset must be 10px + 1ch (7.2px) = 17.2px')
+
+  // The rail: OUR rail ships the copy button only, so n = 1.
+  const RAIL_BUTTONS = 1
+  const railWidth = 24 * RAIL_BUTTONS + 3 * (RAIL_BUTTONS - 1) + 12 + 2
+  const oneCh = 7.2
+  assert.equal(right, railWidth + oneCh,
+    'right inset must be the rail width for ' + RAIL_BUTTONS + ' button(s) plus 1ch; '
+    + 'if the rail gained or lost a button, update RAIL_BUTTONS and this number together')
+
+  // And the rail must actually be one button wide, or the constant above is
+  // reserving space for a control that is not rendered. Find the rule that
+  // DEFINES the button's box, not the first rule that merely mentions it
+  // (several hover/opacity rules match the same selector first).
+  const copy = rules.find(function (r) {
+    return r.selector.includes('[data-code-block-banner] button')
+      && /width:\s*var\(--cds-copy-size\)/.test(r.body)
+  })
+  assert.ok(copy, 'expected the shared copy-control rule to size the button from --cds-copy-size')
 })
 
 test('terminal line-heights are FIXED (only inline code follows the setting)', function () {
@@ -1515,7 +1541,62 @@ test('tool cards: generic labels removed, request boxed, response bare', functio
 
   const seat = rules.find(function (rule) { return rule.selector.includes('[class*="_bodyWrap"]') })
   assert.ok(seat, 'expected the expanded body to be inset under the row')
-  assert.match(seat.body, /margin:\s*4px 0 8px 22px/)
+  // 10px, not 22px: the table reaches the 22px content inset as 10px margin +
+  // 12px padding, and the padding half lives on the frame below. This assertion
+  // used to pin `4px 0 8px 22px`, which paid all 22px as margin on ONE side —
+  // the cards were flush right and 26px in on the left once the host's own 4px
+  // frame margin applied.
+  assert.match(seat.body, /margin:\s*4px 10px 8px 10px/)
+})
+
+/**
+ * The read/write/edit frame carries the PADDING half of the table's inset, and
+ * the two halves must add up to the documented 16 / 20 / 22 / 22.
+ *
+ * This is the assertion that would have caught the previous shape: it pins the
+ * SUM, so moving a number from the margin to the padding (or losing the host's
+ * own 4px frame margin) cannot pass just because each rule still looks sane on
+ * its own.
+ */
+test('tool card inset: margin + padding add up to 16 / 20 / 22 / 22', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const seat = rules.find(function (rule) { return rule.selector.includes('[class*="_bodyWrap"]') })
+  const frame = rules.find(function (rule) {
+    return rule.selector.includes('[class*="_bodyWrap"]')
+      && rule.selector.includes('> *:not')
+  })
+  assert.ok(seat, 'expected the _bodyWrap seat')
+  assert.ok(frame, 'expected the payload frame inside the seat')
+
+  const px = function (text) { return Number(String(text).replace('px', '').replace(';', '').trim()) }
+  const seatRaw = /margin:\s*([^;]+);/.exec(seat.body)
+  assert.ok(seatRaw, 'the seat must declare a margin')
+  const seatTokens = seatRaw[1].trim().split(/\s+/)
+  assert.equal(seatTokens.length, 4, 'the seat margin must be a four-value shorthand, got ' + seatRaw[1])
+  // `padding: 12px` is a valid one-value shorthand; only split on the tokens
+  // that are actually present rather than requiring four.
+  const framePadRaw = /padding:\s*([^;]+);/.exec(frame.body)
+  assert.ok(framePadRaw, 'the frame must declare padding')
+  const padTokens = framePadRaw[1].trim().split(/\s+/)
+  const padTop = px(padTokens[0])
+  const padRight = padTokens[1] === undefined ? padTop : px(padTokens[1])
+  const padBottom = padTokens[2] === undefined ? padTop : px(padTokens[2])
+  const padLeft = padTokens[3] === undefined ? padRight : px(padTokens[3])
+
+  const seatTop = px(seatTokens[0])
+  const seatRight = px(seatTokens[1])
+  const seatBottom = px(seatTokens[2])
+  const seatLeft = px(seatTokens[3])
+
+  assert.equal(seatTop + padTop, 16, 'top inset must be 16px (4 margin + 12 padding)')
+  assert.equal(seatBottom + padBottom, 20, 'bottom inset must be 20px (8 margin + 12 padding)')
+  assert.equal(seatLeft + padLeft, 22, 'left inset must be 22px (10 margin + 12 padding)')
+  assert.equal(seatRight + padRight, 22, 'right inset must be 22px (10 margin + 12 padding)')
+
+  // And the host's own 4px card margin must be zeroed, or the left/top sums
+  // drift by 4px on top of the above.
+  assert.match(frame.body, /margin:\s*0(;|\s)/,
+    'the host card ships margin 4px 0 4px 4px; it must be zeroed or the inset is 4px over')
 })
 
 /**
@@ -1523,6 +1604,16 @@ test('tool cards: generic labels removed, request boxed, response bare', functio
  * a numbered gutter. It does NOT repeat the file path — the tool row above it
  * already names the file for edit, write and read alike.
  */
+test('diff card: symmetric seat matches read cards without padding the full-bleed rows', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  const card = rules.find(function (rule) { return rule.selector === '[data-cds-diffcard]' })
+  const seat = rules.find(function (rule) { return rule.selector === '[data-slot="tool.call.toolview"] [class*="_bodyWrap"]' })
+  assert.ok(card && seat, 'both diff and host payload seats must exist')
+  const margin = function (rule) { return /margin:\s*([^;]+);/.exec(rule.body)?.[1].trim() }
+  assert.equal(margin(card), margin(seat), 'write/edit cards must align with the read card on both sides')
+  assert.match(card.body, /padding:\s*8px 0\s*;/, 'diff rows must still reach both frame edges')
+})
+
 test('diff card: no path line, full bleed, numbered gutter', function () {
   const rules = parseRules(buildCssFor(sanitize({})))
   const path = rules.find(function (rule) {

@@ -14,13 +14,15 @@
  *      `ctx.theme.overrideTokens`, because the layout presenter writes tokens as
  *      INLINE styles on `<body>` and no stylesheet can outrank that.
  *
- *   2. TYPOGRAPHY (`typography.js`, `fonts.js`). The real Anthropic variable
- *      faces ship in `fonts/` as six @font-face declarations under the
- *      reference's family names; the reference's stack tokens bridge them into
- *      `--dsw-font-family` / `--ds-font-family-code`, and the whole Claude
- *      ladder (7-tier sizes, content-matrix roles, dark-mode weight thinning)
- *      rides the same token channel. `fontCss` also emits the faces, so the
- *      family strings resolve inside the app.
+ *   2. TYPOGRAPHY (`typography.js`, `fonts.js`). Six @font-face declarations
+ *      carry the reference's family names; the faces' BYTES are not shipped (no
+ *      redistribution grant — see `font-assets.js`), so they resolve through
+ *      `local()` and fall through to the system stack. The reference's stack
+ *      tokens bridge the families into `--dsw-font-family` /
+ *      `--ds-font-family-code`, and the whole Claude ladder (7-tier sizes,
+ *      content-matrix roles, dark-mode weight thinning) rides the same token
+ *      channel. `fontCss` also emits the faces, so the family strings resolve
+ *      inside the app.
  *
  *   3. STYLESHEET (`styles.js`). What a token cannot express: the
  *      `--dsw-elevation-*` tier (declared on `body, body *`, so an inline body

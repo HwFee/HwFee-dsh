@@ -149,3 +149,39 @@ test('the package is publishable and pinned to the official registry', function 
   assert.equal(manifest.publishConfig?.access, 'public')
   assert.equal(manifest.publishConfig?.registry, 'https://registry.npmjs.org')
 })
+
+test('the bundled fonts travel with their licence', function () {
+  // THE REGRESSION. The published bundle inlines two SIL OFL faces as base64.
+  // OFL condition 2 requires the copyright notice and the licence text to travel
+  // with every copy; condition 3 requires a Modified Version to say so. `files`
+  // is an allowlist, so adding the notice without adding `licenses` packs
+  // nothing, and adding `licenses` without the files packs an empty directory.
+  // Neither failure is visible unless the whole `npm pack --dry-run` list is read.
+  assert.ok(Array.isArray(manifest.files), 'files must be declared')
+  assert.ok(manifest.files.includes('licenses'),
+    'files must ship licenses/: the two inlined Noto faces are SIL OFL, and OFL '
+    + 'condition 2 requires the copyright notice and licence text with every copy')
+
+  for (const rel of ['licenses/OFL-1.1.txt', 'licenses/NOTICE.md']) {
+    assert.ok(existsSync(join(root, rel)), `licence file is missing: ${rel}`)
+  }
+
+  // The full licence, not a summary. A truncated OFL text is worse than none:
+  // it looks like compliance and is not.
+  const ofl = read('licenses/OFL-1.1.txt')
+  for (const required of [
+    'SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007',
+    'PERMISSION & CONDITIONS',
+    'TERMINATION',
+    'DISCLAIMER',
+  ]) {
+    assert.ok(ofl.includes(required), `OFL-1.1.txt is missing the "${required}" section`)
+  }
+
+  // The notice must carry the copyright holder read out of the shipped faces,
+  // and the Reserved Font Name that condition 3 turns on.
+  const notice = read('licenses/NOTICE.md')
+  assert.ok(notice.includes('Adobe'), 'NOTICE.md must carry the copyright holder')
+  assert.ok(/Reserved Font Name/.test(notice),
+    'NOTICE.md must state the Reserved Font Name that OFL condition 3 restricts')
+})

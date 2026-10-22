@@ -741,8 +741,8 @@ await test('activation adopts the host families and writes nothing', () => {
   assert.equal(state.terminalFamily, '', 'an empty host list is the default row value')
   assert.deepEqual(theme.calls, [], 'adopting a snapshot never writes the host')
   assert.equal(ctx.injects.length, 0, 'the plugin declares its injections, it does not add any')
-  assert.equal(slots.registrations.length, 7,
-    'three font rows + line-height + tracking register')
+  assert.equal(slots.registrations.length, 8,
+    'five font rows + the UI/inline-code steppers + both sliders register')
 })
 
 await test('a family changed by the host mirrors into the rows through theme/change', () => {
@@ -803,12 +803,19 @@ await test('a delayed settings.general.item declaration parks the rows', () => {
   assert.equal(slots.registrations.length, 0, 'a pending declaration is parked, not a failure')
   assert.ok(document.getElementById('dsh-system-fonts-style') !== null, 'fonts applied anyway')
   slots.declare()
-  assert.equal(slots.registrations.length, 7, 'rows register once the declaration arrives')
+  assert.equal(slots.registrations.length, 8, 'rows register once the declaration arrives')
   assert.deepEqual(
     slots.registrations.map((r) => [r.spec.id, r.spec.order]),
     [['dsh-system-fonts-content', 12], ['dsh-system-fonts-code', 13],
      ['dsh-system-fonts-terminal', 14], ['dsh-system-fonts-ui', 15],
-     ['dsh-system-fonts-ui-size', 16], ['dsh-system-fonts-line-height', 17],
+     ['dsh-system-fonts-ui-size', 16],
+     // 13.5 — the half step between 代码字体 (13) and 终端字体 (14). Every
+     // integer from 12 to 18 is already taken and the row must sit after the
+     // code-family row and before the sliders. The array is REGISTRATION order
+     // (panel.slots = families, steppers, sliders), so this entry trails the UI
+     // stepper; what the user sees is decided by `order` plus the merge pass.
+     ['dsh-system-fonts-inline-code-size', 13.5],
+     ['dsh-system-fonts-line-height', 17],
      ['dsh-system-fonts-tracking', 18]])
   assert.ok(slots.registrations.every((r) => r.spec.name === 'settings.general.item'),
     'no settings.section entry remains')
@@ -1134,6 +1141,10 @@ await test('a legacy payload that still carries weight fields loads and drops th
     uiFamily: 'Arial',
     uiFontFamily: '',
     uiFontSize: 0,
+    // A payload that predates the inline-code row has no value for it, and 0
+    // ("unset") is the right default — not undefined, which the row would read
+    // as a number it can never step from.
+    inlineCodeSize: 0,
     codeFamily: 'Consolas',
     terminalFamily: 'Cascadia Mono',
     lineHeightPct: 80,
@@ -1383,7 +1394,7 @@ await test('choosing a family writes only the family field', async () => {
   assert.equal(state.uiFamily, 'OnlyLight')
   assert.equal('uiWeight' in state, false, 'the removed weight axis is not part of the schema')
   assert.equal('codeWeight' in state, false)
-  assert.deepEqual(Object.keys(state).sort(), ['codeFamily', 'lineHeightPct', 'terminalFamily', 'trackingEm', 'uiFamily', 'uiFontFamily', 'uiFontSize'])
+  assert.deepEqual(Object.keys(state).sort(), ['codeFamily', 'inlineCodeSize', 'lineHeightPct', 'terminalFamily', 'trackingEm', 'uiFamily', 'uiFontFamily', 'uiFontSize'])
   bundle.api.__internals.setState({ uiFamily: 'MyCode', lineHeightPct: 100, trackingEm: 0 })
 })
 
@@ -1447,7 +1458,7 @@ await test('dispose removes both stylesheets, both rows and all timers', () => {
   const slots = makeSlots()
   const ctx = makeCtx({ services: { slots }, inject: bundle.api.inject })
   bundle.api.apply(ctx.proxy)
-  assert.equal(slots.registrations.length, 7)
+  assert.equal(slots.registrations.length, 8)
   assert.ok(bundle.timers.size > 0 || bundle.rafs.length > 0, 'a rebuild was scheduled')
   ctx.dispose()
   assert.equal(bundle.document.getElementById('dsh-system-fonts-style'), null, 'font stylesheet removed')
@@ -1469,7 +1480,7 @@ await test('dispose -> activate on the same module is clean, no duplicates', () 
   const panels = bundle.document.head.children.filter((el) => el.id === 'dsh-system-fonts/panel')
   assert.equal(styles.length, 1, 'exactly one font stylesheet')
   assert.equal(panels.length, 1, 'exactly one panel stylesheet')
-  assert.equal(slots2.registrations.length, 7, 'all rows re-registered on the new ctx')
+  assert.equal(slots2.registrations.length, 8, 'all rows re-registered on the new ctx')
 })
 
 await test('double activation is a no-op', () => {
@@ -1843,7 +1854,7 @@ function makeHostSettingsDom(bundle, { collapsed = true, withGroup = true, stray
   }
 }
 
-/** Mount the plugin's five rows as the outlet's children, in slot order. */
+/** Mount the plugin's rows as the outlet's children, in registration order. */
 function mountTestRows(bundle, outlet) {
   const merger = bundle.api.__internals.merger
   const slots = bundle.api.__internals.panel.slots
@@ -1919,7 +1930,7 @@ await test('the observer pass follows expand and collapse by itself', () => {
   const region = dom.mountRegion()
   observer.fire() // React's childList record for the region
   assert.equal(merger.isMerged(), true, 'the observer seated the rows in the new region')
-  assert.equal(region.children.filter(isOurs).length, 7)
+  assert.equal(region.children.filter(isOurs).length, 8)
 
   dom.removeRegion()
   observer.fire()
@@ -1975,12 +1986,15 @@ await test('expanded: each picker sits inside the region, right after its offici
   assert.deepEqual(region.children, [
     official[0], rows[0], // 正文字体 → content picker
     official[1], rows[1], // 代码字体 → code picker
-    official[2],          // 代码字号 stays usable
+    // 代码字号 → 行内代码 stepper (rows[5], order 13.5). The host's own size row
+    // is HIDDEN, not removed: it stays in place as the anchor the plugin row is
+    // seated after.
+    official[2], rows[5],
     official[3], rows[2], // 终端字体 → terminal picker
-    official[4],          // 终端字号 stays usable
+    official[4],          // 终端字号 stays usable — the host keeps that one
     rows[3],              // 界面字体 — no official row to replace
     rows[4],              // 界面字号
-    rows[5], rows[6],     // 行距 / 字距 last
+    rows[6], rows[7],     // 行距 / 字距 last
   ])
   for (const row of rows) {
     assert.equal(row.parentNode, region)
@@ -1991,9 +2005,13 @@ await test('expanded: each picker sits inside the region, right after its offici
     assert.equal(familyRow.style.display, 'none', 'the redundant official input is hidden')
     assert.equal(familyRow.getAttribute('data-dsf-covered'), '', 'marked so restore() unhides exactly these')
   }
-  assert.equal(merger.coveredCount, 3, 'text / code / terminal family rows covered')
-  for (const sizeRow of [official[2], official[4]]) {
-    assert.notEqual(sizeRow.style.display, 'none', 'the code / terminal size steppers stay usable')
+  assert.equal(merger.coveredCount, 4, 'the three family rows and the code-size row are covered')
+  // The code-size row is covered (this plugin's 行内代码 stepper owns that
+  // setting now); the TERMINAL size row is not — it stays the host's.
+  assert.equal(official[2].style.display, 'none', 'the duplicated 代码字号 control is hidden')
+  assert.equal(official[2].getAttribute('data-dsf-covered'), '', 'and recorded, so restore() unhides it')
+  for (const sizeRow of [official[4]]) {
+    assert.notEqual(sizeRow.style.display, 'none', 'the terminal size stepper stays usable')
     assert.equal(sizeRow.getAttribute('data-dsf-covered'), null)
   }
 })
@@ -2030,7 +2048,7 @@ await test('an official row whose inline style got reset is hidden again, not sk
   official.style.display = '' // React re-renders the row and resets the inline style
   assert.equal(merger.attempt(), true)
   assert.equal(official.style.display, 'none', 'the next pass re-asserts the hidden state')
-  assert.equal(merger.coveredCount, 3, 'and the record is not duplicated')
+  assert.equal(merger.coveredCount, 4, 'and the record is not duplicated')
 
   merger.restore()
   assert.equal(official.style.display, '', 'restore unhides it exactly once')
@@ -2081,10 +2099,16 @@ await test('expand → collapse → expand converges without leftovers', () => {
   const second = dom.mountRegion()
   assert.equal(merger.attempt(), true)
   assert.equal(merger.isMerged(), true)
-  assert.deepEqual(second.children.filter(isOurs), rows, 'the same nodes, seated in the new region')
-  assert.equal(second.children.filter(isOurs).length, 7)
+  // Same NODES as before, in the same VISIBLE order. Not `deepEqual(…, rows)`:
+  // `rows` is registration order (families, steppers, sliders) while the region
+  // follows `order`, so the inline-code stepper (13.5) sits right after the code
+  // picker rather than at its registration index.
+  assert.deepEqual(second.children.filter(isOurs),
+    [rows[0], rows[1], rows[5], rows[2], rows[3], rows[4], rows[6], rows[7]],
+    'the same nodes, seated in the new region')
+  assert.equal(second.children.filter(isOurs).length, 8)
   assert.equal(gone.children.filter(isOurs).length, 0, 'nothing was left behind in the removed region')
-  assert.equal(merger.coveredCount, 3, 'the new region official rows are covered')
+  assert.equal(merger.coveredCount, 4, 'the new region official rows are covered')
 })
 
 await test('role mapping follows the official titles, not the document order', () => {
@@ -2105,7 +2129,10 @@ await test('role mapping follows the official titles, not the document order', (
     termFam, rows[2],
     codeFam, rows[1],
     textFam, rows[0],
-    rows[3], rows[4], rows[5], rows[6],
+    // This region carries no size row at all, so the inline-code stepper has no
+    // anchor and falls in with the other anchorless rows — still ordered by its
+    // `order` (13.5), so it lands ahead of the UI pair and the sliders.
+    rows[5], rows[3], rows[4], rows[6], rows[7],
   ], 'each picker follows the row carrying its role title; the UI picker and the sliders go last')
 })
 
@@ -2123,7 +2150,7 @@ await test('unmounting a row from inside the region seats it home first', () => 
   // passing with `seat()` short-circuited to `return`, which is exactly the
   // guarantee it claims to test.
   assert.equal(merger.isMerged(), true, 'precondition: the pass merged the rows')
-  assert.equal(region.children.filter(isOurs).length, 7, 'precondition: rows sit inside the region')
+  assert.equal(region.children.filter(isOurs).length, 8, 'precondition: rows sit inside the region')
   assert.equal(rows[1].parentNode, region)
 
   // React detaches a ref before removing the node: it must already be back
@@ -2134,7 +2161,7 @@ await test('unmounting a row from inside the region seats it home first', () => 
   assert.equal(rows[1].parentNode, dom.outlet, 'the unmounted row is home again')
   assert.doesNotThrow(function () { dom.outlet.removeChild(rows[1]) },
     "React's own removal must succeed after the ref detach")
-  assert.equal(merger.rowCount, 6)
+  assert.equal(merger.rowCount, 7)
   assert.equal(rows[0].parentNode, region, 'the other rows stay seated')
   merger.restore()
 })
@@ -2183,11 +2210,11 @@ await test('dispose restores the rows and the official inputs', () => {
   const region = dom.mountRegion()
   const merger = bundle.api.__internals.merger
   merger.attempt()
-  assert.equal(merger.coveredCount, 3)
+  assert.equal(merger.coveredCount, 4)
   const official = region.children.filter((el) => !isOurs(el))
 
   merger.restore()
-  assert.equal(merger.rowCount, 7, 'restore keeps the mounted rows registered')
+  assert.equal(merger.rowCount, 8, 'restore keeps the mounted rows registered')
   assert.equal(merger.coveredCount, 0, 'nothing stays covered')
   for (const row of rows) {
     assert.equal(row.parentNode, dom.outlet, 'rows are back in the slot outlet')
@@ -2253,9 +2280,12 @@ await test('a settings remount while expanded re-seats the fresh rows in the fre
   const secondRows = mountTestRows(bundle, second.outlet)
   assert.equal(merger.attempt(), true)
   assert.equal(merger.isMerged(), true)
-  assert.deepEqual(second.region.children.filter(isOurs), secondRows, 'the new nodes are the seated ones')
+  assert.deepEqual(second.region.children.filter(isOurs),
+    [secondRows[0], secondRows[1], secondRows[5], secondRows[2],
+      secondRows[3], secondRows[4], secondRows[6], secondRows[7]],
+    'the new nodes are the seated ones, in `order` rather than registration order')
   for (const row of secondRows) assert.equal(row.parentNode, second.region)
-  assert.equal(merger.coveredCount, 3, 'the new region\u2019s official rows are covered')
+  assert.equal(merger.coveredCount, 4, 'the new region official rows are covered')
 })
 
 await test('no host group: the rows stay visible at their slot positions', () => {
@@ -2336,7 +2366,7 @@ await test('every rendered row carries its mark and notes itself with its role',
     tree.props.ref(el)
     assert.equal(el.getAttribute('data-dsf-row'), slot.id)
   }
-  assert.equal(merger.rowCount, 7, 'all seven rows registered on mount')
+  assert.equal(merger.rowCount, 8, 'all eight rows registered on mount')
   for (const slot of panel.slots) bundle.render(slot.component).props.ref(null)
   assert.equal(merger.rowCount, 0, 'ref cleanup unregisters every row')
 })
@@ -2474,6 +2504,8 @@ const EXPECTED_KEYS = [
   'row.ui.title', 'row.ui.desc',
   'row.uiSize.title', 'row.uiSize.desc',
   'row.uiSize.increase', 'row.uiSize.decrease',
+  'row.inlineCodeSize.title', 'row.inlineCodeSize.desc',
+  'row.inlineCodeSize.increase', 'row.inlineCodeSize.decrease',
   'row.lineHeight.title', 'row.lineHeight.desc',
   'row.tracking.title', 'row.tracking.desc',
   'note.loading', 'note.error', 'note.empty',
@@ -2648,7 +2680,7 @@ await test('the registrations carry the locale namespace and dictionaries ride t
   const slots = makeSlots()
   const ctx = makeCtx({ services: { slots, locale }, inject: bundle.api.inject })
   bundle.api.apply(ctx.proxy)
-  assert.equal(slots.registrations.length, 7)
+  assert.equal(slots.registrations.length, 8)
   assert.ok(slots.registrations.every((r) => r.spec.locale === 'dsh-system-fonts'),
     'every row registration declares the namespace the outlet injects t from')
   const table = locale.tables.get('dsh-system-fonts')

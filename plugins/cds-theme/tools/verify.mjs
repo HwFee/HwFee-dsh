@@ -7,7 +7,7 @@
  *   node tools/verify.mjs
  */
 
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 
@@ -18,8 +18,9 @@ import { createThemeBridge } from '../client/src/theme.js'
 import { STYLE_ID, FONT_STYLE_ID } from '../client/src/constants.js'
 import { EASING } from '../client/src/palette.js'
 import {
-  FONT_FACES, CJK_FACES, FONT_BASE_GLOBAL, fontSourcesFor, preferredCjkStackCss,
+  FONT_FACES, CJK_FACES, FONT_BASE_GLOBAL, RESTRICTED_FACES, fontSourcesFor, preferredCjkStackCss,
 } from '../client/src/fonts.js'
+import { fingerprintFor, restrictedHitsIn, sha256Of } from '../../../tools/font-licences.mjs'
 import {
   TYPOGRAPHY_ROLES, WEIGHTS, GREETING_DISPLAY, UI_ROLE_TOKENS, ELEMENT_WEIGHTS,
 } from '../client/src/typography.js'
@@ -120,25 +121,64 @@ const line = function (label, value) { console.log('  ' + String(label).padEnd(3
 console.log('================= 1. fonts =================')
 const artifact = readFileSync(join(root, 'client', 'client.js'), 'utf8')
 const inlined = (artifact.match(/data:font\/woff2;base64,/g) || []).length
-line('inlined faces in client.js', String(inlined) + ' / ' + String(FONT_FACES.length + CJK_FACES.length))
+/**
+ * The faces this package is allowed to put in a published bundle.
+ *
+ * The six Anthropic web faces carry no redistribution grant, so they are NOT
+ * among them: their @font-face blocks resolve through `local()` and their bytes
+ * must be absent from `client/client.js`. See `client/src/font-assets.js`.
+ */
+const SHIPPED_FACES = FONT_FACES.concat(CJK_FACES).filter(function (face) {
+  return face.redistributable === true
+})
+line('inlined faces in client.js', String(inlined) + ' / ' + String(SHIPPED_FACES.length) + ' shippable')
+line('restricted faces (local() only)', String(RESTRICTED_FACES.length) + ' — bytes must not ship')
 line('Host-injected global (fallback)', FONT_BASE_GLOBAL)
 line('font route', 'none — deleted (unreachable branch, see lib/index.js)')
-line('faces', String(FONT_FACES.length) + ' Anthropic + ' + String(CJK_FACES.length) + ' CJK')
-for (const face of FONT_FACES) {
+line('faces declared', String(FONT_FACES.length) + ' Anthropic + ' + String(CJK_FACES.length) + ' CJK')
+// THE SIX COMMERCIAL FACES ARE UNTRACKED, so this loop must not assume they are
+// on disk: a fresh clone has none of them, and `statSync` would throw before the
+// first line printed. Their sizes come from the licence registry instead — the
+// same table the build gate and the audit read — and a present file is compared
+// against it rather than trusted.
+for (const face of FONT_FACES.concat(CJK_FACES)) {
   const file = join(root, 'fonts', face.file)
-  const size = statSync(file).size
-  const head = readFileSync(file).subarray(0, 4).toString('latin1')
-  console.log('  ' + face.family.padEnd(16) + face.style.padEnd(8) + String(size).padStart(7) + ' B  ' + head + '  ' + face.file)
+  const known = fingerprintFor(face.file)
+  const mark = face.redistributable === true ? 'ship' : 'local'
+  let size = known === undefined ? '?' : String(known.bytes)
+  let head = '    '
+  let note = ' (registry)'
+  if (existsSync(file)) {
+    const bytes = readFileSync(file)
+    size = String(bytes.length)
+    head = bytes.subarray(0, 4).toString('latin1')
+    note = sha256Of(bytes) === (known && known.sha256) ? ' (verified)' : ' (FINGERPRINT MISMATCH)'
+  }
+  console.log('  ' + mark.padEnd(5) + ' ' + face.family.padEnd(20) + face.style.padEnd(8)
+    + size.padStart(7) + ' B  ' + head + '  ' + face.file + note)
 }
 line('src without the build loader', fontSourcesFor(FONT_FACES[0].file, { fileBase: 'file:///x/fonts/' }))
 // Read from the built artifact, not from source, so this line reflects what
-// ships. It must count against every inlined face — six Anthropic plus two CJK
-// fallbacks — exactly like the verdict check below; comparing against
-// FONT_FACES alone reported an ERROR on a healthy artifact.
-if (inlined !== FONT_FACES.length + CJK_FACES.length) {
+// ships. It must count against the SHIPPABLE faces only, and it must also prove
+// the restricted ones are ABSENT — a bare count alone would pass a bundle that
+// swapped one shippable face for a restricted one.
+//
+// The needles are the registry fingerprints, so this works with none of the six
+// files present; a local copy whose bytes differ is searched as well, so a swapped
+// file is not silently trusted.
+const leaked = restrictedHitsIn(artifact).map(function (hit) {
+  return hit.file + (hit.source === 'local' ? ' (local bytes)' : '')
+})
+const uniqueLeaked = [...new Set(leaked.map(function (row) { return row.replace(/ \(.*$/, '') }))]
+if (inlined !== SHIPPED_FACES.length) {
   console.error('  ERROR: the artifact inlines ' + String(inlined) + ' of '
-    + String(FONT_FACES.length + CJK_FACES.length) + ' faces')
+    + String(SHIPPED_FACES.length) + ' shippable faces')
 }
+if (leaked.length > 0) {
+  console.error('  ERROR: the artifact redistributes ' + String(uniqueLeaked.length)
+    + ' restricted face(s): ' + leaked.join(', '))
+}
+line('restricted bytes in artifact', leaked.length === 0 ? 'none' : 'LEAKED: ' + leaked.join(', '))
 
 // ----------------------------------------------------------- typography
 
@@ -569,16 +609,20 @@ B_TIER_KEYS.forEach(function (item) {
 
 const checks = [
   ['eight faces declared (six Anthropic + two CJK fallbacks)', FONT_FACES.length + CJK_FACES.length === 8],
-  ['all eight faces inlined in the artifact', inlined === FONT_FACES.length + CJK_FACES.length],
+  // THE LICENCE RULE. What may ship is the redistributable subset; the six
+  // Anthropic web faces have no redistribution grant and must resolve through
+  // `local()` instead of riding in the published bundle.
+  ['every shippable face is inlined in the artifact', inlined === SHIPPED_FACES.length],
+  ['no restricted face is redistributed', leaked.length === 0],
+  ['every face carries a redistribution classification',
+    FONT_FACES.concat(CJK_FACES).every(function (face) { return typeof face.redistributable === 'boolean' })],
   // The package ships the faces ONE way. This check used to assert that `files`
   // included `fonts`, on the theory that an installed plugin would otherwise lose
-  // them. That theory was wrong: the shipped bundle inlines all eight faces as
-  // data URLs, so the directory was a second copy costing ~3 MB (the tarball went
-  // 7.5 MB -> 3.8 MB when it was dropped). What actually protects the user is the
-  // assertion above — every face inlined. So this checks the duplicate is NOT
-  // packed, which catches someone re-adding the directory without realising the
-  // bundle already carries the faces.
-  ['fonts directory is not shipped twice',
+  // them. That theory was wrong: the shipped bundle inlines the shippable faces
+  // as data URLs, so the directory was a second copy (~3 MB of tarball). What
+  // actually protects the user is the inlining assertion above; for the
+  // restricted faces, shipping the directory would be redistribution itself.
+  ['fonts directory is not shipped', 
     !JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).files.includes('fonts')],
   ['body is 14/20 regular 400/360', tokens['--dsw-font-markdown-base-font-weight'].light === '400'
     && tokens['--dsw-font-markdown-base-font-weight'].dark === '360'],

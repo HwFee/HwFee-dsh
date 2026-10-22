@@ -214,12 +214,15 @@ await test('the client activates under real Cordis and registers all rows', asyn
   app.provide('locale', locale)
   const fiber = activate(api, app, slots)
   await fiber
-  assert.equal(slots.registrations.length, 7, 'seven settings.general.item entries')
+  assert.equal(slots.registrations.length, 8, 'eight settings.general.item entries')
   assert.deepEqual(slots.registrations.map((r) => [r.spec.id, r.spec.order]),
     [['dsh-system-fonts-content', 12], ['dsh-system-fonts-code', 13],
      ['dsh-system-fonts-terminal', 14], ['dsh-system-fonts-ui', 15],
-     ['dsh-system-fonts-ui-size', 16], ['dsh-system-fonts-line-height', 17],
-     ['dsh-system-fonts-tracking', 18]])
+     ['dsh-system-fonts-ui-size', 16],
+     // A half step: 12–18 are all taken, and the row must sit after the
+     // code-family row (13) and before the sliders (17). See panel.js.
+     ['dsh-system-fonts-inline-code-size', 13.5],
+     ['dsh-system-fonts-line-height', 17], ['dsh-system-fonts-tracking', 18]])
   assert.ok(slots.registrations.every((r) => r.spec.name === 'settings.general.item'))
   assert.ok(slots.registrations.every((r) => r.spec.locale === 'dsh-system-fonts'),
     'every registration carries the plugin locale namespace')
@@ -266,7 +269,7 @@ await test('disposing the plugin cleans up, and the same module reactivates', as
   app2.provide('locale', makeLocale())
   const fiber2 = activate(api, app2)
   await fiber2
-  assert.equal(slots2.registrations.length, 7, 'reactivation registers all rows again')
+  assert.equal(slots2.registrations.length, 8, 'reactivation registers all rows again')
   const styles = document.head.children.filter((el) => el.id === 'dsh-system-fonts-style')
   assert.equal(styles.length, 1, 'no duplicate stylesheet')
   await fiber2.dispose()
@@ -298,7 +301,7 @@ await test('a failed activation rolls back and the same module retries cleanly',
   const fiber2 = activate(api, app2)
   await fiber2
   assert.ok(document.getElementById('dsh-system-fonts-style') !== null, 'same module instance activates after the failure')
-  assert.equal(slots2.registrations.length, 7)
+  assert.equal(slots2.registrations.length, 8)
   await fiber2.dispose()
 })
 

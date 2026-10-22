@@ -56,6 +56,10 @@
  *   - Official family rows are identified as the row-level ancestor of such an
  *     input (one family input, no expander, no px unit) and hidden with
  *     `display:none` + `data-dsf-covered`, never removed.
+ *   - The host's code-size row is identified by its `fontSize.code.title` text
+ *     (`代码字号` / `Code font size`), covered the same way, and the 行内代码
+ *     stepper is seated where it was: two size rows share one markup, so the
+ *     title is the only stable difference.
  *
  * IDEMPOTENT. A pass only calls `insertBefore` where the container's current
  * child differs from the desired sequence, and only writes the hidden state
@@ -76,6 +80,8 @@
  * 删除的折叠区里，否则 React 之后 removeChild 会抛）。找不到可识别的结构时，
  * 行留在原位且不遮蔽任何东西。
  */
+
+import { INLINE_CODE_SIZE_ROW_ID } from './constants.js'
 
 /** Mark on each plugin row root; also the traversal's "ours" filter. */
 export const ROW_ATTR = 'data-dsf-row'
@@ -105,6 +111,14 @@ const HOST_FAMILY_TITLES = ROLE_TITLES.reduce(function (all, entry) {
   return all.concat(entry[1])
 }, [])
 const HOST_FAMILY_PLACEHOLDERS = ['默认', 'Default']
+
+// The host's own `fontSize.code.title` strings, both dictionaries — DATA for
+// locating the row, not UI copy. The host's code-size row is REPLACED by this
+// plugin's 行内代码 row, so it is covered (hidden) like the official family
+// inputs are. Terminal and text sizes stay the host's: only the code axis is
+// ours to own, because only its inline rung follows the user's number.
+// 宿主「代码字号」行的两种语言标题：该行被本插件「行内代码」行取代，故一并遮蔽。
+const CODE_SIZE_TITLES = ['代码字号', 'Code font size']
 
 // ------------------------------------------------------------- DOM helpers
 
@@ -207,6 +221,35 @@ function roleOfTitle(title) {
     if (entry[1].indexOf(needle) >= 0) return entry[0]
   }
   return null
+}
+
+/**
+ * True when `el`'s own text is the host's code-size title.
+ *
+ * MATCHED ON THE TITLE ELEMENT, not on a `px` label or a stepper shape: the
+ * region holds TWO size rows (code and terminal) with identical markup, so the
+ * only thing that tells them apart is the string the host's own dictionary
+ * puts in the title. `fontSize.code.title` is that string in both languages.
+ * 按标题精确匹配：折叠区里代码/终端两个字号行结构完全相同，只有标题能区分。
+ */
+function isCodeSizeTitle(el) {
+  return CODE_SIZE_TITLES.indexOf(textOf(el)) >= 0
+}
+
+/**
+ * The host's code-size ROW inside `region`, or null.
+ *
+ * The title sits one or more levels below the row root, so the row is the
+ * ancestor that is a direct child of the region — the same granularity
+ * `familyRowOf` uses, and the same granularity `cover()` hides. Falls back to
+ * the title element itself so the duplicate control still goes when the host's
+ * row shape changes.
+ */
+function codeSizeRowIn(region) {
+  let titleEl = null
+  eachDescendant(region, (node) => { if (titleEl === null && isCodeSizeTitle(node)) titleEl = node })
+  if (titleEl === null) return null
+  return childOfList(titleEl, region) || titleEl
 }
 
 /** The ancestor of `node` that is a direct child of `list`, or null. */
@@ -366,6 +409,9 @@ export function createHostMerger() {
     if (prev && prev.el !== el) seat(prev)
     rows.set(slotId, {
       el,
+      // The slot id rides along so a pass can address ONE specific row (the
+      // inline-code stepper is seated after the host code-size row it replaces).
+      id: slotId,
       order: order === undefined ? (prev ? prev.order : rows.size) : order,
       role: role === undefined ? (prev ? prev.role : null) : role,
       home: prev && prev.el === el ? prev.home : homeOf(el),
@@ -526,7 +572,13 @@ export function createHostMerger() {
     return found
   }
 
-  /** Hide the official family rows of the region. 遮蔽官方族名行。 */
+  /**
+   * Hide the rows this plugin replaces: the official family inputs, and the
+   * host's code-size row (replaced by 行内代码 — the only code size the user
+   * asked to own; the terminal's own size row stays the host's and stays
+   * visible).
+   * 遮蔽被本插件取代的宿主行：三个官方族名输入框，以及「代码字号」行。
+   */
   function cover(region) {
     // Drop records whose node left the document (the region is unmounted on
     // every collapse), so the list cannot grow without bound.
@@ -535,8 +587,10 @@ export function createHostMerger() {
       if (entry.el && entry.el.parentNode !== null) continue
       covered.splice(i, 1)
     }
-    for (const entry of familyEntries(region)) {
-      const target = entry.row
+    const targets = familyEntries(region).map(function (entry) { return entry.row })
+    const codeSizeRow = codeSizeRowIn(region)
+    if (codeSizeRow !== null && targets.indexOf(codeSizeRow) < 0) targets.push(codeSizeRow)
+    for (const target of targets) {
       const marked = attr(target, COVERED_ATTR) !== null
       const hidden = target.style ? target.style.display === 'none' : true
       // The mark and the inline style are TWO facts that can disagree: React
@@ -568,10 +622,10 @@ export function createHostMerger() {
    *
    *   official text family row      → content picker
    *   official code family row      → code picker
-   *   (official code size row)
+   *   (official code size row)      → 行内代码 size row, which replaces it
    *   official terminal family row  → terminal picker
    *   (official terminal size row)
-   *   …then the line-height and tracking sliders
+   *   …then the UI pair and the line-height / tracking sliders
    *
    * Only nodes that are out of place are moved (see `applySequence`).
    */
@@ -580,9 +634,21 @@ export function createHostMerger() {
     const ordered = orderedRows()
     const placed = new Set()
     const sequence = []
+    // The inline-code row has no host FAMILY row to follow, but it does have a
+    // host SIZE row: it takes that row's place, so 行内代码 reads as the control
+    // the hidden 代码字号 used to be instead of trailing every other row.
+    // 行内代码行顶上被隐藏的「代码字号」行位置，而不是排到末尾。
+    const codeSizeRow = codeSizeRowIn(region)
+    const inlineRec = ordered.find(function (row) {
+      return row.id === INLINE_CODE_SIZE_ROW_ID && row.el
+    }) || null
     for (const child of childrenOf(region)) {
       if (isOurRow(child)) continue
       sequence.push(child)
+      if (inlineRec !== null && child === codeSizeRow && !placed.has(inlineRec)) {
+        sequence.push(inlineRec.el)
+        placed.add(inlineRec)
+      }
       for (const item of roles) {
         if (item.row !== child) continue
         const rec = ordered.find(function (row) { return row.role === item.role && !placed.has(row) })

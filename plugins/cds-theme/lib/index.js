@@ -18,26 +18,27 @@
  *
  * NO FONT ROUTE, AND THAT IS DELIBERATE. This plugin used to register six
  * `webServer` routes serving `/dsh-cds-theme/fonts/<file>`. They are gone
- * because **the branch that would use them cannot be built**:
+ * because **the branch that would use them cannot exist**:
  *
- *   - `client/src/font-assets.js` imports the six woff2 binaries, and
- *     `tools/build-client.mjs` sets `loader: { '.woff2': 'dataurl' }`, so every
- *     `@font-face` `src` in the shipped artifact is an inlined `data:` URL.
- *     Verified against the built bundle: six `data:font/woff2` URLs and zero
- *     route URLs in the very CSS the app injects.
- *   - `fontSourcesFor()` only falls back to the route when a face is NOT in the
- *     inline table. That happens only in a plain Node ESM run (the unit tests),
- *     where `.woff2` cannot be imported — and a Node run serves no HTTP fonts.
- *   - A build that LACKS the binaries does not produce a route-based bundle; it
- *     fails outright (`esbuild` cannot resolve the import), as verified. So there
- *     is no shipped configuration in which the route is the live path.
- *   - And the route could not have served the desktop shell anyway: that
+ *   - the six Anthropic faces carry no redistribution grant, so they are
+ *     untracked local working copies — a fresh clone has none of them, and the
+ *     shipped bundle carries none of their bytes. Their `@font-face` blocks
+ *     resolve through `local()` instead (see `client/src/font-assets.js`).
+ *   - the two faces that DO ship are inlined: `client/src/font-assets.js` imports
+ *     them and `tools/build-client.mjs` sets `loader: { '.woff2': 'dataurl' }`,
+ *     so their `src` in the artifact is a `data:` URL. Verified against the built
+ *     bundle: two `data:font/woff2` URLs and zero route URLs in the CSS the app
+ *     injects.
+ *   - a build that LACKS those two binaries fails outright (`esbuild` cannot
+ *     resolve the import) rather than falling back to a route, so no shipped
+ *     configuration has the route as its live path.
+ *   - and the route could not have served the desktop shell anyway: that
  *     document's origin is `dsh-app://app`, where a route-relative URL resolves
  *     into the app protocol handler and 404s.
  *
  * Keeping six dead HTTP routes alive would be pure attack surface for zero
  * rendered glyphs. The `file://` global stays because it is the fallback the
- * source-run path uses.
+ * source-run path uses for a face that was not inlined.
  *
  * The seam does not start anything at import time, and it lives in a plain
  * Cordis event listener the carrier owns.

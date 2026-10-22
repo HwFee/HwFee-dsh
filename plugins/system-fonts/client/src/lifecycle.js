@@ -1,5 +1,5 @@
 import { installPanelCss, removePanelCss } from './panel.js'
-import { createThemeBridge } from './bridge.js'
+import { createThemeBridge, writeInlineCodeSize } from './bridge.js'
 import { LOCALE_NS, en, zh } from './locales.js'
 import { uiScaleFactor } from './constants.js'
 
@@ -92,6 +92,11 @@ export function createLifecycle({ settings, typography, chrome, uiScaler, catalo
       installPanelCss()
       typography.apply()
       if (chrome) chrome.apply()
+      // The row's value is a live `body` property, not a stylesheet rule, so it
+      // has to be re-applied on activation: reopening the app must restore the
+      // user's inline-code size before the settings page is ever opened.
+      // 行内代码字号是 body 上的活属性，激活时就要写回，而不是等用户打开设置页。
+      writeInlineCodeSize(settings.getState().inlineCodeSize)
     }, 'dsh-system-fonts: font styles')
 
     ctx.effect(scheduleRebuild, 'dsh-system-fonts: deferred rebuild')
@@ -190,11 +195,34 @@ export function createLifecycle({ settings, typography, chrome, uiScaler, catalo
       return function () { if (typeof off === 'function') off() }
     }, 'dsh-system-fonts: theme bridge')
 
+    // ---- the inline-code size: re-assert it after every host snapshot ----
+    //
+    // `--dsh-code-font-size` has TWO writers: this plugin (the row) and the
+    // host's own theme presenter, which projects `snapshot.fontSizes.code` onto
+    // the same property on every `theme/change`. Whichever writes last wins, and
+    // the host writes last — so without this listener the user's inline-code
+    // size would silently revert the first time anything else about the theme
+    // moved (a palette switch, 字号大小, a restart's first snapshot). The setting
+    // would look saved and quietly stop applying.
+    //
+    // A SEPARATE EFFECT, not part of the bridge effect above: that one returns
+    // early when no theme service exists, and this rule is about the document
+    // the plugin writes, not about the service.
+    // 宿主 presenter 每次快照都会重写同一属性；单独一个 effect 订阅并重写回来，
+    // 不塞进上面那个「没有主题服务就提前返回」的分支里。
+    ctx.effect(function () {
+      if (typeof ctx.on !== 'function') return undefined
+      const off = ctx.on('theme/change', function () {
+        writeInlineCodeSize(settings.getState().inlineCodeSize)
+      })
+      return function () { if (typeof off === 'function') off() }
+    }, 'dsh-system-fonts: inline-code size re-assert')
+
     // ---- the rows, merged into the host's font group ----
     //
     // `settings.general.item` is a flat sibling list: a slot can only inject
     // rows NEXT TO the host's FontSettingsGroup, never inside it. So the rows
-    // register here at orders 12–17 (right behind the host's group) and
+    // register here at orders 12–18 (right behind the host's group) and
     // `merge.js` reparents them INSIDE the group's collapsible font region —
     // each picker after the official family row it replaces (the UI picker
     // after them), sliders last, the official inputs covered (hidden, not

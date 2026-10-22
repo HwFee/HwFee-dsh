@@ -1,4 +1,43 @@
-import { FONT_ROLES, UI_FAMILY_VARIABLE, normalizeFontFamily, firstFamily } from './constants.js'
+import {
+  FONT_ROLES, UI_FAMILY_VARIABLE, CODE_SIZE_VARIABLE,
+  normalizeFontFamily, firstFamily, clampInlineCodeSize,
+} from './constants.js'
+
+/**
+ * Write (or clear) the inline-code size on the host's own code-size axis.
+ *
+ * WHY THE SIZE VARIABLE AND NEVER THE DELTA. `--dsh-code-font-size` is the
+ * host's input (`FONT_SIZE_SPECS.code.variable` in ui-theme's client); the theme
+ * derives `--dsh-code-font-delta: calc(<this> - 11px)` from it, and cds-theme
+ * lets exactly ONE rung consume that delta — the inline chip (`code(12)` /
+ * `code(14)` in cds-theme's `typography.js`). Fenced blocks, tool cards and the
+ * terminal are pinned at fixed sizes on purpose. Writing the delta here would
+ * move every rung that reads it AND be overwritten by the theme on the next
+ * `theme/change`, i.e. it would both overreach and drift.
+ *
+ * 0 REMOVES THE PROPERTY instead of writing the host's own 11: "unset" has to
+ * mean "the host decides", and its presenter writes this variable on every
+ * snapshot anyway.
+ * 只写宿主的代码字号轴（主题据此派生 delta，且只有行内代码档消费它）；
+ * 绝不直接写 `--dsh-code-font-delta`。0 表示未设置，移除属性交还宿主。
+ *
+ * Standalone rather than a method on the bridge because TWO callers need it —
+ * the settings commit (`index.js`) and the post-`theme/change` re-assert
+ * (`lifecycle.js`) — and neither of them needs a theme service to do it.
+ * Returns false when there is no usable document.
+ */
+export function writeInlineCodeSize(px) {
+  const body = typeof document === 'undefined' ? undefined : document.body
+  if (!body || !body.style || typeof body.style.setProperty !== 'function') return false
+  try {
+    const size = clampInlineCodeSize(px)
+    if (size > 0) body.style.setProperty(CODE_SIZE_VARIABLE, size + 'px')
+    else body.style.removeProperty(CODE_SIZE_VARIABLE)
+    return true
+  } catch (error) {
+    return false
+  }
+}
 
 /**
  * Bridge to the host theme service (`ctx.get('theme')`, provided by

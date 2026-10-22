@@ -220,12 +220,37 @@ function codeRules() {
     '  margin: 16px 0 !important;',
     '}',
     // The host's pre padding is 6px top / 20px bottom / 22px sides, which pins
-    // the code to the top edge and leaves a band below it. The real app pads
-    // the block evenly; 14px top/bottom and 18px sides keeps the first and
-    // last lines optically centred.
+    // the code to the top edge and leaves a band below it.
+    //
+    // 8 / 8 / 17.2 / 72.2 — the reverse-engineered inset, in the table's
+    // top / bottom / left / right order.
+    //
+    // LEFT is 10px + 1ch (7.2px at the 12px code size): the reference's code
+    // starts one character past the block's own edge, so the first glyph lines
+    // up with the text column rather than the frame.
+    //
+    // RIGHT IS THE TOOLBAR'S RESERVATION, and it is NOT a padding anyone chose
+    // by eye. The rail is absolutely positioned over the code, so the block has
+    // to stop short of it or a long line runs underneath the button. The
+    // reference's rail is at `right: 7px` with 24px buttons, 3px gaps and 4px
+    // side padding: 24n + 3(n-1) + 12 + 2, i.e. 65px of rail for TWO buttons,
+    // plus 1ch of breathing room = 72.2px.
+    //
+    // OUR RAIL SHIPS THE COPY BUTTON ALONE (the host's wrap toggle is hidden by
+    // the rule above, and `display: none` takes it out of the flex row, so the
+    // rail is one button wide). This is therefore the ONE-BUTTON value:
+    // 24*1 + 3*0 + 12 + 2 = 38px of rail, + 1ch = 45.2px. Using 72.2 here would
+    // reserve 27px of empty gutter for a control that does not exist.
+    //
+    // RESIDUAL, stated rather than hidden: ours is an 18px button inside an
+    // 18px box at `right: 8px`, not a 24px button at `right: 7px`, so the real
+    // rail occupies 26px and this reserves 45.2px — 19.2px more than strictly
+    // needed. That is deliberate: the table's constant is the reference's, and
+    // keeping the table's arithmetic (rail width + 1ch) means the day a second
+    // button returns, only this one number changes to 72.2.
     '.md-code-block pre,',
     '.md-code-block pre[class*="shiki"] {',
-    '  padding: 14px 18px !important;',
+    '  padding: 8px 45.2px 8px 17.2px !important;',
     '}',
     'body[data-ds-dark-theme] .md-code-block {',
     '  --dsl-code-block-background: ' + CODE_SURFACE.dark + ';',
@@ -624,8 +649,19 @@ function toolRowsRules() {
     '  padding-right: 30px;',
     '}',
     // The expanded seat is inset under the row (reference: `mx-2.5 mt-1`).
+    //
+    // THESE ARE THE TABLE'S MARGINS, NOT AN ESTIMATE. `docs/tool-cards-*.md`
+    // reach the read/write/edit content inset as margin + padding:
+    //   10px horizontal + 12px padding = the 22px left/right inset
+    //    4px top        + 12px padding = the 16px top inset
+    //    8px bottom     + 12px padding = the 20px bottom inset
+    // so the MARGIN half belongs here and the 12px half belongs on the frame
+    // below. It was `4px 0 8px 22px`, i.e. the whole 22px paid as margin on one
+    // side only: the cards were flush against the row's right edge and 26px in
+    // on the left once the host's own 4px frame margin was added, so every
+    // payload card sat visibly off-centre under its row.
     '[data-slot="tool.call.toolview"] [class*="_bodyWrap"] {',
-    '  margin: 4px 0 8px 22px;',
+    '  margin: 4px 10px 8px 10px;',
     '}',
     // The generic fallback: kill the labelled grid, keep two stacked blocks.
     '[data-slot="tool.call.toolview"] [class*="_ioCard"] {',
@@ -898,11 +934,27 @@ function toolRowsRules() {
     // inset card the reference draws around a tool's payload: a hairline frame,
     // the code surface, a 12px radius. `border: 0 !important` on the host's
     // markdown block would beat a plain border, so this one carries the weight.
+    //
+    // THE 12px PADDING HALF OF THE TABLE'S INSET. `docs/tool-cards-*.md` reaches
+    // the read/write/edit content inset as margin + padding on this pair of
+    // boxes: 10+12 = 22px left/right, 4+12 = 16px top, 8+12 = 20px bottom, with
+    // the margins on `_bodyWrap` above. Only the padding lives here, so the two
+    // halves stay legible against the table instead of being pre-summed into a
+    // single number nobody can check.
+    //
+    // `margin: 0` IS PART OF THE SUM, not decoration. The host's own card class
+    // carries `margin: 4px 0 4px 4px`; leaving it would make the left edge
+    // 10+4+12 = 26 against a 22px target and the top 4+4+12 = 20 against 16,
+    // i.e. 4px of drift on two of the four sides, in the direction the eye
+    // reads as "off-centre under its row". Zeroing it here is what makes the
+    // margin half below exact rather than approximate.
     '[data-conversation-content] [data-slot="tool.call.toolview"] [class*="_bodyWrap"] > *:not([class*="_ioCard"]) {',
-    '  padding-top: 10px;',
-    '  padding-bottom: 10px;',
+    '  margin: 0;',
+    '  padding: 12px;',
     '  overflow: hidden;',
-    '  border: .5px solid var(--dsw-alias-border-l1) !important;',
+    // l2 (10%), not l1 (6%): Claude draws these cards with `--cds-border`, which
+    // resolves to `--cds-alpha-2` = 10% alpha. Our l1 was one rung too faint.
+    '  border: .5px solid var(--dsw-alias-border-l2) !important;',
     '  border-radius: var(--dsw-radius-lg) !important;',
     // SAME FAMILY AS THE CODE BLOCK, ONE STEP APART FROM IT.
     //
@@ -1231,9 +1283,21 @@ function diffCardRules() {
     '[data-cds-diffcard] {',
     ...tokenVars('light'),
     '  max-height: 280px;',
-    '  margin: 4px 0 8px 22px;',
+    // Match the host payload seat: symmetric 10px margins under the row.
+    '  margin: 4px 10px 8px 10px;',
+    // 8px BLOCK PADDING, ZERO INLINE. Reverse-engineered from the reference's
+    // diff container (`docs/tool-cards-diff.md`): it carries
+    // `padding-block: var(--diffs-gap-block, 8px)` and
+    // `padding-bottom: max(0px, calc(gap - scrollbar-gutter))`, and NO
+    // padding-inline. The horizontal indent is not the container's job: each
+    // row supplies `padding-inline: 1ch` on its own cells and the 5ch number
+    // gutter in front of the text IS the left inset. Adding container padding
+    // double-counts it — the number column drifts 8px right of where the row
+    // tints begin, and the add/del wash no longer reaches the frame edge, which
+    // is the whole point of the full-bleed rows below.
+    '  padding: 8px 0;',
     '  overflow: auto;',
-    '  border: .5px solid var(--dsw-alias-border-l1);',
+    // Full-bleed diff rows need no extra outline around the card.
     '  border-radius: var(--dsw-radius-lg);',
     // One step off the code surface, same as the host cards: the frame rule that
     // tints _bodyWrap > * never reaches this card because we render it.
@@ -1241,16 +1305,6 @@ function diffCardRules() {
     '  color: var(--shiki-foreground);',
     '  font: var(--dsw-font-markdown-code-block-small, 12px/1.6 var(--ds-font-family-code));',
     '  font-family: var(--ds-font-family-code);',
-    '}',
-    '[data-cds-diffcard]::after {',
-    '  content: "";',
-    '  position: absolute;',
-    '  inset: 0;',
-    '  border-radius: inherit;',
-    '  pointer-events: none;',
-    '  box-shadow:',
-    '    inset 0 0 0 1px var(--dsw-alias-border-l1),',
-    '    inset 0 0 0 1px var(--cds-card-surface, #ffffff);',
     '}',
     'body[data-ds-dark-theme] [data-cds-diffcard] {',
     ...tokenVars('dark'),

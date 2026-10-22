@@ -24,9 +24,9 @@ dsh plugin --profile desktop remove dsh-cds-theme
 
 | 模块 | 实现机制 | 具体改动 |
 |---|---|---|
-| **配色与形状令牌** | `ctx.theme.overrideTokens` | **186 个令牌**（明暗成对）：暖灰表面阶梯、文本三阶、`hsla(0,0%,8%,α)` 发丝边框、陶土品牌色双轨（`#c6613f` / `#d97757`）、圆角六档（输入框 28→**20px**，气泡 20→**18px**）、代码 diff 暖绿与陶红、三层焦点环 |
-| **排印令牌** | `ctx.theme.overrideTokens` | **130 个排印令牌**：17 个 Markdown 角色 × 6 个变量 + 13 级 UI 字阶，对齐 CDS 7 阶字号与**暗色字重减薄**（正文 400→360、Medium 500→460、Semibold 580→550） |
-| **内嵌字体** | 构建时内联 `data:font/woff2` | **6 个 Anthropic 官方可变字体**（Sans/Serif/Mono × Roman/Italic）+ **2 个做过 `avar` 轴偏移校准的思源黑体/宋体子集**，无网络请求，任意 origin 下直接加载 |
+| **配色与形状令牌** | `ctx.theme.overrideTokens` | **173 个配色令牌**（明暗成对）：暖灰表面阶梯、文本三阶、`hsla(0,0%,8%,α)` 发丝边框、陶土品牌色双轨（`#c6613f` / `#d97757`）、圆角六档（输入框 28→**20px**，气泡 20→**18px**）、代码 diff 暖绿与陶红、三层焦点环 |
+| **排印令牌** | `ctx.theme.overrideTokens` | **133 个排印令牌**：17 个 Markdown 角色 × 6 个变量 + 13 级 UI 字阶，对齐 CDS 7 阶字号与**暗色字重减薄**（正文 400→360、Medium 500→460、Semibold 580→550） |
+| **内嵌字体** | 构建时内联 `data:font/woff2` | **只内联 2 个做过 `avar` 轴偏移校准的思源黑体/宋体子集**（SIL OFL，本项目自制子集），无网络请求，任意 origin 下直接加载。**6 个 Anthropic 字面（Sans/Serif/Mono × Roman/Italic）没有再分发授权，包里零字节**：它们只声明成 `local("Anthropic Sans" / "Anthropic Serif" / "Anthropic Mono")`，本机装了才生效，没装就回落到系统字体。构建与产物测试都会拦住受限字面重新混入，详见 [`market/PUBLISHING.md`](../../market/PUBLISHING.md) |
 | **海拔阴影** | 插件样式表 `!important` | 双层弥散阴影（一层贴边、一层大半径散开），覆盖 `--dsw-elevation-panel/prominent/soft` |
 | **组件与正文细节** | 结构定位 + 自有属性 + 样式表 | 首页问候语改衬线 Display（38px / wght 330）；聊天表格闭合 `.5px` 发丝外框 + 浅底表头 + 等宽数字；代码块浅色下是白底、深色下 `#1a1a19` 暖黑；思考提示改柔和呼吸微光；消息操作栏悬停显现；滚动渐隐遮罩 |
 | **代码块默认换行** | `white-space: pre-wrap` + 隐藏 `aria-pressed` 按钮 | 所有代码块（含工具卡片里的 diff / 文件行）**默认自动换行**，并**移除**宿主右上角的「自动换行」开关——主题不再提供「不换行」这个状态。diff/read 的每一行是独立的行元素而不是 `<pre>`，所以单独有一条 `[data-code-wrap] [class*="_line_"]` 规则，并把 diff 的 `max-content` 网格列钉成 `minmax(0, 1fr)`，否则行内文字会溢出卡片被裁掉 |
@@ -61,7 +61,7 @@ dsh plugin --profile desktop remove dsh-cds-theme
 
 ### 1. 为什么令牌必须走 `overrideTokens`，而阴影必须写 `!important`
 
-宿主的 layout 会把当前主题的所有令牌**作为内联样式直接写死在 `<body>` 上**（`body.style.setProperty(name, value)`）。在 CSS 里写 `:root { --dsw-alias-bg-base: ... }` 根本压不过内联样式，所以配色和排印一共 **316 个令牌**（186 + 130）全部走 `ctx.theme.overrideTokens`，直接替换宿主的令牌表。
+宿主的 layout 会把当前主题的所有令牌**作为内联样式直接写死在 `<body>` 上**（`body.style.setProperty(name, value)`）。在 CSS 里写 `:root { --dsw-alias-bg-base: ... }` 根本压不过内联样式，所以配色和排印一共 **319 个令牌**（173 配色 + 133 排印 + 13 圆角/阴影/缓动）全部走 `ctx.theme.overrideTokens`，直接替换宿主的令牌表。数字可用 `node tools/verify.mjs` 复现，它会打印 `override map size`。
 
 唯独 `--dsw-elevation-*` 相反：宿主的样式表把它声明在 `body, body *` 上——每个子元素自己持有一份声明，`body` 上的内联变量根本继承不下去，所以海拔阴影必须用带 `!important` 的样式表下发。
 
@@ -69,13 +69,15 @@ dsh plugin --profile desktop remove dsh-cds-theme
 
 Anthropic 的三个官方可变字体里**一个汉字都没有**（625 个码位，CJK 为 0），而且主题用了 8 档精细字重（`330 / 360 / 400 / 460 / 500 / 550 / 580 / 660`，其中 `360/460/550` 是深色模式防眩光渗色的减薄档）。
 
+> **授权状态。** 这 6 个 Anthropic 字面是商业字体，本仓库**没有**拿到再分发授权；把它们内联进 npm 包等于向所有安装者分发。它们也**不在仓库里**——只是本机的未跟踪工作副本（`.gitignore` 精确列了这 6 个文件名），fresh clone 不含这些文件。公开构建因此只内联两个自制的思源子集，Anthropic 面改成 `local()` 引用（本机装了才生效）。判定逻辑在 `client/src/fonts.js` 的 `redistributable` 标记与 `fontSourcesFor()`；四道闸门（`tools/build-client.mjs`、`test/fonts.test.mjs`、`tools/audit.mjs`、`market/check-release-assets.mjs`）都靠 [`tools/font-licences.mjs`](../../tools/font-licences.mjs) 的静态指纹识别字面，所以没有那 6 个文件照样生效。复核方法与移除后的表现见 [`market/PUBLISHING.md`](../../market/PUBLISHING.md) 第 5 节。下面的 `avar` 校准对思源子集依然成立，与 Anthropic 字面是否在场无关。
+
 - 系统自带的苹方在 Windows 上不存在，在 macOS 上又只有静态字重，8 档字重会直接塌缩成 2 档，暗色减薄彻底失效。
 - 思源黑体虽然是可变字体，但在相同名义字重下竖干比 Anthropic Sans 细约 17%（实测 400 字重下 Anthropic 竖干 0.0943 em，思源只有 0.0758 em）。而 CSS 的 `font-weight` 是整段文字共用的，没法给中英文分别设数字。
 - 解法是直接改思源子集字体里的 OpenType `avar` 表，在浏览器插值前把字重映射过去（比如 CSS 要 `400` 时，映射到思源设计坐标 `490`），让中文和英文笔画粗细严丝合缝。同时修了上游参考仓库把衬线问候语回退到黑体的毛病，补上了思源宋体 330 字重子集（`NotoSerifSC-Shifted-330.woff2`）。
 
 ### 3. 为什么拆成两张 `<style>` 标签
 
-8 个内联字体的 base64 加起来将近 5 MB。如果和业务样式规则放在同一个 `<style>` 里，每次拨动开关或拖滑块都会触发浏览器重新解析整张大表并重注册字体，点一下卡一下。
+静态字体表里 2 个思源子集的 base64 加起来约 4.1 MB（8 个 `@font-face`，其中 6 个 Anthropic 面走 `local()`、不占字节）。如果和业务样式规则放在同一个 `<style>` 里，每次拨动开关或拖滑块都会触发浏览器重新解析整张大表并重注册字体，点一下卡一下。
 
 现在拆成两张表：静态字体表（`STYLE_ID + '/fonts'`）激活时只写一次；状态变化时传 `omitFonts: true`，只重写几 KB 的业务规则表。连总开关关闭时也只清空规则表、保留字体表（因为令牌撤回后字体本来就没人引用了，删掉 `@font-face` 反而会强制整页重排）。
 
@@ -100,8 +102,8 @@ diff 卡片的所有规则都在 `diffCardRules()` 里，位于 `refine` 开关�
 ```bash
 npm ci           # 仅安装开发期打包工具 esbuild，零运行时依赖
 npm run build    # 编译客户端产物：client/src/* -> client/client.js
-npm test         # 产物新鲜度检查 + 24 个测试文件（共 491 条测试）
-npm run verify   # 打印令牌、排印、问候语、双语字典与规则表的核验报告
+npm test         # 产物新鲜度检查 + 清单契约 + 24 个测试文件（条数以输出为准）
+npm run verify   # 打印令牌、排印、问候语、双语字典与规则表的核验报告（含 override map size）
 ```
 
 更详细的规范出处（精确到上游参考仓库的 `文件:行号` 与 18 处冲突裁定）见仓库根目录的 [`docs/cds-spec.md`](../../docs/cds-spec.md) 和 [`docs/host-hooks.md`](../../docs/host-hooks.md)。

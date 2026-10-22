@@ -57,7 +57,7 @@
 
 import {
   PLUGIN_ID, DEFAULT_STATE, SCALE_STEPS,
-  clampLineHeight, clampTracking, clampUiFontSize, uiScaleFactor,
+  clampLineHeight, clampTracking, clampUiFontSize, clampInlineCodeSize, uiScaleFactor,
 } from './constants.js'
 import { createSettingsStore } from './settings.js'
 import { createTypography, buildCss, buildStack, rewriteLineHeight, quoteFamily, splitFontTail, readDeclaredToken } from './typography.js'
@@ -65,7 +65,7 @@ import { createChrome, buildShadowCss } from './chrome.js'
 import { createCatalogue } from './catalogue.js'
 import { createPanel } from './panel.js'
 import { createLifecycle } from './lifecycle.js'
-import { createThemeBridge } from './bridge.js'
+import { createThemeBridge, writeInlineCodeSize } from './bridge.js'
 import { createHostMerger } from './merge.js'
 import { createUiScaler } from './uiscale.js'
 import { createLocaleHandle, createTranslator, LOCALE_NS, DEFAULT_LOCALE } from './locales.js'
@@ -95,6 +95,12 @@ settings.onChange = function () {
   typography.apply()
   chrome.apply()
   uiScaler.setScale(uiScaleFactor(settings.getState()))
+  // The inline-code size is NOT part of the stylesheet: it is one property on
+  // `body` that the host's own presenter also owns. Writing it on every commit
+  // (and removing it when the row is back at 0) keeps the row's number and the
+  // rendered chip in agreement without rebuilding a sheet.
+  // 行内代码字号不在样式表里：它是 body 上的一个属性，宿主 presenter 也写它。
+  writeInlineCodeSize(settings.getState().inlineCodeSize)
 }
 const catalogue = createCatalogue()
 
@@ -147,6 +153,8 @@ export const __internals = {
   clampLineHeight,
   clampTracking,
   clampUiFontSize,
+  clampInlineCodeSize,
+  writeInlineCodeSize,
   loadState: settings.loadState,
   getState: settings.getState,
   setState: settings.setState,

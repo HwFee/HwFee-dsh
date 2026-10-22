@@ -117,6 +117,33 @@ export const SCALE_STEPS = [
  */
 export const UI_FAMILY_VARIABLE = '--dsh-font-family-ui'
 
+/**
+ * The host theme's own code-size axis, written on `body` by ui-layout's
+ * presenter from the `code` role's preference.
+ *
+ * WHY SETTING IT ONLY MOVES INLINE CODE. The host derives
+ * `--dsh-code-font-delta: calc(<this> - 11px)` from it, and cds-theme pins the
+ * fenced-block / tool-card rungs at fixed sizes while letting ONLY the inline
+ * chip ride that delta (`code(12)` in cds-theme's `typography.js`). Writing the
+ * size is therefore the supported way to say "inline code is bigger"; writing
+ * `--dsh-code-font-delta` directly is NOT — the theme owns that derived value
+ * and a second writer would move every rung that reads it, then fight the theme
+ * on the next `theme/change`.
+ * 宿主的代码字号轴；主题据此派生 `--dsh-code-font-delta`，且只让行内代码档消费它。
+ * 故写这个尺寸变量是「只放大行内代码」的正确做法，绝不能直接写 delta。
+ */
+export const CODE_SIZE_VARIABLE = '--dsh-code-font-size'
+
+/**
+ * The slot id of the inline-code size row.
+ *
+ * A constant because TWO modules need the same string: `panel.js` registers it,
+ * and `merge.js` seats it right after the host's code-size row it replaces. A
+ * typo in either copy is silent — the row would simply never be placed.
+ * 行内代码字号行的槽位 id：panel.js 注册、merge.js 定位，两处必须是同一个字符串。
+ */
+export const INLINE_CODE_SIZE_ROW_ID = 'dsh-system-fonts-inline-code-size'
+
 // ------------------------------------------------------------- state
 
 export const DEFAULT_STATE = {
@@ -138,6 +165,16 @@ export const DEFAULT_STATE = {
    * interface text, not a scaled layout.
    */
   uiFontSize: 0,
+  /**
+   * The INLINE-CODE size in PIXELS. 0 = "not set" (the row shows 12 px, the
+   * theme's own chip rung, and nothing is written). A value writes the host's
+   * `--dsh-code-font-size`, which the theme turns into
+   * `--dsh-code-font-delta` — and only the inline-code rung consumes that, so
+   * a fenced block, a tool card and the terminal keep their own sizes.
+   * 行内代码字号：0 = 未设置；有值时写宿主 `--dsh-code-font-size`，
+   * 主题据此派生 delta，只有行内代码档消费它。
+   */
+  inlineCodeSize: 0,
   codeFamily: '',
   /**
    * Terminal family — committed through `theme.setFontFamily('terminal')`
@@ -196,6 +233,26 @@ export function clampUiFontSize(value) {
 /** The host chrome's base text size — the 0/unset display value. */
 export const UI_FONT_BASE_PX = 14
 
+/**
+ * The INLINE-CODE size is PIXELS with the same 0-means-unset convention as the
+ * three host size rows and the UI size row above. 10 is the smallest readable
+ * chip; 20 is where an inline chip stops fitting inside a 14–24 px line box
+ * without pushing the leading of the paragraph it sits in.
+ * 行内代码字号：px，0 = 未设置；10–20。
+ */
+export function clampInlineCodeSize(value) {
+  const n = Math.round(Number(value))
+  if (!isFinite(n) || n <= 0) return 0
+  return Math.min(20, Math.max(10, n))
+}
+
+/**
+ * The size an unset inline-code row displays: the theme's own chip rung
+ * (cds-theme emits `calc(12px + var(--dsh-code-font-delta))` for inline code),
+ * so the row never claims a size the user is not actually getting.
+ */
+export const INLINE_CODE_BASE_PX = 12
+
 /** The text-scale factor for a state: 1 when unset, px / 14 otherwise. */
 export function uiScaleFactor(state) {
   const size = clampUiFontSize(state === null || state === undefined ? 0 : state.uiFontSize)
@@ -235,6 +292,10 @@ export function sanitize(raw) {
     // an empty `data-slot-error` box.
     uiFontFamily: typeof source.uiFontFamily === 'string' ? source.uiFontFamily : '',
     uiFontSize: clampUiFontSize(source.uiFontSize),
+    // Whitelisted for the same reason as `uiFontFamily` above: a key this list
+    // does not name is dropped on every save, so the row would read `undefined`
+    // forever and the setting would look saved while doing nothing.
+    inlineCodeSize: clampInlineCodeSize(source.inlineCodeSize),
     codeFamily: typeof source.codeFamily === 'string' ? source.codeFamily : '',
     terminalFamily: typeof source.terminalFamily === 'string' ? source.terminalFamily : '',
     lineHeightPct: clampLineHeight(source.lineHeightPct),

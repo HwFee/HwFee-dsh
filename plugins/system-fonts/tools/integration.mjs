@@ -245,10 +245,15 @@ if (clientEntry) {
       ['dsh-system-fonts-content', 12],
       ['dsh-system-fonts-code', 13],
       ['dsh-system-fonts-terminal', 14],
-      ['dsh-system-fonts-line-height', 15],
-      ['dsh-system-fonts-tracking', 16],
+      ['dsh-system-fonts-ui', 15],
+      ['dsh-system-fonts-ui-size', 16],
+      // A half step: 12–18 are all taken, and the row must sit after the
+      // code-family row (13) and before the sliders (17). See panel.js.
+      ['dsh-system-fonts-inline-code-size', 13.5],
+      ['dsh-system-fonts-line-height', 17],
+      ['dsh-system-fonts-tracking', 18],
     ]
-    check('five settings.general.item rows register at orders 12–16',
+    check('eight settings.general.item rows register, in slot order',
       registrations.length === expected.length &&
       expected.every(([id, order], i) => registrations[i].spec.name === 'settings.general.item' &&
         registrations[i].spec.id === id && registrations[i].spec.order === order),

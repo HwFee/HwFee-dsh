@@ -1,5 +1,6 @@
 import {
   PLUGIN_ID, PANEL_STYLE_ID, clampLineHeight, clampTracking, clampUiFontSize, UI_FONT_BASE_PX,
+  clampInlineCodeSize, INLINE_CODE_BASE_PX, INLINE_CODE_SIZE_ROW_ID,
 } from './constants.js'
 import { createLocaleHandle, DEFAULT_LOCALE } from './locales.js'
 
@@ -89,15 +90,18 @@ export function removePanelCss() {
  * weight control: the weight of every step belongs to the theme, so a knob
  * here could only fight it.
  *
- * The rows register into `settings.general.item` at orders 12–15 — the three
- * host family roles plus OUR UI role, right behind the host's FontSettingsGroup
- * (appearance 10, font-size 11) — and `merge.js` then reparents them INSIDE the
- * group's collapsible font region, each picker directly after the official
- * family row it replaces, with the UI picker after them and the sliders at the
- * end of that region. While the region is collapsed the host does not render
- * it, so the rows are seated back in the slot outlet and hidden: they
- * expand/collapse with the group instead of showing as standalone settings
- * entries. The registration order is only the pre-merge / fallback seat.
+ * The rows register into `settings.general.item` at orders 12–18 — the three
+ * host family roles, OUR UI role and the two steppers, right behind the host's
+ * FontSettingsGroup (appearance 10, font-size 11) — with the inline-code
+ * stepper on the half step 13.5 (see `STEPPER_SLOTS`). `merge.js` then reparents
+ * them INSIDE the group's collapsible font region, each picker directly after
+ * the official family row it replaces, the inline-code stepper after the
+ * official code-SIZE row it replaces, the remaining steppers after them, and
+ * the sliders at the end of that region. While the region is collapsed the host
+ * does not render it, so the rows are seated back in the slot outlet and
+ * hidden: they expand/collapse with the group instead of showing as standalone
+ * settings entries. The registration order is only the pre-merge / fallback
+ * seat.
  * 三行替代宿主自带字体输入框：文本、代码、终端，每行只有一个字族下拉（字重归宿主
  * 主题管，故不设字重控件）。挂载后由 merge.js 搬进宿主字号组的折叠区（折叠时归位
  * 并隐藏）。
@@ -199,9 +203,10 @@ function effectiveDefaultFamily(role) {
 }
 
 // commits immediately, so the text behind the panel tracks the slider.
-// 两个连续取值行（17、18）：拖动即提交。The UI family row sits at 15 and the
-// UI size stepper at 16, so both follow terminal and precede the sliders — in
-// the region AND in the flat, collapsed fallback list.
+// 两个连续取值行（17、18）：拖动即提交。The UI family row sits at 15, the UI
+// size stepper at 16 and the inline-code stepper at 13.5, so everything but the
+// sliders follows the terminal picker and the sliders close the group — in the
+// region AND in the flat, collapsed fallback list.
 const SLIDER_SLOTS = [
   { id: 'dsh-system-fonts-line-height', order: 17, titleKey: 'row.lineHeight.title', descKey: 'row.lineHeight.desc', key: 'lineHeightPct', min: 50, max: 100, step: 1,
     normalize: function (v) { return clampLineHeight(v) },
@@ -212,10 +217,11 @@ const SLIDER_SLOTS = [
 ]
 
 /**
- * The UI size row. PIXELS, like the host's own 字号大小 (14 px) and the code /
- * terminal size rows above it; a stepper with the same read-out-and-arrows
- * shape, not a slider. 0 means "not set": the row shows the host's 14 px chrome
- * base and nothing is written.
+ * The pixel steppers: 界面字号 and 行内代码, the same read-out-and-arrows shape
+ * as the host's own 字号大小 / 代码字号 / 终端字号 rows, not sliders. 0 means
+ * "not set" in both: the row then shows the size that is actually in effect and
+ * nothing is written.
+ * 两个像素步进器：界面字号、行内代码。0 = 未设置，显示实际生效值且不写任何东西。
  */
 const STEPPER_SLOTS = [
   { id: 'dsh-system-fonts-ui-size', order: 16, titleKey: 'row.uiSize.title', descKey: 'row.uiSize.desc', key: 'uiFontSize',
@@ -224,6 +230,36 @@ const STEPPER_SLOTS = [
     // 0 is "unset": display the host chrome's base size in px.
     display: function (v) { const n = clampUiFontSize(v); return n > 0 ? n : UI_FONT_BASE_PX },
     increaseKey: 'row.uiSize.increase', decreaseKey: 'row.uiSize.decrease' },
+  /**
+   * The INLINE-CODE size row: the same pixel stepper as the host size rows,
+   * because it REPLACES the host's 代码字号 row (`merge.js` covers that row the
+   * same way it covers the official family inputs).
+   *
+   * ORDER 13.5, NOT AN INTEGER. The registration slot is fully spoken for:
+   * 12–14 are the three host font roles, 15 the UI family, 16 the UI size, 17
+   * and 18 the two sliders — and 11 belongs to the host's own 字号大小 row. So
+   * the only place left between the code-family row (13) and the sliders (17)
+   * is a half step. A half step is a real position, not a tie: the renderer
+   * sorts slots with `a.order - b.order`, and renumbering the five rows above
+   * would invalidate the 12–18 map this repo documents in AGENTS.md §12 and
+   * pins in three test files, for nothing the user could see.
+   *
+   * WHY 13.5 AND NOT 16.5. Both satisfy "before the sliders". 13.5 also puts the
+   * row between 代码字体 (13) and 终端字体 (14) in the FLAT fallback list — the
+   * shape used when `merge.js` cannot resolve the host group — which is where a
+   * code-size control reads naturally. Inside the region it is seated right
+   * after the host's hidden 代码字号 row, so the two placements agree: next to
+   * the code family either way.
+   * 行内代码字号：与宿主字号行同款像素步进器。order 13.5 —— 12–18 已无空整数，
+   * 且必须紧跟代码字体行、排在两个滑块之前；半步是真实位置（渲染器按数值排序），
+   * 重编号会让 AGENTS.md 第十二节与三个测试文件里钉死的 12–18 全失效。
+   */
+  { id: INLINE_CODE_SIZE_ROW_ID, order: 13.5, titleKey: 'row.inlineCodeSize.title', descKey: 'row.inlineCodeSize.desc',
+    key: 'inlineCodeSize', min: 10, max: 20, step: 1,
+    normalize: function (v) { return clampInlineCodeSize(v) },
+    // 0 is "unset": display the theme's own inline-chip rung (12 px).
+    display: function (v) { const n = clampInlineCodeSize(v); return n > 0 ? n : INLINE_CODE_BASE_PX },
+    increaseKey: 'row.inlineCodeSize.increase', decreaseKey: 'row.inlineCodeSize.decrease' },
 ]
 
 /**

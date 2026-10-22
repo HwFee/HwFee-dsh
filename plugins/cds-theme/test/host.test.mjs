@@ -19,12 +19,13 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { apply, name, FONT_BASE_GLOBAL, FONT_BASE_URL, PASTE_PATH } from '../lib/index.js'
 import { PASTE_PATH as ROUTE_PASTE_PATH, MARKER_HEADER, MARKER_VALUE } from '../lib/paste-route.js'
-import { FONT_FACES } from '../client/src/fonts.js'
+import { FONT_FACES, CJK_FACES } from '../client/src/fonts.js'
+import { RESTRICTED_FACE_FILES, fingerprintFor, sha256Of } from '../../../tools/font-licences.mjs'
 import { PASTE_ROUTE, PASTE_MARKER_HEADER, PASTE_MARKER_VALUE } from '../client/src/paste.js'
 
 // ------------------------------------------------------------- harness
@@ -84,10 +85,41 @@ test('the index injection publishes the absolute file:// fonts base', function (
   assert.equal(JSON.parse(JSON.stringify(row)).value, FONT_BASE_URL)
 })
 
-test('the injected base points at the six real files', function () {
+/**
+ * THE BASE STILL POINTS AT A REAL DIRECTORY, BUT NO LONGER AT SIX TRACKED FILES.
+ *
+ * This used to assert that all six Anthropic faces exist under the injected
+ * `file://` base. That file set is no longer part of the checkout: those bytes
+ * carry no redistribution grant, so they are untracked local working copies and
+ * a fresh clone has none of them. The base itself keeps its meaning — it is where
+ * a machine that DOES have the faces will find them, and where the two Noto
+ * fallbacks always live.
+ *
+ * So the assertion splits the way the licence does:
+ *   - the base is an absolute `file://` URL ending at `fonts/`, and the directory
+ *     exists (otherwise the injection is a lie);
+ *   - both Noto fallbacks are present, because the package ships them;
+ *   - a commercial face is checked only if this machine has it — absent is the
+ *     expected fresh-clone state, present-but-unknown is not.
+ */
+test('the injected base is the fonts directory, and the faces it promises are accounted for', function () {
   const dir = fileURLToPath(FONT_BASE_URL)
-  for (const face of FONT_FACES) {
+  assert.ok(existsSync(dir), 'the injected base must be a directory: ' + dir)
+
+  for (const face of CJK_FACES) {
     assert.ok(existsSync(dir + face.file), 'missing ' + dir + face.file)
+  }
+  for (const face of FONT_FACES) {
+    const path = dir + face.file
+    if (!existsSync(path)) {
+      // Absent on a fresh clone: these are the untracked commercial working copies.
+      assert.ok(RESTRICTED_FACE_FILES.includes(face.file),
+        face.file + ' is missing AND is not a restricted face — a shippable face must exist')
+      continue
+    }
+    const bytes = readFileSync(path)
+    assert.equal(sha256Of(bytes), fingerprintFor(face.file).sha256,
+      face.file + ' on this machine is not the face the licence registry describes')
   }
 })
 

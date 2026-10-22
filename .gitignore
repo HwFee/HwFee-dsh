@@ -26,3 +26,25 @@ node_modules/
 # live under assets/ and are referenced by name from the README.
 SnowShot_*.png
 
+# Harness session metadata written into the workspace root by the app itself.
+# It is one JSON line holding the session UUID and the absolute workspace path —
+# per-machine state, not repository content. Anchored to the root so a file of
+# the same name deeper in the tree is not silently ignored; `.work/` above only
+# covers the directory, which is why this one slipped into a commit.
+/.work-session.jsonl
+
+# Commercial font working copies: no redistribution grant.
+#
+# WHY EACH FILE IS NAMED INSTEAD OF GLOBBING THE DIRECTORY. `fonts/` also holds
+# the two SIL OFL Noto subsets that the published bundle inlines, and those must
+# stay trackable — they are the source of shipped bytes. A `fonts/*.woff2` rule
+# would silence both categories, so the six commercial faces are listed one by
+# one. They remain on disk as the developer's own working copies; only their git
+# tracking is removed. See market/PUBLISHING.md §5 and
+# plugins/cds-theme/licenses/NOTICE.md.
+plugins/cds-theme/fonts/AnthropicSans-Roman-Web.woff2
+plugins/cds-theme/fonts/AnthropicSans-Italic-Web.woff2
+plugins/cds-theme/fonts/AnthropicSerif-Roman-Web.woff2
+plugins/cds-theme/fonts/AnthropicSerif-Italic-Web.woff2
+plugins/cds-theme/fonts/AnthropicMono-Roman-Web.woff2
+plugins/cds-theme/fonts/AnthropicMono-Italic-Web.woff2

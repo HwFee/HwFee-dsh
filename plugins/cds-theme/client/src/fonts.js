@@ -2,12 +2,20 @@
  * The embedded Anthropic variable web fonts and the reference's font stacks.
  *
  * WHY EMBEDDED. Claude Desktop renders with Anthropic Sans / Serif / Mono. The
- * six variable woff2 files shipped in `fonts/` are the real anthropic.com web
- * faces (Anthropic{Sans,Serif,Mono}-{Roman,Italic}-Web.woff2), and this module
- * declares them under the exact family names the reference CSS uses —
- * `"anthropic-sans"`, `"anthropic-serif"`, `"anthropic-mono"` — so the token
- * strings from `.reference/open-claude-ui/code-examples/cds-theme.css:226-234`
- * copy over verbatim and resolve without translation.
+ * six variable woff2 files (Anthropic{Sans,Serif,Mono}-{Roman,Italic}-Web.woff2)
+ * are the real anthropic.com web faces, and this module declares them under the
+ * exact family names the reference CSS uses — `"anthropic-sans"`,
+ * `"anthropic-serif"`, `"anthropic-mono"` — so the token strings from
+ * `.reference/open-claude-ui/code-examples/cds-theme.css:226-234` copy over
+ * verbatim and resolve without translation.
+ *
+ * THOSE SIX FACES' BYTES ARE NOT SHIPPED. This project holds no redistribution
+ * grant for them, so they are untracked local working copies on the developer's
+ * machine — a fresh clone has none — and the published bundle carries none. Their
+ * `@font-face` blocks survive with a `local()` source, so a machine that has the
+ * family installed gets the replica and everything else falls through the stack.
+ * `font-assets.js` explains the split; `tools/font-licences.mjs` holds the
+ * fingerprints every gate checks them against.
  *
  * WEIGHT AXIS (probed with fontTools, not assumed). All six faces declare
  * `wght 300 → 800`; sans and serif also carry `opsz 16 → 48` (the reference
@@ -93,15 +101,38 @@ try {
 /** Global the Host half injects with the absolute `file://` fonts base. */
 export const FONT_BASE_GLOBAL = '__CDS_THEME_FONT_BASE__'
 
-/** The six variable faces, one entry per @font-face. */
+/**
+ * The faces the theme DECLARES, and which of them may be SHIPPED.
+ *
+ * `redistributable: false` means: keep the @font-face (so a machine that already
+ * has the family installed still gets the replica), but never put the bytes in
+ * the published bundle. See `font-assets.js` for why the six Anthropic faces are
+ * in that category and the two Noto faces are not.
+ *
+ * The flag is the single source of truth for that decision: the build imports
+ * only the `redistributable: true` entries, and the artifact test fails if the
+ * base64 of any `false` entry appears in `client/client.js`. Adding a face is
+ * therefore one edit here plus one import in `font-assets.js`, and mislabelling
+ * it makes a test red rather than shipping quietly.
+ */
 export const FONT_FACES = [
-  { family: 'anthropic-sans', file: 'AnthropicSans-Roman-Web.woff2', style: 'normal' },
-  { family: 'anthropic-sans', file: 'AnthropicSans-Italic-Web.woff2', style: 'italic' },
-  { family: 'anthropic-serif', file: 'AnthropicSerif-Roman-Web.woff2', style: 'normal' },
-  { family: 'anthropic-serif', file: 'AnthropicSerif-Italic-Web.woff2', style: 'italic' },
-  { family: 'anthropic-mono', file: 'AnthropicMono-Roman-Web.woff2', style: 'normal' },
-  { family: 'anthropic-mono', file: 'AnthropicMono-Italic-Web.woff2', style: 'italic' },
+  { family: 'anthropic-sans', file: 'AnthropicSans-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Sans' },
+  { family: 'anthropic-sans', file: 'AnthropicSans-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Sans' },
+  { family: 'anthropic-serif', file: 'AnthropicSerif-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Serif' },
+  { family: 'anthropic-serif', file: 'AnthropicSerif-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Serif' },
+  { family: 'anthropic-mono', file: 'AnthropicMono-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Mono' },
+  { family: 'anthropic-mono', file: 'AnthropicMono-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Mono' },
 ]
+
+/**
+ * Every face whose BYTES must never be shipped, derived from the flags above.
+ *
+ * Exported so the build and the artifact test read the same list instead of each
+ * keeping its own copy of the six file names.
+ */
+export const RESTRICTED_FACES = FONT_FACES
+  .filter(function (face) { return face.redistributable !== true })
+  .map(function (face) { return face.file })
 
 /**
  * THE CJK FALLBACK FACES — the Chinese counterpart of the Anthropic faces.
@@ -143,8 +174,8 @@ export const FONT_FACES = [
  * third of the variable one and needs no avar.
  */
 export const CJK_FACES = [
-  { family: 'anthropic-cjk', file: 'NotoSansSC-Shifted-VF.woff2', style: 'normal' },
-  { family: 'anthropic-cjk-serif', file: 'NotoSerifSC-Shifted-330.woff2', style: 'normal' },
+  { family: 'anthropic-cjk', file: 'NotoSansSC-Shifted-VF.woff2', style: 'normal', redistributable: true },
+  { family: 'anthropic-cjk-serif', file: 'NotoSerifSC-Shifted-330.woff2', style: 'normal', redistributable: true },
 ]
 
 /**
@@ -162,24 +193,47 @@ export const CJK_WEIGHT_RANGE = '300 800'
  * without a browser.
  *
  * `options.fileBase` is the absolute `file://` fonts base (trailing slash).
+ * `options.restricted` marks a face this package may NOT redistribute, and
+ * `options.local` is that face's own installed family name.
  *
- * The inlined `data:` URL always wins when present — it is the shipped path.
+ * THE INLINED `data:` URL WINS WHEN PRESENT, AND A RESTRICTED FACE IS NEVER
+ * ALLOWED TO GET ONE. That second clause is the licence rule, enforced here
+ * rather than only in the build: whatever ends up in the inline table, a
+ * restricted face resolves through `local()` and nothing else. A machine that
+ * has the family installed renders the replica exactly as before; a machine
+ * without it falls through the stack to the system faces.
+ *
+ * No URL is emitted for a restricted face even when a `file://` base exists.
+ * The package does not ship `fonts/`, so such a URL would 404 once per face on
+ * every page load — a console error for a file we deliberately stopped
+ * distributing.
+ *
  * Otherwise there is exactly ONE fallback left, the `file://` base, and no
  * route: the HTTP route was deleted because the branch that needed it cannot be
- * built (see the module header). With neither, `src` is `none`, which makes the
- * family unresolvable on purpose so the stack falls through to its system
+ * built (see the module header). With neither, `src` is `local()`, which leaves
+ * the family unresolvable on purpose so the stack falls through to its system
  * fallbacks instead of requesting a URL that is guaranteed to 404.
  */
 export function fontSourcesFor(file, options) {
+  const opts = options === undefined || options === null ? {} : options
+  // The installed family name comes from the face table, so a caller can never
+  // emit `local("<file>.woff2")` — a name no machine has installed — by
+  // forgetting to pass it.
+  const declared = FONT_FACES.concat(CJK_FACES).find(function (face) { return face.file === file })
+  const localName = typeof opts.local === 'string' && opts.local !== ''
+    ? opts.local
+    : (declared && typeof declared.local === 'string' && declared.local !== '' ? declared.local : file)
+  if (opts.restricted === true || (declared !== undefined && declared.redistributable !== true)) {
+    return 'local("' + localName + '")'
+  }
   // The inlined face wins unconditionally: it cannot 404, needs no origin and
   // no token, and is what makes the replica render in the desktop shell.
   const inline = INLINE_FACE_DATA[file]
   if (typeof inline === 'string' && inline !== '') {
     return 'url("' + inline + '") format("woff2")'
   }
-  const opts = options === undefined || options === null ? {} : options
   const fileBase = typeof opts.fileBase === 'string' ? opts.fileBase : ''
-  if (fileBase === '') return 'local("' + file + '")'
+  if (fileBase === '') return 'local("' + localName + '")'
   return 'url("' + fileBase + file + '") format("woff2")'
 }
 
@@ -191,13 +245,17 @@ function runtimeFileBase() {
 
 /** One `@font-face` block. `weightRange` differs for the shifted CJK faces. */
 function faceBlock(face, opts, weightRange) {
+  const restricted = face.redistributable !== true
+  const options = restricted
+    ? { restricted: true, local: face.local }
+    : opts
   return [
     '@font-face {',
     '  font-family: "' + face.family + '";',
     '  font-style: ' + face.style + ';',
     '  font-weight: ' + weightRange + ';',
     '  font-display: swap;',
-    '  src: ' + fontSourcesFor(face.file, opts) + ';',
+    '  src: ' + fontSourcesFor(face.file, options) + ';',
     '}',
   ].join('\n')
 }

@@ -171,6 +171,8 @@ window.__ModuleLoader__.load({
       "markdown-code-block-small"
     ];
     var UI_FAMILY_VARIABLE = "--dsh-font-family-ui";
+    var CODE_SIZE_VARIABLE = "--dsh-code-font-size";
+    var INLINE_CODE_SIZE_ROW_ID = "dsh-system-fonts-inline-code-size";
     var DEFAULT_STATE = {
       /** Shared UI + content family. Empty = the host's own stack. 空 = 宿主默认字体栈。 */
       uiFamily: "",
@@ -190,6 +192,16 @@ window.__ModuleLoader__.load({
        * interface text, not a scaled layout.
        */
       uiFontSize: 0,
+      /**
+       * The INLINE-CODE size in PIXELS. 0 = "not set" (the row shows 12 px, the
+       * theme's own chip rung, and nothing is written). A value writes the host's
+       * `--dsh-code-font-size`, which the theme turns into
+       * `--dsh-code-font-delta` — and only the inline-code rung consumes that, so
+       * a fenced block, a tool card and the terminal keep their own sizes.
+       * 行内代码字号：0 = 未设置；有值时写宿主 `--dsh-code-font-size`，
+       * 主题据此派生 delta，只有行内代码档消费它。
+       */
+      inlineCodeSize: 0,
       codeFamily: "",
       /**
        * Terminal family — committed through `theme.setFontFamily('terminal')`
@@ -229,6 +241,12 @@ window.__ModuleLoader__.load({
       return Math.min(20, Math.max(10, n));
     }
     var UI_FONT_BASE_PX = 14;
+    function clampInlineCodeSize(value) {
+      const n = Math.round(Number(value));
+      if (!isFinite(n) || n <= 0) return 0;
+      return Math.min(20, Math.max(10, n));
+    }
+    var INLINE_CODE_BASE_PX = 12;
     function uiScaleFactor(state) {
       const size = clampUiFontSize(state === null || state === void 0 ? 0 : state.uiFontSize);
       return size > 0 ? size / UI_FONT_BASE_PX : 1;
@@ -244,6 +262,10 @@ window.__ModuleLoader__.load({
         // an empty `data-slot-error` box.
         uiFontFamily: typeof source.uiFontFamily === "string" ? source.uiFontFamily : "",
         uiFontSize: clampUiFontSize(source.uiFontSize),
+        // Whitelisted for the same reason as `uiFontFamily` above: a key this list
+        // does not name is dropped on every save, so the row would read `undefined`
+        // forever and the setting would look saved while doing nothing.
+        inlineCodeSize: clampInlineCodeSize(source.inlineCodeSize),
         codeFamily: typeof source.codeFamily === "string" ? source.codeFamily : "",
         terminalFamily: typeof source.terminalFamily === "string" ? source.terminalFamily : "",
         lineHeightPct: clampLineHeight(source.lineHeightPct),
@@ -801,7 +823,7 @@ window.__ModuleLoader__.load({
     var zh_default = {
       meta: {
         title: "\u7CFB\u7EDF\u5B57\u4F53",
-        description: "\u4E3A\u300C\u8BBE\u7F6E \u2192 \u901A\u7528\u300D\u589E\u52A0\u5185\u5BB9\u5B57\u4F53\u3001\u4EE3\u7801\u5B57\u4F53\u3001\u7EC8\u7AEF\u5B57\u4F53\u4E09\u4E2A\u7CFB\u7EDF\u5B57\u4F53\u9009\u62E9\u5668\uFF0C\u9644\u884C\u8DDD\u4E0E\u5B57\u8DDD\u63A7\u5236\uFF1B\u4ECE Windows \u5DF2\u5B89\u88C5\u5B57\u4F53\u679A\u4E3E\u3002\u6B63\u6587/\u4EE3\u7801/\u7EC8\u7AEF\u7684\u5B57\u53F7\u4E0E\u5B57\u91CD\u4ECD\u7531\u5BBF\u4E3B\u4E3B\u9898\u7BA1\u7406\uFF1B\u754C\u9762\u5B57\u4F53\u7684\u5B57\u53F7\u9ED8\u8BA4\u8DDF\u968F\u6B63\u6587\u3002"
+        description: "\u4E3A\u300C\u8BBE\u7F6E \u2192 \u901A\u7528\u300D\u589E\u52A0\u5185\u5BB9\u5B57\u4F53\u3001\u4EE3\u7801\u5B57\u4F53\u3001\u7EC8\u7AEF\u5B57\u4F53\u4E09\u4E2A\u7CFB\u7EDF\u5B57\u4F53\u9009\u62E9\u5668\uFF0C\u52A0\u754C\u9762\u5B57\u4F53\u4E0E\u300C\u884C\u5185\u4EE3\u7801\u300D\u5B57\u53F7\u6B65\u8FDB\u5668\uFF0C\u9644\u884C\u8DDD\u4E0E\u5B57\u8DDD\u63A7\u5236\uFF1B\u4ECE Windows \u5DF2\u5B89\u88C5\u5B57\u4F53\u679A\u4E3E\u3002\u6B63\u6587\u4E0E\u7EC8\u7AEF\u7684\u5B57\u53F7\u3001\u4EE5\u53CA\u5168\u90E8\u5B57\u91CD\u4ECD\u7531\u5BBF\u4E3B\u4E3B\u9898\u7BA1\u7406\uFF1B\u754C\u9762\u5B57\u4F53\u7684\u5B57\u53F7\u9ED8\u8BA4\u8DDF\u968F\u6B63\u6587\uFF0C\u884C\u5185\u4EE3\u7801\u5B57\u53F7\u53EA\u4F5C\u7528\u4E8E\u884C\u5185\u4EE3\u7801\u3002"
       },
       strings: {
         "row.text.title": "\u5185\u5BB9\u5B57\u4F53",
@@ -828,7 +850,11 @@ window.__ModuleLoader__.load({
         "row.uiSize.title": "\u754C\u9762\u5B57\u53F7",
         "row.uiSize.desc": "\u754C\u9762\u6587\u5B57\u5927\u5C0F\uFF1B\u9ED8\u8BA4 14px\uFF0C\u53EA\u653E\u5927\u6587\u5B57\uFF0C\u4E0D\u6539\u5E03\u5C40\u3002",
         "row.uiSize.increase": "\u589E\u5927\u754C\u9762\u5B57\u53F7",
-        "row.uiSize.decrease": "\u51CF\u5C0F\u754C\u9762\u5B57\u53F7"
+        "row.uiSize.decrease": "\u51CF\u5C0F\u754C\u9762\u5B57\u53F7",
+        "row.inlineCodeSize.title": "\u884C\u5185\u4EE3\u7801",
+        "row.inlineCodeSize.desc": "\u53EA\u6539\u884C\u5185\u4EE3\u7801\u7684\u5B57\u53F7\uFF0C\u4EE3\u7801\u5757\u4E0E\u7EC8\u7AEF\u4E0D\u53D7\u5F71\u54CD\u3002",
+        "row.inlineCodeSize.increase": "\u589E\u5927\u884C\u5185\u4EE3\u7801\u5B57\u53F7",
+        "row.inlineCodeSize.decrease": "\u51CF\u5C0F\u884C\u5185\u4EE3\u7801\u5B57\u53F7"
       }
     };
 
@@ -836,7 +862,7 @@ window.__ModuleLoader__.load({
     var en_default = {
       meta: {
         title: "System fonts",
-        description: "Adds system-font pickers for text, code and terminal fonts to Settings \u2192 General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Size and weight of the content roles stay with the host theme; the interface font's size follows the body by default."
+        description: "Adds system-font pickers for text, code and terminal fonts to Settings \u2192 General, plus an interface font and an Inline code size stepper, with line-height and letter-spacing controls; enumerates installed Windows fonts. Sizes for the body and terminal, and every weight, stay with the host theme; the interface font's size follows the body by default, and the inline-code size affects inline code only."
       },
       strings: {
         "row.text.title": "Text font",
@@ -863,7 +889,11 @@ window.__ModuleLoader__.load({
         "row.uiSize.title": "Interface size",
         "row.uiSize.desc": "Interface text size; 14px by default, text only \u2014 the layout does not move.",
         "row.uiSize.increase": "Increase interface font size",
-        "row.uiSize.decrease": "Decrease interface font size"
+        "row.uiSize.decrease": "Decrease interface font size",
+        "row.inlineCodeSize.title": "Inline code",
+        "row.inlineCodeSize.desc": "Inline code only; code blocks and the terminal keep their sizes.",
+        "row.inlineCodeSize.increase": "Increase inline code size",
+        "row.inlineCodeSize.decrease": "Decrease inline code size"
       }
     };
 
@@ -1086,6 +1116,50 @@ window.__ModuleLoader__.load({
         },
         increaseKey: "row.uiSize.increase",
         decreaseKey: "row.uiSize.decrease"
+      },
+      /**
+       * The INLINE-CODE size row: the same pixel stepper as the host size rows,
+       * because it REPLACES the host's 代码字号 row (`merge.js` covers that row the
+       * same way it covers the official family inputs).
+       *
+       * ORDER 13.5, NOT AN INTEGER. The registration slot is fully spoken for:
+       * 12–14 are the three host font roles, 15 the UI family, 16 the UI size, 17
+       * and 18 the two sliders — and 11 belongs to the host's own 字号大小 row. So
+       * the only place left between the code-family row (13) and the sliders (17)
+       * is a half step. A half step is a real position, not a tie: the renderer
+       * sorts slots with `a.order - b.order`, and renumbering the five rows above
+       * would invalidate the 12–18 map this repo documents in AGENTS.md §12 and
+       * pins in three test files, for nothing the user could see.
+       *
+       * WHY 13.5 AND NOT 16.5. Both satisfy "before the sliders". 13.5 also puts the
+       * row between 代码字体 (13) and 终端字体 (14) in the FLAT fallback list — the
+       * shape used when `merge.js` cannot resolve the host group — which is where a
+       * code-size control reads naturally. Inside the region it is seated right
+       * after the host's hidden 代码字号 row, so the two placements agree: next to
+       * the code family either way.
+       * 行内代码字号：与宿主字号行同款像素步进器。order 13.5 —— 12–18 已无空整数，
+       * 且必须紧跟代码字体行、排在两个滑块之前；半步是真实位置（渲染器按数值排序），
+       * 重编号会让 AGENTS.md 第十二节与三个测试文件里钉死的 12–18 全失效。
+       */
+      {
+        id: INLINE_CODE_SIZE_ROW_ID,
+        order: 13.5,
+        titleKey: "row.inlineCodeSize.title",
+        descKey: "row.inlineCodeSize.desc",
+        key: "inlineCodeSize",
+        min: 10,
+        max: 20,
+        step: 1,
+        normalize: function(v) {
+          return clampInlineCodeSize(v);
+        },
+        // 0 is "unset": display the theme's own inline-chip rung (12 px).
+        display: function(v) {
+          const n = clampInlineCodeSize(v);
+          return n > 0 ? n : INLINE_CODE_BASE_PX;
+        },
+        increaseKey: "row.inlineCodeSize.increase",
+        decreaseKey: "row.inlineCodeSize.decrease"
       }
     ];
     function createPanel({ React: React2, primitives: primitives2, settings: settings2, catalogue: catalogue2, bridge: bridge2, locale: locale2, merger: merger2 }) {
@@ -1435,6 +1509,18 @@ window.__ModuleLoader__.load({
     }
 
     // client/src/bridge.js
+    function writeInlineCodeSize(px) {
+      const body = typeof document === "undefined" ? void 0 : document.body;
+      if (!body || !body.style || typeof body.style.setProperty !== "function") return false;
+      try {
+        const size = clampInlineCodeSize(px);
+        if (size > 0) body.style.setProperty(CODE_SIZE_VARIABLE, size + "px");
+        else body.style.removeProperty(CODE_SIZE_VARIABLE);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
     function createThemeBridge(theme, settings2) {
       const listeners = [];
       let svc = theme;
@@ -1623,6 +1709,7 @@ window.__ModuleLoader__.load({
           installPanelCss();
           typography2.apply();
           if (chrome2) chrome2.apply();
+          writeInlineCodeSize(settings2.getState().inlineCodeSize);
         }, "dsh-system-fonts: font styles");
         ctx.effect(scheduleRebuild, "dsh-system-fonts: deferred rebuild");
         ctx.effect(function() {
@@ -1685,6 +1772,15 @@ window.__ModuleLoader__.load({
           };
         }, "dsh-system-fonts: theme bridge");
         ctx.effect(function() {
+          if (typeof ctx.on !== "function") return void 0;
+          const off = ctx.on("theme/change", function() {
+            writeInlineCodeSize(settings2.getState().inlineCodeSize);
+          });
+          return function() {
+            if (typeof off === "function") off();
+          };
+        }, "dsh-system-fonts: inline-code size re-assert");
+        ctx.effect(function() {
           if (!merger2) return void 0;
           return function() {
             try {
@@ -1739,6 +1835,7 @@ window.__ModuleLoader__.load({
       return all.concat(entry[1]);
     }, []);
     var HOST_FAMILY_PLACEHOLDERS = ["\u9ED8\u8BA4", "Default"];
+    var CODE_SIZE_TITLES = ["\u4EE3\u7801\u5B57\u53F7", "Code font size"];
     function attr(el, name2) {
       if (!el || typeof el.getAttribute !== "function") return null;
       try {
@@ -1825,6 +1922,17 @@ window.__ModuleLoader__.load({
         if (entry[1].indexOf(needle) >= 0) return entry[0];
       }
       return null;
+    }
+    function isCodeSizeTitle(el) {
+      return CODE_SIZE_TITLES.indexOf(textOf(el)) >= 0;
+    }
+    function codeSizeRowIn(region) {
+      let titleEl = null;
+      eachDescendant(region, (node) => {
+        if (titleEl === null && isCodeSizeTitle(node)) titleEl = node;
+      });
+      if (titleEl === null) return null;
+      return childOfList(titleEl, region) || titleEl;
     }
     function childOfList(node, list) {
       let current = node;
@@ -1937,6 +2045,9 @@ window.__ModuleLoader__.load({
         if (prev && prev.el !== el) seat(prev);
         rows.set(slotId, {
           el,
+          // The slot id rides along so a pass can address ONE specific row (the
+          // inline-code stepper is seated after the host code-size row it replaces).
+          id: slotId,
           order: order === void 0 ? prev ? prev.order : rows.size : order,
           role: role === void 0 ? prev ? prev.role : null : role,
           home: prev && prev.el === el ? prev.home : homeOf(el)
@@ -2048,8 +2159,12 @@ window.__ModuleLoader__.load({
           if (entry.el && entry.el.parentNode !== null) continue;
           covered.splice(i, 1);
         }
-        for (const entry of familyEntries(region)) {
-          const target = entry.row;
+        const targets = familyEntries(region).map(function(entry) {
+          return entry.row;
+        });
+        const codeSizeRow = codeSizeRowIn(region);
+        if (codeSizeRow !== null && targets.indexOf(codeSizeRow) < 0) targets.push(codeSizeRow);
+        for (const target of targets) {
           const marked = attr(target, COVERED_ATTR) !== null;
           const hidden = target.style ? target.style.display === "none" : true;
           if (marked && hidden) continue;
@@ -2072,9 +2187,17 @@ window.__ModuleLoader__.load({
         const ordered = orderedRows();
         const placed = /* @__PURE__ */ new Set();
         const sequence = [];
+        const codeSizeRow = codeSizeRowIn(region);
+        const inlineRec = ordered.find(function(row) {
+          return row.id === INLINE_CODE_SIZE_ROW_ID && row.el;
+        }) || null;
         for (const child of childrenOf(region)) {
           if (isOurRow(child)) continue;
           sequence.push(child);
+          if (inlineRec !== null && child === codeSizeRow && !placed.has(inlineRec)) {
+            sequence.push(inlineRec.el);
+            placed.add(inlineRec);
+          }
           for (const item of roles) {
             if (item.row !== child) continue;
             const rec = ordered.find(function(row) {
@@ -2449,6 +2572,7 @@ window.__ModuleLoader__.load({
       typography.apply();
       chrome.apply();
       uiScaler.setScale(uiScaleFactor(settings.getState()));
+      writeInlineCodeSize(settings.getState().inlineCodeSize);
     };
     var catalogue = createCatalogue();
     var bridge = createThemeBridge(null, settings);
@@ -2486,6 +2610,8 @@ window.__ModuleLoader__.load({
       clampLineHeight,
       clampTracking,
       clampUiFontSize,
+      clampInlineCodeSize,
+      writeInlineCodeSize,
       loadState: settings.loadState,
       getState: settings.getState,
       setState: settings.setState,

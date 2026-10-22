@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "系统字体",
-    "description": "为「设置 → 通用」增加内容字体、代码字体、终端字体三个系统字体选择器，附行距与字距控制；从 Windows 已安装字体枚举。正文/代码/终端的字号与字重仍由宿主主题管理；界面字体的字号默认跟随正文。"
+    "description": "为「设置 → 通用」增加内容字体、代码字体、终端字体三个系统字体选择器，加界面字体与「行内代码」字号步进器，附行距与字距控制；从 Windows 已安装字体枚举。正文与终端的字号、以及全部字重仍由宿主主题管理；界面字体的字号默认跟随正文，行内代码字号只作用于行内代码。"
   },
   "strings": {
     "row.text.title": "内容字体",
@@ -28,6 +28,10 @@
     "row.uiSize.title": "界面字号",
     "row.uiSize.desc": "界面文字大小；默认 14px，只放大文字，不改布局。",
     "row.uiSize.increase": "增大界面字号",
-    "row.uiSize.decrease": "减小界面字号"
+    "row.uiSize.decrease": "减小界面字号",
+    "row.inlineCodeSize.title": "行内代码",
+    "row.inlineCodeSize.desc": "只改行内代码的字号，代码块与终端不受影响。",
+    "row.inlineCodeSize.increase": "增大行内代码字号",
+    "row.inlineCodeSize.decrease": "减小行内代码字号"
   }
 }

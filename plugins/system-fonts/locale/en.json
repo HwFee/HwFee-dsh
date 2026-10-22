@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "System fonts",
-    "description": "Adds system-font pickers for text, code and terminal fonts to Settings → General, with line-height and letter-spacing controls; enumerates installed Windows fonts. Size and weight of the content roles stay with the host theme; the interface font's size follows the body by default."
+    "description": "Adds system-font pickers for text, code and terminal fonts to Settings → General, plus an interface font and an Inline code size stepper, with line-height and letter-spacing controls; enumerates installed Windows fonts. Sizes for the body and terminal, and every weight, stay with the host theme; the interface font's size follows the body by default, and the inline-code size affects inline code only."
   },
   "strings": {
     "row.text.title": "Text font",
@@ -28,6 +28,10 @@
     "row.uiSize.title": "Interface size",
     "row.uiSize.desc": "Interface text size; 14px by default, text only — the layout does not move.",
     "row.uiSize.increase": "Increase interface font size",
-    "row.uiSize.decrease": "Decrease interface font size"
+    "row.uiSize.decrease": "Decrease interface font size",
+    "row.inlineCodeSize.title": "Inline code",
+    "row.inlineCodeSize.desc": "Inline code only; code blocks and the terminal keep their sizes.",
+    "row.inlineCodeSize.increase": "Increase inline code size",
+    "row.inlineCodeSize.decrease": "Decrease inline code size"
   }
 }
