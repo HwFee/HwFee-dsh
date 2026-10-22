@@ -162,7 +162,7 @@ Final tarballs, packed once each:
 | `dsh-cds-theme` | `dsh-cds-theme-0.1.6.tgz` | 14 | 3131.9 KB | `b7c6886f91060539e04775fa5d81dab35752df35` |
 | `dsh-system-fonts` | `dsh-system-fonts-0.1.3.tgz` | 9 | 42.4 KB | `281ba22f63a27ddc9ffa15ec79832836657828da` |
 | `@hwfee/dsh-usage-stats` | `hwfee-dsh-usage-stats-0.1.3.tgz` | 12 | 43.0 KB | `857d65b973638e2dbc7a00facbf311871fa6e527` |
-| `@hwfee/dsh-git-bash` | `hwfee-dsh-git-bash-0.1.1.tgz` | 11 | 42.8 KB | `7e1253f0e436e0a810adead2ec50dbddfc1f5c04` |
+| `@hwfee/dsh-git-bash` | `hwfee-dsh-git-bash-0.1.1.tgz` | 11 | 43.7 KB | `94019b2ed3a5f3e6cf3ad9eec6e94631926f2164` |
 | `@hwfee/dsh-predict` | `hwfee-dsh-predict-0.1.1.tgz` | 12 | 28.3 KB | `66996c5e4bb7e188d247f744c245c240b7677ae6` |
 | `@hwfee/dsh-genui` | `hwfee-dsh-genui-0.1.1.tgz` | 14 | 91.1 KB | `d8f02d8d875058153e0955525cfaa5b8e86ddc53` |
 
