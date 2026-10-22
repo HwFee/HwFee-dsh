@@ -58,13 +58,10 @@ export const en = {
   'heat.cell': '{date} · {count} messages',
   'heat.cell.one': '{date} · {count} message',
   'heat.cell.zero': '{date} · no activity',
-  // Interpolated by the panel from bookComparison's {title, ratio}; the
-  // sentence shape lives here so translators own the word order. `book.lang`
-  // is a self-reporting marker the panel uses to pick `title` vs `titleEn`
-  // from the pick — translators never see it in the UI.
+  // `book.lang` is a self-reporting locale marker, never shown: the panel reads
+  // it to resolve the `auto` unit scale (K/M/B in an English UI, 万/亿 in a
+  // Chinese one). Translators never see it.
   'book.lang': 'en',
-  'book.less': "You haven't used a full copy of {title} yet.",
-  'book.more': "You've used ~{ratio}× more tokens than {title}.",
 }
 
 export const zh = {
@@ -108,6 +105,4 @@ export const zh = {
   'heat.cell.one': '{date} · {count} 条消息',
   'heat.cell.zero': '{date} · 没有活跃记录',
   'book.lang': 'zh',
-  'book.less': '你用掉的 token 还没凑满 1 本《{title}》。',
-  'book.more': '你用掉的 token 约是《{title}》的 {ratio} 倍。',
 }

@@ -83,27 +83,6 @@ export const RANGES = [
   { id: '7d', days: 7 },
 ]
 
-/**
- * Books used for the fun comparison.
- *
- * The comparison picks ONE book per mount — see `bookComparison` — and renders
- * it as a single line, so each entry carries `title` and `chars` only. `title`
- * is the display name verbatim: zh renders it inside 《》, en renders it as-is,
- * which is why every entry has an explicit English title.
- *
- * 字数 are the commonly cited counts for the widely-read editions and are
- * ROUND NUMBERS ON PURPOSE. They are not manuscript figures, and the real
- * tokens-per-character ratio depends on the tokenizer — this is a scale joke,
- * not a measurement, so the printed sentence carries no byline or basis.
- */
-export const BOOKS = [
-  { title: '红楼梦', titleEn: 'Dream of the Red Chamber', chars: 730000 },
-  { title: '三国演义', titleEn: 'Romance of the Three Kingdoms', chars: 630000 },
-  { title: '围城', titleEn: 'Fortress Besieged', chars: 230000 },
-  { title: '活着', titleEn: 'To Live', chars: 120000 },
-  { title: '骆驼祥子', titleEn: 'Rickshaw Boy', chars: 100000 },
-]
-
 export const DEFAULT_STATE = {
   range: 'all',
   tab: 'overview',

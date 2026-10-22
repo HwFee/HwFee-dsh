@@ -53,10 +53,6 @@ export const en = {
   'heroRipple.desc': 'On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.',
   'markdownScope.title': 'Assistant markdown: lists, emphasis, links',
   'markdownScope.desc': 'Task lists, bold, italic, strikethrough and links in the assistant’s reply get the reference’s ink, markers and underline offset. Code blocks and inline code keep their own treatment; user messages, tool cards and settings are out of scope.',
-  'viewTabsPill.title': '“Chat / Trajectory” as a segmented pill',
-  'viewTabsPill.desc': 'Off is the host’s own underline tabs. On packs both into one pill. Neither decides whether the tabs appear — the host shows them only while General → “Show coding view” is on, and that setting also enables the turn’s code diff and the full agent presets.',
-  'composerSplit.title': 'Split composer: box above, toolbar below',
-  'composerSplit.desc': 'Puts the text box in its own frame and moves permission, add, the statistics group, the model and the context ring onto a line beneath it, as the reference does. Every control stays the host’s own, with its own behaviour. The workspace line above the box appears on a new session only, because that is where the host renders it.',
   'enabled.title': 'Enable CDS theme',
   'enabled.desc': 'Off releases every token override and restores the host skin.',
   // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -113,10 +109,6 @@ export const zh = {
   'heroRipple.desc': '新会话时，问候语与输入框背后浮出一层淡的代码字形，每次点击从光标处荡开水波。输入框会略透，让波纹从底下透出来。关闭即整层移除。',
   'markdownScope.title': '助手正文的列表、强调与链接',
   'markdownScope.desc': '助手的任务列表、粗体、斜体、删除线与链接改用参考版的墨色、项目符号与下划线间距。代码块与行内代码保持原样；用户消息、工具卡片与设置页不在范围内。',
-  'viewTabsPill.title': '「对话 / 轨迹」用胶囊样式',
-  'viewTabsPill.desc': '关闭是宿主原本的下划线页签，开启则两段收进一个胶囊。两者都不决定这两个页签出不出现——只有当「通用 → 显示代码工作视图」打开时宿主才画它们，而那个开关同时会打开本轮代码差异与完整 Agent 预设。',
-  'composerSplit.title': '输入框分离：文本框在上，工具栏在下',
-  'composerSplit.desc': '把文本框放进独立边框，权限、添加、统计、模型与上下文环移到它下方一行，与参考版一致。每个控件仍是宿主的原件，行为不变。文本框上方那行工作区只在新会话出现，因为宿主只在那里渲染它。',
   'enabled.title': '启用 CDS 主题',
   'enabled.desc': '关闭即释放全部令牌覆盖，界面回到宿主原样式。',
   // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------

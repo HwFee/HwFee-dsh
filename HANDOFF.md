@@ -1,20 +1,23 @@
 # 交接文档 · DSH 界面复刻与缺陷修复
 
 > 生成时间：2026-10-22 21:20（Asia/Shanghai）
-> 最后更新：2026-10-22 22:25
+> 最后更新：2026-10-22 23:10
 > 工作区：`C:\Users\17445\Desktop\HwFee-dsh`
 
 ---
 
-## 0. 一句话现状（22:25 更新）
+## 0. 一句话现状（23:10 更新）
 
-三块产品代码已完成，**849 条测试全绿、仓库审计 exit 0、diff 行号补丁已装**，但：
+三块产品代码已完成，**840 条测试全绿、仓库审计 exit 0、diff 行号补丁已装**，但：
 **① 全部改动仍未提交、未发版；② 未做真实宿主挂载验证；③ 行号补丁要重启应用才生效；④ profile 有 3 条 preflight FAIL 待用户决定。**
 
-本轮修掉的真缺陷（都有回归测试且验证过「改回旧代码会红」）：
-- 分离输入框工具栏重叠（plan 槽被统计压住，35px / 54px）
+本轮的变化（cds-theme）：
+- **撤掉四个参考派生功能**：页签胶囊、输入框分离布局、首页「添加工作区」、框内发送按钮——连同 `composerRules()` 里两条权限图标规则。状态键、设置行、规则、语言键、测试一并删除。
+- 编辑行 `+N / −N` 改为**各带同色淡底**（`--dsw-alias-file-diff-added-bg` / `-deleted-bg`、4px 圆角、紧内边距），文字仍是宿主的绿 / 红。
+- 保留的参考派生物只有 Markdown 的列表 / 强调 / 链接（`markdown-scope.js`，开关 45）。
+
+之前几轮修掉的真缺陷（都有回归测试且验证过「改回旧代码会红」）：
 - 编辑行 `+N/−N` 在 refine 关闭时输给正文 `!important`，退回代码字体
-- 「参考胶囊」页签撑满整条标题栏（grid 项默认拉伸）
 - compact 面板说明行被裁掉半个字
 - `markdown-scope.js` 注释谎称数值「follow the reference」（参考仓库里没有这些规则）
 
@@ -75,22 +78,25 @@
 - **验证**：`npm test` **162/162**、`--check` 0、fixture 48/48、25 张截图（`.work/usage-style/shots/`）。
 - 文档：`README.md` 已更新双样式/独立高度/长文本；`licenses/MIT-NOTICE.md` 已加并进 `files`；`.work/usage-style/report.md` 已保存。
 
-### 2.3 cds-theme（Markdown + 页签 + 分离输入框 + 加减字体）
+### 2.3 cds-theme（Markdown + 加减字体背景）
 目录：`plugins/cds-theme/`
 
 | 功能 | 状态 |
 |---|---|
-| Markdown 列表/任务/粗斜删除线/链接 | ✅ 作用域 `[data-chat-flow][data-chat-flow-kind="assistant-step"]`，排除 `pre`/`code`/工具卡/genui 卡；不使用盐类选择器；行内代码不重涂 |
-| 「对话/轨迹」页签：原版 / 参考胶囊 | ✅ 默认原版，body 标记 `data-cds-view-tabs`，切换需要宿主「显示代码工作视图」开着，主题不写该设置 |
-| 输入框分离布局开关 | ⚠️ 代码完成、**视觉有重叠缺陷**（见 §4.1） |
-| 编辑行 `+N/−N` 改 SANS | ✅ `[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"]` 用 `--dsw-font-family-ui`，保留宿主绿/红 |
+| Markdown 列表/任务/粗斜删除线/链接 | ✅ 作用域 `[data-chat-flow][data-chat-flow-kind="assistant-step"]`，排除 `pre`/`code`/工具卡/genui 卡；不使用盐类选择器；行内代码不重涂。**唯一保留下来的参考派生外观** |
+| 「对话/轨迹」页签：原版 / 参考胶囊 | ❌ 已删除（用户要求撤掉；`viewtabs.js`、状态键、设置行、语言键、测试一并移除） |
+| 输入框分离布局开关 | ❌ 已删除（`composer-layout.js` 及其行、键、规则一并移除） |
+| 首页「添加工作区」入口 | ❌ 已删除（`workspace-add.js`；该文件在 HEAD 里就没有被任何地方引用） |
+| 输入框内的发送按钮 | ❌ 已删除（文件、导入、`parts.push(sendButtonRules())`、生命周期里的 effect） |
+| 权限按钮图标的隐藏规则 | ❌ 已删除（`[class*="_triggerIcon"]` 与 `button { gap: 0 }` 两条规则及其注释） |
+| 编辑行 `+N/−N` | ✅ UI 字族 + **各带同色淡底**（`--dsw-alias-file-diff-added-bg` / `-deleted-bg`、4px 圆角、紧内边距、等宽数字），**文字仍是宿主绿/红**；`refine` 关闭时同样生效 |
 | diff 真实行号 | ⚠️ 主题侧就绪，**宿主补丁未安装**（见 §4.2） |
 
-- **验证**：`npm test` **518/518**（26 文件）、`build --check` 0、`tools/verify.mjs` exit 0、仓库审计 exit 0。
+- **验证**：`npm test` **516/516**（26 文件）、`build --check` 0、`tools/verify.mjs` exit 0、仓库审计 exit 0。
 
 ### 2.4 仓库级
 - `node tools/audit.mjs` → **exit 0**（此前 6 条回归已全部清零）。
-- 测试合计：**滑块 156 + 用量 162 + 主题 518 = 836 条，0 失败**。
+- 测试合计：**滑块 161 + 用量 163 + 主题 516 = 840 条，0 失败**。
 
 ---
 
@@ -113,44 +119,17 @@
 
 ## 4. 未完成项（按优先级）
 
-### 4.1 【已修】分离输入框工具栏重叠
-证据：`.work/theme-wave/shots/02-split-on-wide-1280.png`、`04-split-on-narrow-720.png`
+### 4.1 【已移除】输入框分离布局
 
-**精确根因（已用 fixture 几何实测定位）：**
+该功能连同它的重叠缺陷一起撤掉了：用户要求移除四个参考派生功能，分离输入框是其中之一。
+`client/src/composer-layout.js`、它的 `composerSplit` 状态键、设置行（order 47）、样式表里的
+`parts.push(composerLayoutRules())` 与生命周期里的 effect、语言键、以及 `test/` 下的全部断言
+都已删除。§4.1 原本记录的量测口径（按左簇而非单个 permission 槽取内缩、窄屏按实测内容宽度回退）
+随文件一起没了——**不要再按旧记录去找 `--cds-dock-inset-*` 或 `data-cds-composer-narrow`**，
+现在整张表里一个都不存在。
 
-- 左内缩 `--cds-dock-inset-left` 只按 **permission** 槽（`conversation.input.permission`）量，
-  漏掉了同一行里**第二个左侧 seat —— plan 槽**（「标准模式」，`conversation.input.plan`）。
-- 于是 dock 的统计数字被 plan 槽压住：
-  - 1280 宽：`rowRight=531` vs `dockLeft=496`（重叠 35px）
-  - 720 宽：`rowRight=270` vs `dockLeft=216`（重叠 54px）
-- 窄屏标记 `data-cds-composer-narrow=no`：阈值 `MIN_CENTRE_GAP=220` 太小，
-  720 宽时 centre 仍有 270，所以不触发回退；要到约 480 才置位，那时 dock 已回落独立行。
-- `permission/add/model/send` 四个中心 hitTest 全 true（这几个无重叠），重叠只发生在
-  左簇第二 seat 与 dock 统计之间——**只看 hitTest 会漏掉，必须做全行 sweep**。
-
-**修法建议（择一，优先 ①）：**
-
-1. **改为同一行 flex 三列**：`grid-template-columns: auto 1fr auto`（左簇 / 统计 / 右簇），
-   统计区 `min-width:0; overflow:hidden`，彻底不依赖绝对定位与实测内缩。
-2. 保留 absolute 方案则：左内缩必须量**左簇所有 seat 的最右边界**（permission + plan + add），
-   不是只量 permission；窄屏阈值按实测 `centre - (左簇宽 + 右簇宽)` 动态判定，不要用固定 220。
-
-修完必须重拍 1280 / 720 两张，并用**全行元素两两 rect 相交**断言无重叠（不能只测中心点）。
-
-**补充：480px 已有可用回退** —— `.work/theme-wave/shots/05-split-on-narrow-fallback-480.png` 显示
-统计会回落到独立一行，该宽度下无重叠。说明回退机制本身有效，问题只在 481–~1000px 这段区间。
-
-### 4.1 修复记录（2026-10-22 22:20）
-
-已按建议 ① 的等效做法修好，但**没有**改成三列 flex（那会重排宿主的行结构）。改的是测量口径：
-
-- `findCluster()` 沿 `parentElement` 找到行内包裹该 seat 的直接子元素——左簇（permission + plan + add）、右簇（model + send），内缩改由**簇的边界**算，不再只量 permission 槽。
-- 窄屏判据改成**实测**：`measureDockContent()` 量统计区自身内容宽度，`centre < contentWidth` 才回退；`MIN_CENTRE_GAP = 220` 只在统计区为空时兜底。
-- 空气间隙取 8px（宿主自己的 `--dsh-composer-dock-inset`），12px 会把 1280 下本来放得下的行推进回退。
-
-结果：1280 下 narrow=false、`pad=246px 163px`、gap=274（统计内容 266.78），无重叠；720 下 narrow=true，统计回落独立一行。fixture **32 pass / 0 fail**，截图逐张看过。
-
-> fixture 里有一条断言被改过：`on/720 · dock sits on the toolbar band` 原来无条件要求 `position: absolute`，即**要求在窄屏下重叠**。现改为「absolute 且同带，或 static + narrow + 无重叠」。
+同一批删掉的还有：页签胶囊（`viewtabs.js`）、首页「添加工作区」（`workspace-add.js`）、
+框内发送按钮（`send-button.js` + 生命周期 effect），以及 `composerRules()` 里那两条权限图标规则。
 
 ### 4.2 【已装】diff 真实行号
 - 仓库自带两个配套补丁，**均未安装**：
@@ -186,10 +165,10 @@
 | 主题分离布局截图 | `.work/theme-wave/shots/01–05*.png`（含 480 回落） |
 | 分离布局 fixture | `.work/theme-wave/fixture/{shoot.mjs,composer-fixture.html}` |
 | 主题验证日志 | `.work/theme-wave/{npm-test,verify,audit,build-check}.log` |
-| 分离布局实现 | `plugins/cds-theme/client/src/composer-layout.js` |
+| 分离布局实现 | 已删除（`composer-layout.js` 随「输入框分离」一起移除） |
 | Markdown 规则 | `plugins/cds-theme/client/src/markdown-scope.js` |
-| 页签规则 | `plugins/cds-theme/client/src/viewtabs.js` |
-| 工作区真实入口 | `plugins/cds-theme/client/src/workspace-add.js` |
+| 页签规则 | 已删除（`viewtabs.js` 随「参考胶囊」一起移除） |
+| 工作区真实入口 | 已删除（`workspace-add.js` 随首页「添加工作区」一起移除） |
 | diff 行号模块 | `plugins/cds-theme/client/src/diffnumbers.js` |
 | 行号补丁（未装） | `patches/dsh-tool-fs-hunk-lines.patch`、`patches/dsh-web-frontend-diff-start.patch` |
 | 补丁工具 | `tools/patch-asar.mjs` |
@@ -199,8 +178,8 @@
 
 ## 6. 下一位接手者的最短路径
 
-1. **先跑基线**：`node tools/audit.mjs`（应 exit 0）、三个插件的 `npm test`（应分别 156 / 162 / 518 全绿）。
-2. **修 §4.1 重叠**：只改 `composer-layout.js` 的布局方式，重拍 4 张图，确认文字不重叠、`data-cds-composer-narrow` 正确切换。
+1. **先跑基线**：`node tools/audit.mjs`（应 exit 0）、三个插件的 `npm test`（应分别 161 / 163 / 516 全绿）。
+2. **四件参考派生功能已移除**：页签胶囊、输入框分离、首页「添加工作区」、框内发送按钮——连同状态键、设置行、规则、语言键与测试一起删掉，不要再按旧文档去找它们。
 3. **问用户要不要打行号补丁**（§4.2）：需要完全退出 DSH；打之前先 `status`，打完 `status` 应显示 installed。
 4. **真实挂载验证**：只有在用户同意启用插件后，才改 profile 的 `bundles` 并重启；**不要主动恢复**。
 5. 全部通过后再谈提交/发版/安装矩阵。

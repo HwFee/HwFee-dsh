@@ -8,8 +8,6 @@ import { fontCss, preferredCjkStackCss } from './fonts.js'
 import { GREETING_DISPLAY, WEIGHTS } from './typography.js'
 import { RIPPLE_ATTR } from './ripple.js'
 import { markdownScopeRules } from './markdown-scope.js'
-import { tabsStyleRules } from './viewtabs.js'
-import { composerLayoutRules } from './composer-layout.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -1159,7 +1157,8 @@ function toolRowsRules() {
 }
 
 /**
- * The `+N` / `−N` change counts take the UI family, in BOTH card states.
+ * The `+N` / `−N` change counts: UI family and a tinted plate, in BOTH card
+ * states.
  *
  * WHY TWO HOOKS. Which card draws those counts depends on `refine`:
  *
@@ -1190,19 +1189,62 @@ function toolRowsRules() {
  * theme's own `[data-cds-diffrow]`). So this can reach a tool row's stat cell
  * and nothing else — never a markdown block, a settings row, or the read card.
  *
- * WHAT IS *NOT* TOUCHED: the two colours. `+N` stays the host's green and `−N`
- * its red, including their hover states — no `color`, no `opacity`. Only the
- * family and the numeric alignment change, and `tabular-nums` keeps the two
- * counts from jittering as their width changes while a file is being edited.
+ * THE PLATE. Each count gets the host's own diff wash behind it —
+ * `--dsw-alias-file-diff-added-bg` / `-deleted-bg`, both declared by the host on
+ * `body` (`.work/host-src/ui-theme.js`: `--dsw-alias-file-diff-added-bg:#e6f4e7`,
+ * `--dsw-alias-file-diff-deleted-bg:#fce6e2`), so the tint follows the palette
+ * the theme already remaps rather than a literal here. The two counts do NOT
+ * sit in one plate: each gets its own, because the pair states two different
+ * facts and a single wash would have to pick one of the two hues.
+ *
+ * The plate is a WASH BEHIND THE INK, never a replacement for it: `+N` keeps the
+ * host's green and `−N` its red, hover states included — no `color`, no
+ * `opacity`, exactly as before. `inline-block` (not `inline`) is what gives the
+ * tint a box to fill; `flex: none` keeps the pair from being squeezed when the
+ * summary is long, and `tabular-nums` keeps the two counts from jittering as
+ * their width changes while a file is being edited.
+ *
+ * LEFT-ALIGNED AFTER THE TITLE. The pair is a sibling of the summary in the
+ * host's flex row, and the summary is what absorbs the free space (`flex:auto`),
+ * so nothing here may take `margin-left: auto` or `order` — a plate pushed to
+ * the right edge would read as a separate column instead of a suffix.
  *
  * @returns {string} the rules
  */
 function diffStatFamilyRules() {
   return [
-    '/* ---- the ±N change counts: UI family in both card states ----------- */',
+    '/* ---- the ±N change counts: UI family + a tinted plate ------------- */',
     '[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"],',
     '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diffrow-stats] {',
     '  font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;',
+    '  font-variant-numeric: tabular-nums;',
+    '}',
+    // The host's cell holds both numbers; the theme's own marker holds two spans.
+    // The plate therefore goes on the LEAVES in each: `[class*="diffAdded"]` /
+    // `[class*="diffRemoved"]` for the host (salt-tolerant, the same technique
+    // the cell uses), `[data-cds-diff-stat]` for ours.
+    //
+    // `line-height: 16px` is what keeps the wash a chip rather than a band: the
+    // row's own box is 24px, and an inherited `calc(24px + delta)` would make the
+    // plate span the full height of the line.
+    '[data-slot="tool.call.toolview"] [data-tool] [class*="diffAdded"],',
+    '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="add"] {',
+    '  display: inline-block;',
+    '  flex: none;',
+    '  border-radius: var(--dsw-radius-xs);',
+    '  padding: 0 4px;',
+    '  line-height: 16px;',
+    '  background: var(--dsw-alias-file-diff-added-bg);',
+    '  font-variant-numeric: tabular-nums;',
+    '}',
+    '[data-slot="tool.call.toolview"] [data-tool] [class*="diffRemoved"],',
+    '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="del"] {',
+    '  display: inline-block;',
+    '  flex: none;',
+    '  border-radius: var(--dsw-radius-xs);',
+    '  padding: 0 4px;',
+    '  line-height: 16px;',
+    '  background: var(--dsw-alias-file-diff-deleted-bg);',
     '  font-variant-numeric: tabular-nums;',
     '}',
   ].join('\n')
@@ -1388,13 +1430,37 @@ function diffCardRules() {
     '  /* transparent, per --diffs-bg-context-override */',
     '  background-color: transparent;',
     '}',
+    // THE GUTTER MUST NOT WRAP. Without an explicit width the span is a flex
+    // item that shrinks below its content, so a four-digit file line breaks
+    // between the digits: `1451` rendered as `145` on one line and `1` on the
+    // next, which reads as two columns of numbers. `white-space: nowrap` stops
+    // the break; the `min-width` in ch keeps the column steady while the numbers
+    // grow from 1 to 4 digits, so the code text does not shift sideways mid-hunk.
+    // THE GUTTER: FIXED WIDTH, NO WRAP, AND THE DIGITS MUST NOT TOUCH THE GLYPH.
+    //
+    // Three defects met here, each with its own fix:
+    //   1. no width → the span is a flex item that shrinks below its content, so
+    //      `1451` broke between the digits and read as two columns of numbers;
+    //   2. `white-space: nowrap` stops the break, but with `min-width: 5ch` and
+    //      `content-box` a four-digit number fills the whole box, the 1ch of
+    //      right padding is consumed, and the last digit lands ON the `+`/`-`
+    //      glyph (measured at 4x: the ink ended 4px past the glyph's left edge);
+    //   3. widening the box made it worse, because `text-align: right` moves the
+    //      digits outward — the padding has to come out of the width, not add to
+    //      it.
+    // `border-box` is what ties the two together: the 5ch floor INCLUDES the 8px
+    // right pad, so the digits keep their clearance at every digit count.
     '[data-cds-diffcard] [data-cds-diff-num] {',
-    '  padding: 0 1ch;',
+    '  padding: 0 8px 0 2px;',
     '  text-align: right;',
     '  color: var(--dsw-alias-label-caption);',
     '  font-size: 11px;',
     '  font-variant-numeric: tabular-nums;',
     '  user-select: none;',
+    '  white-space: nowrap;',
+    '  flex: none;',
+    '  min-width: 5ch;',
+    '  box-sizing: border-box;',
     '}',
     '[data-cds-diffcard] [data-kind="add"] [data-cds-diff-num] { color: var(--dsw-alias-state-success-primary); }',
     '[data-cds-diffcard] [data-kind="del"] [data-cds-diff-num] { color: var(--dsw-alias-state-error-primary); }',
@@ -2726,22 +2792,14 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
       settingsRules(),
     )
 
-    // ---- the opt-in looks (all OFF by default) ---------------------------
+    // ---- the opt-in look (OFF by default) --------------------------------
     //
     // THE MARKDOWN SCOPE paints only the assistant's lists/task lists,
     // emphasis and links; code blocks, inline chips, tool cards and genui cards
     // are excluded inside the rule text itself (`markdown-scope.js`). Everything
     // there is plain CSS — no marker, no observer — so the switch is exactly the
     // presence of these rules.
-    //
-    // THE VIEW-TABS PILL and THE COMPOSER SPLIT are each split in two halves on
-    // purpose: their rules are scoped to a `body` attribute that `lifecycle.js`
-    // writes. Emitting them while that mark is absent would be dead CSS, so each
-    // pair travels on one state key, and the host's own look stands whenever the
-    // key is false.
     if (state.markdownScope === true) parts.push(markdownScopeRules())
-    if (state.viewTabsPill === true) parts.push(tabsStyleRules())
-    if (state.composerSplit === true) parts.push(composerLayoutRules())
   }
 
   // ---- the solidified replication items: ALWAYS ON -------------------------
@@ -2762,11 +2820,10 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
     statTypographyRules(),
   )
 
-  // The `+N` / `−N` change counts take the UI family. OUTSIDE `refine` for the
-  // same class of reason the block above is: the host's own card is what comes
-  // back when refinement is off, so a rule inside the component half would be
-  // emitted exactly in the state that does not need it. See
-  // `diffStatFamilyRules()`.
+  // The `+N` / `−N` change counts. OUTSIDE `refine` for the same class of reason
+  // the block above is: the host's own card is what comes back when refinement
+  // is off, so a rule inside the component half would be emitted exactly in the
+  // state that does not need it. See `diffStatFamilyRules()`.
   //
   // APPENDED AT THE END on purpose: `motionTokenRules()` and the A/B-tier
   // baselines (`test/rule-baseline.mjs`) are byte-pinned slices of the sheet,

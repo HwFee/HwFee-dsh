@@ -108,9 +108,20 @@ function s(selector) {
  * What the block actually does is restore what a Markdown renderer normally
  * provides and the host's sheet leaves to the browser default: a 20px list
  * gutter, 4px between items, markers one ink tier down, and a 1px link rule
- * with 2px of air in the accent. Those are typographic judgements at the
+ * sitting 3px below the baseline. Those are typographic judgements at the
  * current body size (14/20), not measurements of anything. Leading is the
  * row's own. If a value here ever needs to match a source, cite the source.
+ *
+ * WHY 3px AND NOT 2px. A link is often immediately followed by an inline-code
+ * chip (a site name, then 查看文档), and at 2px the underline's ink band
+ * (offset 2, thickness 1 → 2–3px below the baseline) ended part-way up the
+ * chip's left border, which runs from roughly 12px above to 4.4px below the
+ * shared baseline (12px glyphs, 1px padding, .5px border). The two strokes met
+ * as a T: the user read them as touching. At 3px the band is 3–4px, so it
+ * terminates at the chip's bottom-left corner — aligned with the chip's lower
+ * edge instead of stabbing its side border. Going further would detach the rule
+ * from the text (the 14px descender floor is ~3.5px), so this is the far end of
+ * the range, not a starting point.
  *
  * @returns the rule text, `\n`-joined, ending with a blank line
  */
@@ -174,12 +185,32 @@ export function markdownScopeRules() {
     // The underline is the whole treatment; a chip inside the link keeps the
     // chip's own ink and fill from `codeRules()` (there is deliberately NO
     // `a[href] code` rule here — see the module comment).
+    //
+    // THE UNDERLINE NEEDS ROOM ON THE RIGHT, NOT BELOW.
+    //
+    // A link written as `[示例网站](…)` immediately followed by `` `查看文档` ``
+    // has NO whitespace between the two, so the underline's 1px rule runs to the
+    // link's last glyph, which is also where the inline code chip's left border
+    // begins. The two strokes met: measured on the live page at 4x, the underline
+    // ended inside the chip's border. Raising `text-underline-offset` moves the
+    // rule DOWN and leaves that horizontal collision untouched — the A/B shots
+    // at 0/2/3px look identical at the seam.
+    //
+    // `padding-inline-end` gives the link its own trailing space, so the
+    // underline stops before the chip. It belongs to the LINK, so the chip's box
+    // (from `codeRules()`, shared by every inline code in the app) never moves.
+    // 5px: 3px still read as touching at 4x, 5px leaves a clear gap; a link
+    // followed by a real space gains 5px more, which is not visible at body size.
+    //
+    // `text-underline-offset` stays at 3px — it is the descender-safe value
+    // (2px sat on the glyph tails), independent of this fix.
     s('a[href]') + ' {',
     '  color: var(--dsw-alias-state-business-primary);',
     '  text-decoration-line: underline;',
     '  text-decoration-thickness: 1px;',
     '  text-decoration-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);',
-    '  text-underline-offset: 2px;',
+    '  text-underline-offset: 3px;',
+    '  padding-inline-end: 5px;',
     '}',
     s('a[href]:hover') + ' {',
     '  text-decoration-color: var(--dsw-alias-state-business-primary);',

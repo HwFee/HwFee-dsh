@@ -33,7 +33,7 @@ import {
   COMPACT_CELL_CEIL,
   COMPACT_CELL_FLOOR,
   COMPACT_DEFAULT_BODY_HEIGHT,
-  COMPACT_FOOT_HEIGHT,
+  COMPACT_BOTTOM_GAP,
   COMPACT_HEAT_GAP,
   COMPACT_HEAT_ROWS,
   COMPACT_PAD,
@@ -96,7 +96,7 @@ test('the compact default height is the natural sum, and lands on the slider gri
   // not classic's 344: reusing 344 would leave ~92px of empty card and lose the
   // compact read entirely.
   assert.equal(compactFixedHeight(),
-    COMPACT_TILE_HEIGHT * 2 + COMPACT_TILE_GAP + COMPACT_BLOCK_GAP * 2 + COMPACT_FOOT_HEIGHT)
+    COMPACT_TILE_HEIGHT * 2 + COMPACT_TILE_GAP + COMPACT_BLOCK_GAP * 2 + COMPACT_BOTTOM_GAP)
   assert.equal(compactFixedHeight(), 136)
   // Seven 14px cells and the six gaps between them complete the card.
   const natural = compactFixedHeight() + COMPACT_HEAT_GAP * (COMPACT_HEAT_ROWS - 1)
@@ -175,7 +175,6 @@ test('compactVars emits only the column cap and the fixed block metrics', functi
   assert.equal(vars['--dus-compact-tile-h'], COMPACT_TILE_HEIGHT + 'px')
   assert.equal(vars['--dus-compact-tile-gap'], COMPACT_TILE_GAP + 'px')
   assert.equal(vars['--dus-compact-block-gap'], COMPACT_BLOCK_GAP + 'px')
-  assert.equal(vars['--dus-compact-foot-h'], COMPACT_FOOT_HEIGHT + 'px')
   assert.equal(vars['--dus-compact-heat-gap'], COMPACT_HEAT_GAP + 'px')
   // No height of the grid or of the card is ever written: both are outcomes.
   for (const name of Object.keys(vars)) {
@@ -217,49 +216,39 @@ test('each style keeps its own height, so neither rewrites the other', function 
   assert.equal(bodyHeightKey('classic'), 'bodyHeight')
 })
 
-test('switching style is instant, persists, and edits only the visible height', function () {
+test('the body height is FIXED per style, and the style switch persists', function () {
   const storage = makeStorage()
   const store = createSettingsStore(storage)
-  const shapes = []
-  store.subscribe(function (state) {
-    shapes.push([state.style, state.bodyHeight, state.compactBodyHeight])
-  })
 
-  // Switching writes the style and NOT a height: the compact card keeps its own.
+  // There is no height preference any more: each style carries its own number,
+  // and `bodyHeightOf` reports that number whatever the stored state says.
+  // Removing the slider was the point — a value under the design height either
+  // dropped heat rows or clipped the caption, both silently.
+  assert.equal(bodyHeightOf({ style: 'classic' }), DEFAULT_BODY_HEIGHT)
+  assert.equal(bodyHeightOf({ style: 'compact' }), COMPACT_DEFAULT_BODY_HEIGHT)
+  assert.equal(bodyHeightOf({ style: 'compact', compactBodyHeight: 288 }), COMPACT_DEFAULT_BODY_HEIGHT,
+    'a leftover persisted height is ignored, not honoured')
+  assert.equal(bodyHeightOf({ style: 'classic', bodyHeight: 520 }), DEFAULT_BODY_HEIGHT,
+    'and so is a leftover classic one')
+
+  // Picking a style still writes and persists, and never touches a height.
   assert.equal(store.setStyle('compact'), 'compact')
-  assert.deepEqual(shapes, [['compact', DEFAULT_BODY_HEIGHT, COMPACT_DEFAULT_BODY_HEIGHT]])
-  assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT,
-    'the classic height is untouched by picking compact')
   assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).style, 'compact',
     'the choice persists')
-
-  // While compact is showing, the height write lands on the compact field.
-  assert.equal(store.setBodyHeight(288), 288)
-  assert.equal(store.getState().compactBodyHeight, 288)
-  assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
-  assert.equal(bodyHeightOf(store.getState()), 288, 'and the panel renders that number')
-
-  // Switching back restores the classic height exactly as it was.
+  assert.equal(bodyHeightOf(store.getState()), COMPACT_DEFAULT_BODY_HEIGHT)
   store.setStyle('classic')
   assert.equal(bodyHeightOf(store.getState()), DEFAULT_BODY_HEIGHT)
-  assert.equal(store.getState().compactBodyHeight, 288, 'the compact height survives')
-
-  // A write aimed at a style explicitly cannot land on the other field even if
-  // the caller is a frame behind.
-  store.setBodyHeight(400, 'compact')
-  assert.equal(store.getState().compactBodyHeight, 400)
-  assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
 
   // Setting the same style twice notifies nobody.
   const before = store.getState()
   store.setStyle('classic')
   assert.equal(store.getState(), before, 'a no-op style write keeps the snapshot')
 
-  // A fresh store over the same storage reads both heights and the style back.
+  // A fresh store over the same storage reads the style back and reports the
+  // same fixed height.
   const remounted = createSettingsStore(storage)
   assert.equal(remounted.getState().style, 'classic')
-  assert.equal(remounted.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
-  assert.equal(remounted.getState().compactBodyHeight, 400)
+  assert.equal(bodyHeightOf(remounted.getState()), DEFAULT_BODY_HEIGHT)
 })
 
 test('bodyHeightStyle emits ONLY the active style\'s lengths', function () {
@@ -349,17 +338,19 @@ test('the stylesheet and the layout module agree on the compact card geometry', 
   assert.equal(paddings.length, 1, 'exactly one padding declaration: ' + paddings.join(' | '))
 })
 
-test('the caption reserves exactly one line, and truncates instead of being cut', function () {
-  // THE REGRESSION. At the compact default the body height is exactly
-  // `compactFixedHeight() + grid`, so the caption's share is ONE line box: 252 =
-  // 136 + 116 + 16, no slack. A caption that wrapped to two lines (a longer
-  // sentence, or the English locale) was cut through the second line's glyphs by
-  // `.dus-body { overflow: hidden }`, silently: no scrollbar, no ellipsis, no
-  // console warning. The fix is to keep the line a line and let it ellipsize, so
-  // the truncation is visible and the seven heat rows still get their pixels.
+test('the bottom strip is reserved but no caption is drawn, and the grid keeps its 14px cells', function () {
+  // THE REGRESSION THIS GUARDS. The compact body height is exactly
+  // `compactFixedHeight() + grid`: 252 = 136 + 116. The 16px inside the 136 was
+  // the caption's line box, and the caption is now gone. Dropping the
+  // reservation WITH the caption would have enlarged every heat square
+  // (14px → 15px, `COMPACT_CELL_CEIL`) and pulled the seven rows taller — the
+  // user asked for the line to go, not for the grid to grow. So the reservation
+  // stays and the strip simply stands empty under the grid.
   const layout = compactLayout(COMPACT_DEFAULT_BODY_HEIGHT)
   assert.equal(layout.height, compactFixedHeight() + layout.band,
-    'the default body is exactly fixed blocks + grid: the caption gets one line, zero slack')
+    'the default body is still exactly fixed blocks + grid')
+  assert.equal(layout.cell, 14, 'the grid still draws 14px cells')
+  assert.equal(COMPACT_BOTTOM_GAP, 16, 'the strip is the reservation the caption left behind')
 
   const rules = cssRules(PANEL_CSS)
   const find = function (selector) {
@@ -368,33 +359,19 @@ test('the caption reserves exactly one line, and truncates instead of being cut'
     return rule
   }
 
-  const foot = find('[data-dus-style="compact"] .dus-foot')
-  // The box is the line box: no padding, no divider, and a height pinned to the
-  // same token the arithmetic reserves — so what is reserved and what is painted
-  // are the same number rather than merely usually equal.
-  assert.match(foot.body, /padding-top:\s*0/)
-  assert.match(foot.body, /border-top:\s*0/)
-  assert.match(foot.body, /height:\s*var\(--dus-compact-foot-h,\s*16px\)/,
-    'the caption box is pinned to the reserved line height')
-  assert.match(foot.body, /line-height:\s*var\(--dus-compact-foot-h,\s*16px\)/,
-    'and its leading is that same height, so the one line fills it exactly')
-  assert.match(foot.body, /overflow:\s*hidden/)
-  assert.match(foot.body, /flex:\s*none/,
-    'the caption cannot be squeezed by the flex column it sits in')
+  // No caption rule survives in either style, in any scope.
+  assert.ok(!/\.dus-foot\b/.test(PANEL_CSS), 'no classic caption rule')
+  assert.ok(!/dus-foot-line/.test(PANEL_CSS), 'no caption line rule')
+  assert.ok(!rules.some(function (rule) { return /dus-foot/.test(rule.selector) }),
+    'no compact caption rule either')
 
-  const line = find('[data-dus-style="compact"] .dus-foot-line')
-  assert.match(line.body, /white-space:\s*nowrap/,
-    'the sentence never wraps: a second line has nowhere to go')
-  assert.match(line.body, /overflow:\s*hidden/)
-  assert.match(line.body, /text-overflow:\s*ellipsis/,
-    'a too-long sentence is truncated VISIBLY, not cut mid-glyph')
+  // The strip is a BUDGET, not a painted length, so it is not emitted as a
+  // custom property: an unused var invites a rule to start reading it.
+  assert.equal(compactVars(COMPACT_DEFAULT_BODY_HEIGHT)['--dus-compact-bottom-gap'],
+    undefined, 'the strip is budgeted in JS only')
 
-  // The reserved height the sheet reads is the module's constant.
-  assert.equal(compactVars(COMPACT_DEFAULT_BODY_HEIGHT)['--dus-compact-foot-h'],
-    COMPACT_FOOT_HEIGHT + 'px')
-
-  // The body still clips, which is WHY the caption must be one line: removing the
-  // clip would let a long caption grow the panel past its persisted height.
+  // The body still clips at its persisted height, which is what makes the fixed
+  // height the contract rather than a suggestion.
   const body = find('.dus-body')
   assert.match(body.body, /height:\s*var\(--dus-body-height/)
   assert.match(body.body, /overflow:\s*hidden/)
@@ -404,15 +381,20 @@ test('every compact rule is scoped, so the classic sheet is untouched', function
   const compactRules = cssRules(PANEL_CSS).filter(function (rule) {
     return /dus-root\[data-dus-style|\[data-dus-style="compact"\]/.test(rule.selector)
   })
-  assert.ok(compactRules.length > 20, 'the compact block should be substantial')
+  // A floor, not a target: this guards against the block silently vanishing.
+  // It is 20 today because the compact rules now carry only what DIFFERS from
+  // classic — the head chip and the tile geometry became the base rules (they
+  // are the reference's own numbers), so their compact copies were deleted
+  // rather than left to drift.
+  assert.ok(compactRules.length >= 18, 'the compact block should be substantial')
 
-  // The classic `.dus-card` / `.dus-heat` / `.dus-foot` rules the shipped panel
-  // relies on must be the same declarations they always were: a compact block
-  // that edited them in place would restyle the default look.
+  // The classic `.dus-card` / `.dus-heat` rules the shipped panel relies on must
+  // be the same declarations they always were: a compact block that edited them
+  // in place would restyle the default look.
   const card = cssRules(PANEL_CSS).filter(function (rule) { return rule.selector === '.dus-card' })
   assert.equal(card.length, 1, 'exactly one unscoped .dus-card rule')
-  assert.match(card[0].body, /background:\s*var\(--dsw-alias-bg-module-platform\)/,
-    'the classic tile keeps its filled surface')
+  assert.match(card[0].body, /color-mix\(in srgb, var\(--dsw-alias-label-primary\) 11%,/,
+    'the classic tile keeps its own deeper fill')
   const heat = cssRules(PANEL_CSS).filter(function (rule) { return rule.selector === '.dus-heat' })
   assert.equal(heat.length, 1, 'exactly one unscoped .dus-heat rule')
   assert.match(heat[0].body, /background:\s*var\(--dsw-alias-bg-module-platform\)/,
@@ -426,7 +408,8 @@ test('every compact rule is scoped, so the classic sheet is untouched', function
   }
   assert.ok(scoped('dus-card'), 'the compact style overrides the tile')
   assert.ok(scoped('dus-heat'), 'the compact style overrides the band')
-  assert.ok(scoped('dus-foot'), 'the compact style overrides the caption')
+  // The caption has no compact override because it has no rule at all any more.
+  assert.ok(!scoped('dus-foot'), 'the removed caption has no compact rule')
 })
 
 test('the compact look is a flat card with no band and no divider', function () {
@@ -449,9 +432,6 @@ test('the compact look is a flat card with no band and no divider', function () 
   const heat = find('dus-heat')
   assert.match(heat.body, /background:\s*transparent/)
   assert.match(heat.body, /padding:\s*0/)
-  // Caption: no divider above it.
-  const foot = find('dus-foot')
-  assert.match(foot.body, /border-top:\s*0/)
   // Tiles are one tone deeper than the wash.
   const card = find('dus-card')
   assert.match(card.body, /color-mix\(in srgb, var\(--dsw-alias-label-primary\) 15%,/,
@@ -593,22 +573,23 @@ test('the root carries the style attribute AND the width the stylesheet targets'
     'the compact card is sized by the compact height, not by classic\'s 344')
 })
 
-test('the compact height follows its own setting without touching the classic one', function () {
+test('the compact card renders at its own fixed height, and classic at 344', function () {
   const store = createSettingsStore(makeStorage())
   store.setStyle('compact')
+  // A stale slider value from an older build must not resize anything.
   store.setBodyHeight(288)
   const panelEl = flatten(renderPanel(store))
     .find(function (node) { return node.props?.className === 'dus-panel' })
-  assert.equal(panelEl.props.style['--dus-body-height'], '288px',
-    'the slider really does resize the compact card')
-  assert.equal(panelEl.props.style['--dus-compact-cell'], '15px',
-    'and the extra room grows the cells up to the ceiling')
+  assert.equal(panelEl.props.style['--dus-body-height'], COMPACT_DEFAULT_BODY_HEIGHT + 'px',
+    'the compact card keeps its designed 252px whatever is stored')
+  assert.equal(panelEl.props.style['--dus-compact-cell'], '14px',
+    'and the cells stay at the size that ratio implies')
 
   store.setStyle('classic')
   const classicEl = flatten(renderPanel(store))
     .find(function (node) { return node.props?.className === 'dus-panel' })
   assert.equal(classicEl.props.style['--dus-body-height'], DEFAULT_BODY_HEIGHT + 'px',
-    'switching back restores the classic height exactly')
+    'classic renders at 344')
 })
 
 test('every metric tile is named, so the compact model tile can drop its emphasis', function () {
@@ -638,7 +619,7 @@ test('the style row sits above the height row, and the shipped ids keep their or
   assert.ok(SETTINGS_ROW_ORDER < UNITS_ROW_ORDER)
 })
 
-test('all three rows register together, in reading order, on the same page', function () {
+test('both rows register together, in reading order, on the same page', function () {
   const registrations = []
   const store = createSettingsStore(makeStorage())
   const slots = {
@@ -665,10 +646,12 @@ test('all three rows register together, in reading order, on the same page', fun
   const rows = registrations.filter(function (row) {
     return row.options.name === 'settings.appearance.item'
   })
+  // Two rows, not three: the height slider is gone, because each style's height
+  // is part of its design rather than a preference.
   assert.deepEqual(rows.map(function (row) { return row.options.id }),
-    [STYLE_ROW_ID, SETTINGS_ROW_ID, UNITS_ROW_ID], 'one list, in reading order')
+    [STYLE_ROW_ID, UNITS_ROW_ID], 'one list, in reading order')
   assert.deepEqual(rows.map(function (row) { return row.options.order }),
-    [STYLE_ROW_ORDER, SETTINGS_ROW_ORDER, UNITS_ROW_ORDER])
+    [STYLE_ROW_ORDER, UNITS_ROW_ORDER])
   for (const row of rows) {
     assert.equal(row.options.locale, 'dsh-usage-stats')
   }
@@ -712,66 +695,6 @@ test('the style row renders two buttons and the chosen one is marked', function 
   buttons[1].props.onClick()
   assert.equal(store.getState().style, 'compact')
 })
-
-test('the height row sizes the style in view and says which one it is', function () {
-  const registrations = []
-  const store = createSettingsStore(makeStorage())
-  const slots = {
-    inject(key, callback) { callback(); return function () {} },
-    register(options, component) {
-      registrations.push({ options: options, component: component })
-      return function () {}
-    },
-  }
-  createLifecycle({
-    React: makeReactStub(),
-    primitives: {},
-    panel: { Panel: function () { return null } },
-    fetchSummary: function () {},
-    peekSummary: function () { return null },
-    settings: store,
-  })({
-    slots: slots,
-    locale: { register: function () { return function () {} } },
-    effect: function (fn) { fn(); return function () {} },
-  })
-
-  const heightRow = registrations.filter(function (row) { return row.options.id === SETTINGS_ROW_ID })[0]
-  const read = function () {
-    const tree = heightRow.component({ t: function (key) { return key } })
-    const nodes = flatten(tree)
-    return {
-      slider: nodes.find(function (node) { return node.props?.className === 'dus-row-slider' }),
-      value: nodes.find(function (node) { return node.props?.className === 'dus-row-value' }),
-    }
-  }
-
-  // Classic: the shipped 344.
-  const classic = read()
-  assert.equal(classic.slider.props.value, DEFAULT_BODY_HEIGHT)
-  assert.equal(classic.slider.props['data-style'], 'classic')
-  assert.equal(classic.value.props.children, DEFAULT_BODY_HEIGHT + ' px')
-
-  // Compact: the slider shows the compact card's own height, not classic's.
-  store.setStyle('compact')
-  const compact = read()
-  assert.equal(compact.slider.props.value, COMPACT_DEFAULT_BODY_HEIGHT,
-    'the readout is the height actually rendered')
-  assert.equal(compact.slider.props['data-style'], 'compact')
-  assert.equal(compact.value.props.children, COMPACT_DEFAULT_BODY_HEIGHT + ' px')
-
-  // Dragging writes the compact field and leaves classic's value alone.
-  compact.slider.props.onChange({ target: { value: '300' } })
-  assert.equal(store.getState().compactBodyHeight, 300)
-  assert.equal(store.getState().bodyHeight, DEFAULT_BODY_HEIGHT)
-  assert.equal(read().value.props.children, '300 px', 'the readout updates')
-
-  // Back in classic the slider shows 344 again, not 300.
-  store.setStyle('classic')
-  assert.equal(read().slider.props.value, DEFAULT_BODY_HEIGHT)
-})
-
-// ------------------------------------------------------------ the copy
 
 test('both dictionaries name the style row, in one language each', function () {
   const CJK = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/

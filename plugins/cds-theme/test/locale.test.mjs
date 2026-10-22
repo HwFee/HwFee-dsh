@@ -184,15 +184,15 @@ function paramsChildren(props) {
   return props && Object.hasOwn(props, 'children') ? props.children : []
 }
 
-test('the panel registers the fourteen rows with stable ids and order', function () {
+test('the panel registers the twelve rows with stable ids and order', function () {
   const panel = createRowPanel()
-  // 13 appearance rows + the master switch. EVERY retired replication row is
+  // 11 appearance rows + the master switch. EVERY retired replication row is
   // gone: four were deleted because their effects could not be seen, three were
   // solidified into unconditional rules at the user's request, and the
   // hero-compaction switch was retired with its runtime. The blank-session
-  // backdrop is a live replication item, so it carries its own comparison switch
-  // — and so do this wave's two opt-in looks (assistant markdown scope, view
-  // tabs pill), both defaulting to off.
+  // backdrop is a live replication item, so it carries its own comparison switch,
+  // and so does the assistant markdown scope (off by default). The view-tabs pill
+  // and the split composer were removed outright, rows included.
   const ids = panel.slots.map(function (slot) { return slot.id })
   assert.deepEqual(ids, [
     'dsh-cds-theme-mode',
@@ -207,10 +207,8 @@ test('the panel registers the fourteen rows with stable ids and order', function
     'dsh-cds-theme-prefer-theme-cjk',
     'dsh-cds-theme-hero-ripple',
     'dsh-cds-theme-markdown-scope',
-    'dsh-cds-theme-view-tabs-pill',
-    'dsh-cds-theme-composer-split',
   ])
-  assert.equal(panel.slots.length, 14)
+  assert.equal(panel.slots.length, 12)
   const orders = panel.slots.map(function (slot) { return slot.order })
   assert.deepEqual(orders, orders.slice().sort(function (a, b) { return a - b }),
     'rows must be ordered so the block reads top to bottom')

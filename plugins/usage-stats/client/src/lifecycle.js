@@ -10,13 +10,10 @@
 
 import { installPanelCss, removePanelCss } from './styles.js'
 import { LOCALE_NS, en, zh } from './locales.js'
-import {
-  BODY_HEIGHT_STEP, MAX_BODY_HEIGHT, MIN_BODY_HEIGHT,
-  bodyHeightOf, isCompact, unitsForSwitch, unitsIsOn,
-} from './settings.js'
+import { unitsForSwitch, unitsIsOn } from './settings.js'
 import { registerSettingsRows } from './settings-slot.js'
 import {
-  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, STYLE_ROW_ID, STYLE_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
+  STYLE_ROW_ID, STYLE_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
 } from './constants.js'
 
 /**
@@ -76,56 +73,6 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
       peekSummary: peekSummary,
       t: props.t,
     })
-  }
-
-  /**
-   * The settings row that edits the panel body height.
-   *
-   * ONE control, because the value is one number: a range input over
-   * 240–520 px in steps of 4, with the live readout beside it. `t` comes from
-   * the registration's `locale:` field (re-rendered on a language switch), and
-   * the store subscription is what makes the value shared: dragging here
-   * re-renders the hero panel too, which rewrites `--dus-body-height`.
-   *
-   * IT SIZES THE STYLE IN VIEW, AND ONLY THAT ONE. Each style keeps its own
-   * height (`bodyHeight` / `compactBodyHeight`), so switching to compact shows
-   * the compact card's own 252px rather than inheriting classic's 344 — which
-   * would either squash the compact card or leave the slider editing a value
-   * the user cannot see. The row passes the style it read explicitly, so the
-   * write lands on the right field even if the two React trees disagree about
-   * the current style for a frame. The description names the range and the fact
-   * that it applies immediately; the readout is always the rendered height.
-   */
-  function PanelHeightRow(props) {
-    const t = typeof props.t === 'function' ? props.t : fallbackTranslate
-    const state = React.useSyncExternalStore(settings.subscribe, settings.getState)
-    const style = state.style
-    const height = bodyHeightOf(state)
-    const span = MAX_BODY_HEIGHT - MIN_BODY_HEIGHT
-    const fill = span > 0 ? Math.round(((height - MIN_BODY_HEIGHT) / span) * 100) : 0
-    return React.createElement('div', { className: 'dus-row' },
-      React.createElement('div', { className: 'dus-row-text' },
-        React.createElement('div', { className: 'dus-row-title' }, t('settings.height.title')),
-        React.createElement('div', { className: 'dus-row-desc' }, t('settings.height.desc'))),
-      React.createElement('div', { className: 'dus-row-control' },
-        React.createElement('input', {
-          type: 'range',
-          className: 'dus-row-slider',
-          min: MIN_BODY_HEIGHT,
-          max: MAX_BODY_HEIGHT,
-          step: BODY_HEIGHT_STEP,
-          value: height,
-          'aria-label': t('settings.height.title'),
-          'aria-valuetext': height + ' px',
-          // The style this slider was rendered for: the readout and the write
-          // then cannot disagree about which field they belong to.
-          'data-style': isCompact(style) ? 'compact' : 'classic',
-          style: { '--dus-fill': fill + '%' },
-          onChange: function (event) {
-            settings.setBodyHeight(parseInt(event.target.value, 10), style)
-          },
-        }),
-        React.createElement('span', { className: 'dus-row-value' }, height + ' px')))
   }
 
   /**
@@ -277,9 +224,13 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
       ctx.effect(function () {
         const placement = registerSettingsRows({
           slots: slots,
+          // The height row is deliberately absent: both styles are FIXED at
+          // their designed heights (classic 344px, compact 252px). A slider let
+          // the reader shrink the card until the heat band lost rows or the
+          // caption clipped, and those failures were silent; the number is now
+          // the style's own contract, not a preference.
           rows: [
             { id: STYLE_ROW_ID, order: STYLE_ROW_ORDER, component: StyleRow },
-            { id: SETTINGS_ROW_ID, order: SETTINGS_ROW_ORDER, component: PanelHeightRow },
             { id: UNITS_ROW_ID, order: UNITS_ROW_ORDER, component: UnitRow },
           ],
           warn: warnOnce,

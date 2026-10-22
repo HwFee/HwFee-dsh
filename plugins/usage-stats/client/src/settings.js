@@ -180,9 +180,24 @@ export function sanitizeSettings(raw) {
  * Both the panel and the height row go through this, so the slider's readout and
  * the rendered box can never name different numbers.
  */
+/**
+ * The body height for the style in view — ALWAYS the style's own default.
+ *
+ * The height is a fixed part of each style's design, not a preference. The two
+ * cards are built around their number (`136 + 116 + 16 = 252` for compact; the
+ * classic card's grid and heat band at 344), so any other value either clips
+ * the caption or drops heat rows — both silently, because the body hides its
+ * overflow. The persisted `bodyHeight` / `compactBodyHeight` fields are still
+ * read and written by nothing, and a leftover value from an older build is
+ * ignored on purpose: honouring it would restore exactly the clipping the fixed
+ * height removes.
+ *
+ * @param state the settings snapshot (only its `style` is consulted)
+ * @returns the style's designed body height in px
+ */
 export function bodyHeightOf(state) {
   const source = state && typeof state === 'object' ? state : {}
-  return isCompact(source.style) ? source.compactBodyHeight : source.bodyHeight
+  return isCompact(source.style) ? COMPACT_DEFAULT_BODY_HEIGHT : DEFAULT_BODY_HEIGHT
 }
 
 /** The state key the height row writes for the style in view. */

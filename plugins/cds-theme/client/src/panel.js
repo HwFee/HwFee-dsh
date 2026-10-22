@@ -512,7 +512,8 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       // ORDER 45 is free: 44 is the backdrop above, 42 is retired. The row is a
       // look-only switch — the rules it gates live in `markdown-scope.js` and are
       // emitted inside `refine` (styles.js), so turning refinement off removes
-      // the look without touching this setting.
+      // the look without touching this setting. Orders 46 and 47 are vacant: the
+      // view-tabs pill and the split composer were removed outright.
       id: 'dsh-cds-theme-markdown-scope',
       order: 45,
       key: 'markdownScope',
@@ -524,57 +525,6 @@ export function createPanel({ React, primitives, settings, themeMode }) {
             key: 'markdownScope',
             titleKey: 'markdownScope.title',
             descKey: 'markdownScope.desc',
-          },
-          t: props.t,
-        })
-      },
-    },
-    {
-      // The 「对话 / 轨迹」 strip's look. The switch decides the LOOK only: the
-      // strip appears or disappears on the host's own 「显示代码工作视图」
-      // setting, which this plugin never writes. Off (the default) is the host's
-      // underline tabs.
-      //
-      // ORDER 46, after the markdown row. The body mark this gates is written by
-      // lifecycle.js; the rules live in `viewtabs.js`.
-      id: 'dsh-cds-theme-view-tabs-pill',
-      order: 46,
-      key: 'viewTabsPill',
-      titleKey: 'viewTabsPill.title',
-      descKey: 'viewTabsPill.desc',
-      component: function BoundToggle(props) {
-        return React.createElement(ToggleRow, {
-          slot: {
-            key: 'viewTabsPill',
-            titleKey: 'viewTabsPill.title',
-            descKey: 'viewTabsPill.desc',
-          },
-          t: props.t,
-        })
-      },
-    },
-    {
-      // The composer's layout: false keeps the shipped single card; true puts
-      // the text box in its own frame, the host's control row on a band beneath
-      // it, and the statistics dock one line under both. The key existed in this
-      // wave WITHOUT a row — the repository audit flags exactly that ("a switch
-      // the user cannot compare against the host treatment"), and this row is
-      // the fix.
-      //
-      // ORDER 47, after the markdown (45) and pill (46) rows. What it gates is a
-      // body attribute plus pure CSS (`composer-layout.js`): no node is moved,
-      // cloned or measured, and no observer is added.
-      id: 'dsh-cds-theme-composer-split',
-      order: 47,
-      key: 'composerSplit',
-      titleKey: 'composerSplit.title',
-      descKey: 'composerSplit.desc',
-      component: function BoundToggle(props) {
-        return React.createElement(ToggleRow, {
-          slot: {
-            key: 'composerSplit',
-            titleKey: 'composerSplit.title',
-            descKey: 'composerSplit.desc',
           },
           t: props.t,
         })
@@ -607,6 +557,12 @@ export function createPanel({ React, primitives, settings, themeMode }) {
     // above (long paste → file, 39) is a feature, not a retired replication
     // item; order 42 is vacant again now that the hero-compaction switch is
     // retired (see the note beside `newSessionInputRules` in styles.js).
+    //
+    // Orders 46 and 47 are now vacant: the view-tabs pill and the split
+    // composer were removed outright at the user's request, rows and rules
+    // together. They are not retired — there is nothing left to retire — and a
+    // future row may NOT take those numbers either, for the same reason the
+    // numbers above stay unused.
   ]
 
   // ------------------------------------------------------- slot placement

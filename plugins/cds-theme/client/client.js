@@ -172,13 +172,10 @@ window.__ModuleLoader__.load({
       pasteAsFile: true,
       preferThemeCjk: true,
       heroRipple: true,
-      // The three looks the user asked for, each OFF at the start so installing
-      // this version cannot change the interface on its own: the scope rules paint
-      // the assistant's lists/emphasis/links, the pill restyles the view tabs, and
-      // the split lifts the composer's toolbar out of the text box.
-      markdownScope: false,
-      viewTabsPill: false,
-      composerSplit: false
+      // The assistant markdown look, OFF at the start so installing this version
+      // cannot change the interface on its own: the scope rules paint the
+      // assistant's lists/emphasis/links, and nothing else.
+      markdownScope: false
     };
     var ACCENT_IDS = ["clay", "ochre", "sand", "graphite"];
     function clampWarmth(value) {
@@ -217,11 +214,9 @@ window.__ModuleLoader__.load({
         preferThemeCjk: input.preferThemeCjk === void 0 ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
         // The blank-session backdrop defaults on; a stored false turns it off.
         heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
-        // The three new looks are opt-in: only an explicit `true` turns one on, so
-        // a payload written by an older version can never light them up.
-        markdownScope: input.markdownScope === true,
-        viewTabsPill: input.viewTabsPill === true,
-        composerSplit: input.composerSplit === true
+        // The markdown look is opt-in: only an explicit `true` turns it on, so a
+        // payload written by an older version can never light it up.
+        markdownScope: input.markdownScope === true
         // Any other key in an old payload is ignored. Every retired switch field is
         // dropped here: `compactHero` (its runtime is gone — the new-session layout
         // is CSS-only, see `newSessionInputRules` in styles.js, and a stored value
@@ -231,6 +226,9 @@ window.__ModuleLoader__.load({
         // `concentricRadius`, `disclosurePolish`). The solid ones no longer have an
         // off state to read, and the deleted ones have no rules to gate — so a
         // stored value for any of them can never resurrect as an invisible mode.
+        // The looks that were removed with their rules (view-tabs pill, split
+        // composer) are dropped the same way: a stored `true` has nothing left to
+        // turn on, and the key never reappears in a saved payload.
       };
     }
 
@@ -2491,485 +2489,35 @@ window.__ModuleLoader__.load({
         // The underline is the whole treatment; a chip inside the link keeps the
         // chip's own ink and fill from `codeRules()` (there is deliberately NO
         // `a[href] code` rule here — see the module comment).
+        //
+        // THE UNDERLINE NEEDS ROOM ON THE RIGHT, NOT BELOW.
+        //
+        // A link written as `[示例网站](…)` immediately followed by `` `查看文档` ``
+        // has NO whitespace between the two, so the underline's 1px rule runs to the
+        // link's last glyph, which is also where the inline code chip's left border
+        // begins. The two strokes met: measured on the live page at 4x, the underline
+        // ended inside the chip's border. Raising `text-underline-offset` moves the
+        // rule DOWN and leaves that horizontal collision untouched — the A/B shots
+        // at 0/2/3px look identical at the seam.
+        //
+        // `padding-inline-end` gives the link its own trailing space, so the
+        // underline stops before the chip. It belongs to the LINK, so the chip's box
+        // (from `codeRules()`, shared by every inline code in the app) never moves.
+        // 5px: 3px still read as touching at 4x, 5px leaves a clear gap; a link
+        // followed by a real space gains 5px more, which is not visible at body size.
+        //
+        // `text-underline-offset` stays at 3px — it is the descender-safe value
+        // (2px sat on the glyph tails), independent of this fix.
         s("a[href]") + " {",
         "  color: var(--dsw-alias-state-business-primary);",
         "  text-decoration-line: underline;",
         "  text-decoration-thickness: 1px;",
         "  text-decoration-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);",
-        "  text-underline-offset: 2px;",
+        "  text-underline-offset: 3px;",
+        "  padding-inline-end: 5px;",
         "}",
         s("a[href]:hover") + " {",
         "  text-decoration-color: var(--dsw-alias-state-business-primary);",
-        "}",
-        ""
-      ].join("\n");
-    }
-
-    // client/src/viewtabs.js
-    var TABS_ATTR = "data-cds-view-tabs";
-    var TABS_PILL = "pill";
-    var TABS_SELECTOR = "[data-conversation-tabs]";
-    function applyTabsStyle(doc, style) {
-      const body = doc && doc.body;
-      if (!body || typeof body.setAttribute !== "function") return false;
-      if (style === TABS_PILL) {
-        if (typeof body.getAttribute !== "function" || body.getAttribute(TABS_ATTR) !== TABS_PILL) {
-          body.setAttribute(TABS_ATTR, TABS_PILL);
-        }
-        return true;
-      }
-      if (typeof body.hasAttribute === "function" && body.hasAttribute(TABS_ATTR)) {
-        body.removeAttribute(TABS_ATTR);
-      }
-      return false;
-    }
-    function createTabsStyleController(options) {
-      const doc = options && options.doc;
-      const getState = options && typeof options.getState === "function" ? options.getState : function() {
-        return {};
-      };
-      const subscribe = options && typeof options.subscribe === "function" ? options.subscribe : null;
-      let off = null;
-      function wanted() {
-        const state = getState() || {};
-        return state.enabled !== false && state.viewTabsPill === true;
-      }
-      function sync() {
-        applyTabsStyle(doc, wanted() ? TABS_PILL : "host");
-      }
-      return {
-        start() {
-          if (off !== null) return;
-          sync();
-          if (subscribe !== null) off = subscribe(sync);
-        },
-        sync,
-        stop() {
-          if (typeof off === "function") off();
-          off = null;
-          applyTabsStyle(doc, "host");
-        },
-        get applied() {
-          const body = doc && doc.body;
-          return !!(body && typeof body.getAttribute === "function" && body.getAttribute(TABS_ATTR) === TABS_PILL);
-        }
-      };
-    }
-    function tabsStyleRules() {
-      const root = "body[" + TABS_ATTR + '="' + TABS_PILL + '"] ';
-      const strip = root + TABS_SELECTOR;
-      const darkRoot = "body[" + TABS_ATTR + '="' + TABS_PILL + '"][data-ds-dark-theme] ';
-      return [
-        "/* ---- view tabs: the reference pill, opt-in only ------------------- */",
-        strip + " {",
-        "  display: inline-flex;",
-        // The shrink that `inline-flex` cannot do as a grid item — see the header.
-        "  justify-self: start;",
-        "  align-items: center;",
-        "  gap: 2px;",
-        "  padding: 2px;",
-        "  border-radius: 7px;",
-        "  background: var(--dsw-specific-selector);",
-        "}",
-        // The host draws its underline on ::after and its accent on the text; both
-        // have to go for a pill, and both come back the moment the mark is removed,
-        // because none of this is emitted for the host style.
-        strip + ' > button[role="tab"] {',
-        "  border: none;",
-        "  background: transparent;",
-        "  color: var(--dsw-alias-label-tertiary);",
-        "  font-size: 13px;",
-        "  font-weight: 500;",
-        "  line-height: 16px;",
-        "  padding: 3px 12px 4px;",
-        "  border-radius: 5px;",
-        "  transition: color 120ms cubic-bezier(0.16, 1, 0.3, 1),",
-        "    background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);",
-        "}",
-        strip + ' > button[role="tab"]::after {',
-        "  display: none;",
-        "}",
-        strip + ' > button[role="tab"]:hover {',
-        "  color: var(--dsw-alias-label-primary);",
-        "}",
-        strip + ' > button[role="tab"][aria-selected="true"] {',
-        "  color: var(--dsw-alias-label-primary);",
-        "  background: var(--dsw-alias-bg-overlay);",
-        "  box-shadow: var(--dsw-elevation-soft);",
-        "}",
-        // Dark: the trough is the translucent hover wash the host uses on dark
-        // surfaces, and the selected plate is the raised layer — the same two tiers
-        // the light pair reads as, so neither palette needs a literal colour.
-        darkRoot + TABS_SELECTOR + " {",
-        "  background: var(--dsw-alias-interactive-bg-hover);",
-        "}",
-        darkRoot + TABS_SELECTOR + ' > button[role="tab"][aria-selected="true"] {',
-        "  background: var(--dsw-alias-bg-layer-3);",
-        "  box-shadow: none;",
-        "}",
-        "@media (prefers-reduced-motion: reduce) {",
-        "  " + strip + ' > button[role="tab"] {',
-        "    transition: none;",
-        "  }",
-        "}",
-        ""
-      ].join("\n");
-    }
-
-    // client/src/composer-layout.js
-    var COMPOSER_LAYOUT_ATTR = "data-cds-composer-layout";
-    var COMPOSER_LAYOUT_SPLIT = "split";
-    var COMPOSER_STACK_ATTR = "data-cds-composer-stack";
-    var COMPOSER_ROW_ATTR = "data-cds-composer-row";
-    var COMPOSER_NARROW_ATTR = "data-cds-composer-narrow";
-    var ROW_TOP_VAR = "--cds-row-top";
-    var ROW_HEIGHT_VAR = "--cds-row-height";
-    var DOCK_INSET_LEFT_VAR = "--cds-dock-inset-left";
-    var DOCK_INSET_RIGHT_VAR = "--cds-dock-inset-right";
-    var CARD = "[data-composer-card]";
-    var DOCK = "[data-composer-dock]";
-    var TEXT_PORT = "[data-input-scroll]";
-    var LEFT_SLOT = '[data-slot="conversation.input.permission"]';
-    var RIGHT_SLOT = '[data-slot="conversation.input.model"]';
-    var MIN_CENTRE_GAP = 220;
-    var AIR = 8;
-    function findControlRow(card) {
-      if (!card || typeof card.querySelector !== "function") return null;
-      const left = card.querySelector(LEFT_SLOT);
-      const right = card.querySelector(RIGHT_SLOT);
-      if (left === null || right === null) return null;
-      let node = left;
-      while (node !== null && node !== card) {
-        if (typeof node.contains === "function" && node.contains(right)) return node;
-        node = node.parentElement;
-      }
-      return null;
-    }
-    function findCluster(row, slot) {
-      if (!row || slot === null || slot === void 0) return null;
-      let node = slot;
-      let guard = 0;
-      while (node !== null && node !== row && guard < 64) {
-        if (node.parentElement === row) return node;
-        node = node.parentElement;
-        guard += 1;
-      }
-      return slot;
-    }
-    function measureDockContent(dock) {
-      if (!dock || !dock.children) return 0;
-      const kids = Array.prototype.slice.call(dock.children);
-      if (kids.length < 2) return 0;
-      const first = kids[0];
-      const last = kids[kids.length - 1];
-      if (typeof first.getBoundingClientRect !== "function" || typeof last.getBoundingClientRect !== "function") return 0;
-      const left = first.getBoundingClientRect().left;
-      const right = last.getBoundingClientRect().right;
-      const width = Math.round(right - left);
-      return Number.isFinite(width) && width > 0 ? width : 0;
-    }
-    function findComposerParts(doc) {
-      if (!doc || typeof doc.querySelector !== "function") return null;
-      const card = doc.querySelector(CARD);
-      if (card === null) return null;
-      const dock = doc.querySelector(DOCK);
-      if (dock === null) return null;
-      const ancestors = [];
-      let node = card.parentElement;
-      while (node !== null) {
-        ancestors.push(node);
-        node = node.parentElement;
-      }
-      for (const candidate of ancestors) {
-        if (typeof candidate.contains === "function" && candidate.contains(dock)) {
-          return { card, dock, stack: candidate };
-        }
-      }
-      return null;
-    }
-    function applyComposerLayout(doc, layout) {
-      const body = doc && doc.body;
-      if (!body || typeof body.setAttribute !== "function") return false;
-      if (layout === COMPOSER_LAYOUT_SPLIT) {
-        if (typeof body.getAttribute !== "function" || body.getAttribute(COMPOSER_LAYOUT_ATTR) !== COMPOSER_LAYOUT_SPLIT) {
-          body.setAttribute(COMPOSER_LAYOUT_ATTR, COMPOSER_LAYOUT_SPLIT);
-        }
-        return true;
-      }
-      if (typeof body.hasAttribute === "function" && body.hasAttribute(COMPOSER_LAYOUT_ATTR)) {
-        body.removeAttribute(COMPOSER_LAYOUT_ATTR);
-      }
-      return false;
-    }
-    function createRowAlignment(options) {
-      const doc = options && options.document;
-      const RO = options.ResizeObserver === void 0 ? typeof ResizeObserver === "function" ? ResizeObserver : null : options.ResizeObserver;
-      const view = doc && doc.defaultView ? doc.defaultView : null;
-      const requestFrame = options.requestFrame !== void 0 ? options.requestFrame : view && typeof view.requestAnimationFrame === "function" ? function(run) {
-        return view.requestAnimationFrame(run);
-      } : function(run) {
-        return setTimeout(run, 16);
-      };
-      const cancelFrame = options.cancelFrame !== void 0 ? options.cancelFrame : view && typeof view.cancelAnimationFrame === "function" ? function(id) {
-        view.cancelAnimationFrame(id);
-      } : function(id) {
-        clearTimeout(id);
-      };
-      let stack = null;
-      let card = null;
-      let row = null;
-      let observer = null;
-      let frame = null;
-      let last = null;
-      function releaseMarks() {
-        if (observer !== null) {
-          observer.disconnect();
-          observer = null;
-        }
-        if (frame !== null) {
-          cancelFrame(frame);
-          frame = null;
-        }
-        if (row !== null && typeof row.removeAttribute === "function" && row.hasAttribute(COMPOSER_ROW_ATTR)) {
-          row.removeAttribute(COMPOSER_ROW_ATTR);
-        }
-        if (stack !== null) {
-          if (typeof stack.removeAttribute === "function") {
-            if (stack.hasAttribute(COMPOSER_STACK_ATTR)) stack.removeAttribute(COMPOSER_STACK_ATTR);
-            if (stack.hasAttribute(COMPOSER_NARROW_ATTR)) stack.removeAttribute(COMPOSER_NARROW_ATTR);
-          }
-          if (stack.style && typeof stack.style.removeProperty === "function") {
-            for (const name2 of [ROW_TOP_VAR, ROW_HEIGHT_VAR, DOCK_INSET_LEFT_VAR, DOCK_INSET_RIGHT_VAR]) {
-              stack.style.removeProperty(name2);
-            }
-          }
-        }
-        stack = null;
-        card = null;
-        row = null;
-        last = null;
-      }
-      function schedule() {
-        if (frame !== null) return;
-        frame = requestFrame(function() {
-          frame = null;
-          measure();
-        });
-      }
-      function observe(target, callback) {
-        if (observer === null || !target) return;
-        try {
-          observer.observe(target);
-        } catch (error) {
-        }
-      }
-      function measure() {
-        if (!doc || typeof doc.querySelector !== "function") return;
-        const parts = findComposerParts(doc);
-        if (parts === null) {
-          releaseMarks();
-          return;
-        }
-        const nextRow = findControlRow(parts.card);
-        if (nextRow === null) {
-          releaseMarks();
-          return;
-        }
-        const stackChanged = parts.stack !== stack;
-        const rowChanged = nextRow !== row;
-        stack = parts.stack;
-        card = parts.card;
-        row = nextRow;
-        if (typeof stack.setAttribute === "function" && !stack.hasAttribute(COMPOSER_STACK_ATTR)) {
-          stack.setAttribute(COMPOSER_STACK_ATTR, "");
-        }
-        if (typeof row.setAttribute === "function" && !row.hasAttribute(COMPOSER_ROW_ATTR)) {
-          row.setAttribute(COMPOSER_ROW_ATTR, "");
-        }
-        if (RO !== null && (stackChanged || rowChanged || observer === null)) {
-          if (observer !== null) observer.disconnect();
-          observer = null;
-          try {
-            observer = new RO(function() {
-              schedule();
-            });
-          } catch (error) {
-            observer = null;
-          }
-          if (observer !== null) {
-            observe(card);
-            observe(row);
-            observe(card.querySelector(TEXT_PORT));
-          }
-        }
-        const stackBox = stack.getBoundingClientRect();
-        const rowBox = row.getBoundingClientRect();
-        const top = Math.round(rowBox.top - stackBox.top);
-        const height = Math.round(rowBox.height);
-        const leftSlot = row.querySelector(LEFT_SLOT);
-        const rightSlot = row.querySelector(RIGHT_SLOT);
-        const leftCluster = findCluster(row, leftSlot);
-        const rightCluster = findCluster(row, rightSlot);
-        const leftEdge = leftCluster === null ? 0 : leftCluster.getBoundingClientRect().right - rowBox.left;
-        const rightEdge = rightCluster === null ? 0 : rowBox.right - rightCluster.getBoundingClientRect().left;
-        const insetLeft = Math.max(0, Math.round(leftEdge + AIR));
-        const insetRight = Math.max(0, Math.round(rightEdge + AIR));
-        const centre = Math.round(rowBox.width - (leftEdge + AIR) - (rightEdge + AIR));
-        const contentWidth = measureDockContent(parts.dock);
-        const needed = contentWidth > 0 ? contentWidth : MIN_CENTRE_GAP;
-        const narrow = centre < needed;
-        const next = { top, height, left: insetLeft, right: insetRight, narrow };
-        if (last !== null && last.top === next.top && last.height === next.height && last.left === next.left && last.right === next.right && last.narrow === next.narrow) return;
-        last = next;
-        stack.style.setProperty(ROW_TOP_VAR, next.top + "px");
-        stack.style.setProperty(ROW_HEIGHT_VAR, next.height + "px");
-        stack.style.setProperty(DOCK_INSET_LEFT_VAR, next.left + "px");
-        stack.style.setProperty(DOCK_INSET_RIGHT_VAR, next.right + "px");
-        if (next.narrow) stack.setAttribute(COMPOSER_NARROW_ATTR, "");
-        else if (stack.hasAttribute(COMPOSER_NARROW_ATTR)) stack.removeAttribute(COMPOSER_NARROW_ATTR);
-      }
-      return { measure, stop: releaseMarks };
-    }
-    function createComposerLayoutController(options) {
-      const doc = options && options.doc;
-      const getState = options && typeof options.getState === "function" ? options.getState : function() {
-        return {};
-      };
-      const subscribe = options && typeof options.subscribe === "function" ? options.subscribe : null;
-      let off = null;
-      let align = null;
-      function wanted() {
-        const state = getState() || {};
-        return state.enabled !== false && state.composerSplit === true;
-      }
-      function sync() {
-        const on = wanted();
-        applyComposerLayout(doc, on ? COMPOSER_LAYOUT_SPLIT : "host");
-        if (!on) {
-          if (align !== null) {
-            align.stop();
-            align = null;
-          }
-          return;
-        }
-        if (align === null) {
-          align = createRowAlignment({
-            document: doc,
-            ResizeObserver: options.ResizeObserver,
-            requestFrame: options.requestFrame,
-            cancelFrame: options.cancelFrame
-          });
-        }
-        align.measure();
-      }
-      return {
-        start() {
-          if (off !== null) return;
-          sync();
-          if (subscribe !== null) off = subscribe(sync);
-        },
-        sync,
-        stop() {
-          if (typeof off === "function") off();
-          off = null;
-          if (align !== null) {
-            align.stop();
-            align = null;
-          }
-          applyComposerLayout(doc, "host");
-        },
-        /** One explicit reading — what the settings panel triggers after a change. */
-        measure() {
-          if (align !== null) align.measure();
-        },
-        get applied() {
-          const body = doc && doc.body;
-          return !!(body && typeof body.getAttribute === "function" && body.getAttribute(COMPOSER_LAYOUT_ATTR) === COMPOSER_LAYOUT_SPLIT);
-        }
-      };
-    }
-    function composerLayoutRules() {
-      const root = "body[" + COMPOSER_LAYOUT_ATTR + '="' + COMPOSER_LAYOUT_SPLIT + '"]';
-      const stack = root + " [" + COMPOSER_STACK_ATTR + "]";
-      const card = root + " " + CARD;
-      const dock = stack + " > " + DOCK;
-      const narrow = stack + "[" + COMPOSER_NARROW_ATTR + "]";
-      return [
-        "/* ---- composer: split layout (box, then one toolbar line) ---------- */",
-        // THE CONTAINING BLOCK. The stack is the dock's real parent, so `relative`
-        // here is what makes `absolute` on the dock resolve against a box that
-        // contains both the card and the dock. Declaring it on the card — what an
-        // earlier draft did — left the dock with no containing block at all.
-        stack + " {",
-        "  position: relative;",
-        "}",
-        // The card's own chrome goes away: its fill, its shadow and its padding move
-        // onto the text box, or the box would sit inside a second frame.
-        card + " {",
-        "  display: flex;",
-        "  flex-direction: column;",
-        "  gap: 8px;",
-        "  background: transparent !important;",
-        "  box-shadow: none !important;",
-        "  border-radius: 0 !important;",
-        "  padding: 0 !important;",
-        "}",
-        // The box. `[data-input-scroll]` is the host's own scrollport around the
-        // Lexical surface, so the fill and the hairline land on it instead of on a
-        // wrapper this sheet would have to invent.
-        //
-        // NO max-height, NO overflow, NO min-height: the host caps this scrollport
-        // through `--dsh-composer-text-max-height` and usage-stats adds
-        // `--dus-input-budget`; the two own the ceiling together, and a hard
-        // `min(30vh, 220px)` here — the first draft's value — overrode both.
-        card + " " + TEXT_PORT + " {",
-        "  box-sizing: border-box;",
-        "  border-radius: var(--dsw-radius-md);",
-        "  background: var(--dsw-specific-input-major);",
-        "  box-shadow: 0 0 0 1px var(--dsw-alias-border-l2) inset;",
-        "  padding: 10px 14px;",
-        "}",
-        // The toolbar band: the host's own row, now a line under the box. It keeps
-        // its place in the flow — the dock is what gets lifted onto it.
-        card + " [" + COMPOSER_ROW_ATTR + "] {",
-        "  min-height: 32px;",
-        "}",
-        // THE STATISTICS, ON THE TOOLBAR'S BAND. Every number comes from the stack's
-        // own properties, which the dock inherits because the stack is its ancestor.
-        // The insets are MEASURED cluster widths, so nothing overlaps on a narrow
-        // window; `pointer-events: none` lets the host's buttons underneath stay
-        // clickable, and each child re-enables its own pointer events.
-        dock + " {",
-        "  position: absolute;",
-        "  top: var(" + ROW_TOP_VAR + ", 0px);",
-        "  left: 0;",
-        "  right: 0;",
-        "  height: var(" + ROW_HEIGHT_VAR + ", 32px);",
-        "  margin: 0;",
-        "  padding-inline: var(" + DOCK_INSET_LEFT_VAR + ", 0px) var(" + DOCK_INSET_RIGHT_VAR + ", 0px);",
-        "  display: flex;",
-        "  align-items: center;",
-        "  justify-content: center;",
-        "  gap: 12px;",
-        "  pointer-events: none;",
-        "}",
-        dock + " > * {",
-        "  pointer-events: auto;",
-        "}",
-        // NARROW: the measured gap cannot hold the statistics, so they go back to
-        // their own line under the toolbar — the layout the host already ships. This
-        // is a measured switch, not a media query, and it is what replaces the fixed
-        // 168px inset that used to overlap the clusters.
-        narrow + " > " + DOCK + " {",
-        "  position: static;",
-        "  height: auto;",
-        "  padding-inline: 0;",
-        "  margin: 6px 0 0;",
-        "  min-height: 24px;",
-        "}",
-        // A blank session's workspace row keeps the reference's air above the box.
-        root + ' [data-slot="conversation.hero.workspace"] {',
-        "  margin-bottom: 2px;",
         "}",
         ""
       ].join("\n");
@@ -3982,10 +3530,38 @@ window.__ModuleLoader__.load({
     }
     function diffStatFamilyRules() {
       return [
-        "/* ---- the \xB1N change counts: UI family in both card states ----------- */",
+        "/* ---- the \xB1N change counts: UI family + a tinted plate ------------- */",
         '[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"],',
         '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diffrow-stats] {',
         "  font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;",
+        "  font-variant-numeric: tabular-nums;",
+        "}",
+        // The host's cell holds both numbers; the theme's own marker holds two spans.
+        // The plate therefore goes on the LEAVES in each: `[class*="diffAdded"]` /
+        // `[class*="diffRemoved"]` for the host (salt-tolerant, the same technique
+        // the cell uses), `[data-cds-diff-stat]` for ours.
+        //
+        // `line-height: 16px` is what keeps the wash a chip rather than a band: the
+        // row's own box is 24px, and an inherited `calc(24px + delta)` would make the
+        // plate span the full height of the line.
+        '[data-slot="tool.call.toolview"] [data-tool] [class*="diffAdded"],',
+        '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="add"] {',
+        "  display: inline-block;",
+        "  flex: none;",
+        "  border-radius: var(--dsw-radius-xs);",
+        "  padding: 0 4px;",
+        "  line-height: 16px;",
+        "  background: var(--dsw-alias-file-diff-added-bg);",
+        "  font-variant-numeric: tabular-nums;",
+        "}",
+        '[data-slot="tool.call.toolview"] [data-tool] [class*="diffRemoved"],',
+        '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="del"] {',
+        "  display: inline-block;",
+        "  flex: none;",
+        "  border-radius: var(--dsw-radius-xs);",
+        "  padding: 0 4px;",
+        "  line-height: 16px;",
+        "  background: var(--dsw-alias-file-diff-deleted-bg);",
         "  font-variant-numeric: tabular-nums;",
         "}"
       ].join("\n");
@@ -4144,13 +3720,37 @@ window.__ModuleLoader__.load({
         "  /* transparent, per --diffs-bg-context-override */",
         "  background-color: transparent;",
         "}",
+        // THE GUTTER MUST NOT WRAP. Without an explicit width the span is a flex
+        // item that shrinks below its content, so a four-digit file line breaks
+        // between the digits: `1451` rendered as `145` on one line and `1` on the
+        // next, which reads as two columns of numbers. `white-space: nowrap` stops
+        // the break; the `min-width` in ch keeps the column steady while the numbers
+        // grow from 1 to 4 digits, so the code text does not shift sideways mid-hunk.
+        // THE GUTTER: FIXED WIDTH, NO WRAP, AND THE DIGITS MUST NOT TOUCH THE GLYPH.
+        //
+        // Three defects met here, each with its own fix:
+        //   1. no width → the span is a flex item that shrinks below its content, so
+        //      `1451` broke between the digits and read as two columns of numbers;
+        //   2. `white-space: nowrap` stops the break, but with `min-width: 5ch` and
+        //      `content-box` a four-digit number fills the whole box, the 1ch of
+        //      right padding is consumed, and the last digit lands ON the `+`/`-`
+        //      glyph (measured at 4x: the ink ended 4px past the glyph's left edge);
+        //   3. widening the box made it worse, because `text-align: right` moves the
+        //      digits outward — the padding has to come out of the width, not add to
+        //      it.
+        // `border-box` is what ties the two together: the 5ch floor INCLUDES the 8px
+        // right pad, so the digits keep their clearance at every digit count.
         "[data-cds-diffcard] [data-cds-diff-num] {",
-        "  padding: 0 1ch;",
+        "  padding: 0 8px 0 2px;",
         "  text-align: right;",
         "  color: var(--dsw-alias-label-caption);",
         "  font-size: 11px;",
         "  font-variant-numeric: tabular-nums;",
         "  user-select: none;",
+        "  white-space: nowrap;",
+        "  flex: none;",
+        "  min-width: 5ch;",
+        "  box-sizing: border-box;",
         "}",
         '[data-cds-diffcard] [data-kind="add"] [data-cds-diff-num] { color: var(--dsw-alias-state-success-primary); }',
         '[data-cds-diffcard] [data-kind="del"] [data-cds-diff-num] { color: var(--dsw-alias-state-error-primary); }',
@@ -4841,8 +4441,6 @@ window.__ModuleLoader__.load({
           settingsRules()
         );
         if (state.markdownScope === true) parts.push(markdownScopeRules());
-        if (state.viewTabsPill === true) parts.push(tabsStyleRules());
-        if (state.composerSplit === true) parts.push(composerLayoutRules());
       }
       parts.push(
         footnoteRules(),
@@ -4944,10 +4542,6 @@ window.__ModuleLoader__.load({
       "heroRipple.desc": "On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.",
       "markdownScope.title": "Assistant markdown: lists, emphasis, links",
       "markdownScope.desc": "Task lists, bold, italic, strikethrough and links in the assistant\u2019s reply get the reference\u2019s ink, markers and underline offset. Code blocks and inline code keep their own treatment; user messages, tool cards and settings are out of scope.",
-      "viewTabsPill.title": "\u201CChat / Trajectory\u201D as a segmented pill",
-      "viewTabsPill.desc": "Off is the host\u2019s own underline tabs. On packs both into one pill. Neither decides whether the tabs appear \u2014 the host shows them only while General \u2192 \u201CShow coding view\u201D is on, and that setting also enables the turn\u2019s code diff and the full agent presets.",
-      "composerSplit.title": "Split composer: box above, toolbar below",
-      "composerSplit.desc": "Puts the text box in its own frame and moves permission, add, the statistics group, the model and the context ring onto a line beneath it, as the reference does. Every control stays the host\u2019s own, with its own behaviour. The workspace line above the box appears on a new session only, because that is where the host renders it.",
       "enabled.title": "Enable CDS theme",
       "enabled.desc": "Off releases every token override and restores the host skin.",
       // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -5003,10 +4597,6 @@ window.__ModuleLoader__.load({
       "heroRipple.desc": "\u65B0\u4F1A\u8BDD\u65F6\uFF0C\u95EE\u5019\u8BED\u4E0E\u8F93\u5165\u6846\u80CC\u540E\u6D6E\u51FA\u4E00\u5C42\u6DE1\u7684\u4EE3\u7801\u5B57\u5F62\uFF0C\u6BCF\u6B21\u70B9\u51FB\u4ECE\u5149\u6807\u5904\u8361\u5F00\u6C34\u6CE2\u3002\u8F93\u5165\u6846\u4F1A\u7565\u900F\uFF0C\u8BA9\u6CE2\u7EB9\u4ECE\u5E95\u4E0B\u900F\u51FA\u6765\u3002\u5173\u95ED\u5373\u6574\u5C42\u79FB\u9664\u3002",
       "markdownScope.title": "\u52A9\u624B\u6B63\u6587\u7684\u5217\u8868\u3001\u5F3A\u8C03\u4E0E\u94FE\u63A5",
       "markdownScope.desc": "\u52A9\u624B\u7684\u4EFB\u52A1\u5217\u8868\u3001\u7C97\u4F53\u3001\u659C\u4F53\u3001\u5220\u9664\u7EBF\u4E0E\u94FE\u63A5\u6539\u7528\u53C2\u8003\u7248\u7684\u58A8\u8272\u3001\u9879\u76EE\u7B26\u53F7\u4E0E\u4E0B\u5212\u7EBF\u95F4\u8DDD\u3002\u4EE3\u7801\u5757\u4E0E\u884C\u5185\u4EE3\u7801\u4FDD\u6301\u539F\u6837\uFF1B\u7528\u6237\u6D88\u606F\u3001\u5DE5\u5177\u5361\u7247\u4E0E\u8BBE\u7F6E\u9875\u4E0D\u5728\u8303\u56F4\u5185\u3002",
-      "viewTabsPill.title": "\u300C\u5BF9\u8BDD / \u8F68\u8FF9\u300D\u7528\u80F6\u56CA\u6837\u5F0F",
-      "viewTabsPill.desc": "\u5173\u95ED\u662F\u5BBF\u4E3B\u539F\u672C\u7684\u4E0B\u5212\u7EBF\u9875\u7B7E\uFF0C\u5F00\u542F\u5219\u4E24\u6BB5\u6536\u8FDB\u4E00\u4E2A\u80F6\u56CA\u3002\u4E24\u8005\u90FD\u4E0D\u51B3\u5B9A\u8FD9\u4E24\u4E2A\u9875\u7B7E\u51FA\u4E0D\u51FA\u73B0\u2014\u2014\u53EA\u6709\u5F53\u300C\u901A\u7528 \u2192 \u663E\u793A\u4EE3\u7801\u5DE5\u4F5C\u89C6\u56FE\u300D\u6253\u5F00\u65F6\u5BBF\u4E3B\u624D\u753B\u5B83\u4EEC\uFF0C\u800C\u90A3\u4E2A\u5F00\u5173\u540C\u65F6\u4F1A\u6253\u5F00\u672C\u8F6E\u4EE3\u7801\u5DEE\u5F02\u4E0E\u5B8C\u6574 Agent \u9884\u8BBE\u3002",
-      "composerSplit.title": "\u8F93\u5165\u6846\u5206\u79BB\uFF1A\u6587\u672C\u6846\u5728\u4E0A\uFF0C\u5DE5\u5177\u680F\u5728\u4E0B",
-      "composerSplit.desc": "\u628A\u6587\u672C\u6846\u653E\u8FDB\u72EC\u7ACB\u8FB9\u6846\uFF0C\u6743\u9650\u3001\u6DFB\u52A0\u3001\u7EDF\u8BA1\u3001\u6A21\u578B\u4E0E\u4E0A\u4E0B\u6587\u73AF\u79FB\u5230\u5B83\u4E0B\u65B9\u4E00\u884C\uFF0C\u4E0E\u53C2\u8003\u7248\u4E00\u81F4\u3002\u6BCF\u4E2A\u63A7\u4EF6\u4ECD\u662F\u5BBF\u4E3B\u7684\u539F\u4EF6\uFF0C\u884C\u4E3A\u4E0D\u53D8\u3002\u6587\u672C\u6846\u4E0A\u65B9\u90A3\u884C\u5DE5\u4F5C\u533A\u53EA\u5728\u65B0\u4F1A\u8BDD\u51FA\u73B0\uFF0C\u56E0\u4E3A\u5BBF\u4E3B\u53EA\u5728\u90A3\u91CC\u6E32\u67D3\u5B83\u3002",
       "enabled.title": "\u542F\u7528 CDS \u4E3B\u9898",
       "enabled.desc": "\u5173\u95ED\u5373\u91CA\u653E\u5168\u90E8\u4EE4\u724C\u8986\u76D6\uFF0C\u754C\u9762\u56DE\u5230\u5BBF\u4E3B\u539F\u6837\u5F0F\u3002",
       // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------
@@ -5595,7 +5185,8 @@ window.__ModuleLoader__.load({
           // ORDER 45 is free: 44 is the backdrop above, 42 is retired. The row is a
           // look-only switch — the rules it gates live in `markdown-scope.js` and are
           // emitted inside `refine` (styles.js), so turning refinement off removes
-          // the look without touching this setting.
+          // the look without touching this setting. Orders 46 and 47 are vacant: the
+          // view-tabs pill and the split composer were removed outright.
           id: "dsh-cds-theme-markdown-scope",
           order: 45,
           key: "markdownScope",
@@ -5607,57 +5198,6 @@ window.__ModuleLoader__.load({
                 key: "markdownScope",
                 titleKey: "markdownScope.title",
                 descKey: "markdownScope.desc"
-              },
-              t: props.t
-            });
-          }
-        },
-        {
-          // The 「对话 / 轨迹」 strip's look. The switch decides the LOOK only: the
-          // strip appears or disappears on the host's own 「显示代码工作视图」
-          // setting, which this plugin never writes. Off (the default) is the host's
-          // underline tabs.
-          //
-          // ORDER 46, after the markdown row. The body mark this gates is written by
-          // lifecycle.js; the rules live in `viewtabs.js`.
-          id: "dsh-cds-theme-view-tabs-pill",
-          order: 46,
-          key: "viewTabsPill",
-          titleKey: "viewTabsPill.title",
-          descKey: "viewTabsPill.desc",
-          component: function BoundToggle(props) {
-            return React2.createElement(ToggleRow, {
-              slot: {
-                key: "viewTabsPill",
-                titleKey: "viewTabsPill.title",
-                descKey: "viewTabsPill.desc"
-              },
-              t: props.t
-            });
-          }
-        },
-        {
-          // The composer's layout: false keeps the shipped single card; true puts
-          // the text box in its own frame, the host's control row on a band beneath
-          // it, and the statistics dock one line under both. The key existed in this
-          // wave WITHOUT a row — the repository audit flags exactly that ("a switch
-          // the user cannot compare against the host treatment"), and this row is
-          // the fix.
-          //
-          // ORDER 47, after the markdown (45) and pill (46) rows. What it gates is a
-          // body attribute plus pure CSS (`composer-layout.js`): no node is moved,
-          // cloned or measured, and no observer is added.
-          id: "dsh-cds-theme-composer-split",
-          order: 47,
-          key: "composerSplit",
-          titleKey: "composerSplit.title",
-          descKey: "composerSplit.desc",
-          component: function BoundToggle(props) {
-            return React2.createElement(ToggleRow, {
-              slot: {
-                key: "composerSplit",
-                titleKey: "composerSplit.title",
-                descKey: "composerSplit.desc"
               },
               t: props.t
             });
@@ -5690,6 +5230,12 @@ window.__ModuleLoader__.load({
         // above (long paste → file, 39) is a feature, not a retired replication
         // item; order 42 is vacant again now that the hero-compaction switch is
         // retired (see the note beside `newSessionInputRules` in styles.js).
+        //
+        // Orders 46 and 47 are now vacant: the view-tabs pill and the split
+        // composer were removed outright at the user's request, rows and rules
+        // together. They are not retired — there is nothing left to retire — and a
+        // future row may NOT take those numbers either, for the same reason the
+        // numbers above stay unused.
       ];
       const modeSlot = {
         id: "dsh-cds-theme-mode",
@@ -8037,32 +7583,6 @@ window.__ModuleLoader__.load({
             ripple.stop();
           };
         }, "dsh-cds-theme: blank-session backdrop");
-        ctx.effect(function() {
-          if (typeof document === "undefined") return function() {
-          };
-          const tabs = createTabsStyleController({
-            doc: document,
-            getState: settings2.getState,
-            subscribe: typeof settings2.subscribe === "function" ? settings2.subscribe : null
-          });
-          tabs.start();
-          return function() {
-            tabs.stop();
-          };
-        }, "dsh-cds-theme: view tab style");
-        ctx.effect(function() {
-          if (typeof document === "undefined") return function() {
-          };
-          const layout = createComposerLayoutController({
-            doc: document,
-            getState: settings2.getState,
-            subscribe: typeof settings2.subscribe === "function" ? settings2.subscribe : null
-          });
-          layout.start();
-          return function() {
-            layout.stop();
-          };
-        }, "dsh-cds-theme: composer split layout");
         const slots = ctx.slots;
         const uiReady = React2 && primitives2 && primitives2.IconCheckOutlineRegular;
         if (!uiReady || !slots || typeof slots.inject !== "function") {

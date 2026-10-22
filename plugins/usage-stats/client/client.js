@@ -88,21 +88,12 @@ window.__ModuleLoader__.load({
     var STORAGE_KEY = "dsh-usage-stats/settings";
     var STYLE_ROW_ID = "dsh-usage-stats-panel-style";
     var STYLE_ROW_ORDER = 39;
-    var SETTINGS_ROW_ID = "dsh-usage-stats-panel-height";
-    var SETTINGS_ROW_ORDER = 40;
     var UNITS_ROW_ID = "dsh-usage-stats-units";
     var UNITS_ROW_ORDER = 41;
     var RANGES = [
       { id: "all", days: 0 },
       { id: "30d", days: 30 },
       { id: "7d", days: 7 }
-    ];
-    var BOOKS = [
-      { title: "\u7EA2\u697C\u68A6", titleEn: "Dream of the Red Chamber", chars: 73e4 },
-      { title: "\u4E09\u56FD\u6F14\u4E49", titleEn: "Romance of the Three Kingdoms", chars: 63e4 },
-      { title: "\u56F4\u57CE", titleEn: "Fortress Besieged", chars: 23e4 },
-      { title: "\u6D3B\u7740", titleEn: "To Live", chars: 12e4 },
-      { title: "\u9A86\u9A7C\u7965\u5B50", titleEn: "Rickshaw Boy", chars: 1e5 }
     ];
     var DEFAULT_STATE = {
       range: "all",
@@ -348,8 +339,7 @@ window.__ModuleLoader__.load({
         labelLh: 15,
         valueSize: 17,
         valueLh: 22,
-        footPad: 8,
-        footLh: 17,
+        bottomGap: 25.5,
         heatPad: 8,
         heatGap: 4
       },
@@ -364,8 +354,7 @@ window.__ModuleLoader__.load({
         labelLh: 15,
         valueSize: 17,
         valueLh: 22,
-        footPad: 8,
-        footLh: 17,
+        bottomGap: 25.5,
         heatPad: 4,
         heatGap: 3
       },
@@ -380,8 +369,7 @@ window.__ModuleLoader__.load({
         labelLh: 12,
         valueSize: CARD_VALUE_FLOOR,
         valueLh: 18,
-        footPad: 4,
-        footLh: 15,
+        bottomGap: 19.5,
         heatPad: 2,
         heatGap: 2
       }
@@ -395,8 +383,7 @@ window.__ModuleLoader__.load({
     }
     function fixedHeight(tier, rows) {
       const grid = cardHeight(tier) * rows + tier.gridGap * (rows - 1);
-      const foot = tier.footPad + 0.5 + tier.footLh;
-      return grid + tier.overviewGap * 2 + foot;
+      return grid + tier.overviewGap * 2 + tier.bottomGap;
     }
     function cellFor(tier, rows, bodyHeight) {
       const bandBudget = bodyHeight - fixedHeight(tier, rows);
@@ -437,8 +424,7 @@ window.__ModuleLoader__.load({
         labelLh: chosen.labelLh,
         valueSize: chosen.valueSize,
         valueLh: chosen.valueLh,
-        footPad: chosen.footPad,
-        footLh: chosen.footLh,
+        bottomGap: chosen.bottomGap,
         heatPad: chosen.heatPad,
         heatGap: chosen.heatGap
       };
@@ -454,8 +440,6 @@ window.__ModuleLoader__.load({
         "--dus-card-label-lh": layout.labelLh + "px",
         "--dus-card-value-size": layout.valueSize + "px",
         "--dus-card-value-lh": layout.valueLh + "px",
-        "--dus-foot-pad": layout.footPad + "px",
-        "--dus-foot-lh": layout.footLh + "px",
         "--dus-heat-pad": layout.heatPad + "px",
         "--dus-heat-gap": layout.heatGap + "px",
         "--dus-heat-cell-max": layout.cell + "px"
@@ -506,13 +490,10 @@ window.__ModuleLoader__.load({
       "heat.cell": "{date} \xB7 {count} messages",
       "heat.cell.one": "{date} \xB7 {count} message",
       "heat.cell.zero": "{date} \xB7 no activity",
-      // Interpolated by the panel from bookComparison's {title, ratio}; the
-      // sentence shape lives here so translators own the word order. `book.lang`
-      // is a self-reporting marker the panel uses to pick `title` vs `titleEn`
-      // from the pick — translators never see it in the UI.
-      "book.lang": "en",
-      "book.less": "You haven't used a full copy of {title} yet.",
-      "book.more": "You've used ~{ratio}\xD7 more tokens than {title}."
+      // `book.lang` is a self-reporting locale marker, never shown: the panel reads
+      // it to resolve the `auto` unit scale (K/M/B in an English UI, 万/亿 in a
+      // Chinese one). Translators never see it.
+      "book.lang": "en"
     };
     var zh = {
       "tab.overview": "\u603B\u89C8",
@@ -554,9 +535,7 @@ window.__ModuleLoader__.load({
       "heat.cell": "{date} \xB7 {count} \u6761\u6D88\u606F",
       "heat.cell.one": "{date} \xB7 {count} \u6761\u6D88\u606F",
       "heat.cell.zero": "{date} \xB7 \u6CA1\u6709\u6D3B\u8DC3\u8BB0\u5F55",
-      "book.lang": "zh",
-      "book.less": "\u4F60\u7528\u6389\u7684 token \u8FD8\u6CA1\u51D1\u6EE1 1 \u672C\u300A{title}\u300B\u3002",
-      "book.more": "\u4F60\u7528\u6389\u7684 token \u7EA6\u662F\u300A{title}\u300B\u7684 {ratio} \u500D\u3002"
+      "book.lang": "zh"
     };
 
     // client/src/compact-layout.js
@@ -566,13 +545,13 @@ window.__ModuleLoader__.load({
     var COMPACT_TILE_HEIGHT = 46;
     var COMPACT_TILE_GAP = 4;
     var COMPACT_BLOCK_GAP = 12;
-    var COMPACT_FOOT_HEIGHT = 16;
+    var COMPACT_BOTTOM_GAP = 16;
     var COMPACT_HEAT_GAP = 3;
     var COMPACT_HEAT_ROWS = 7;
     var COMPACT_CELL_FLOOR = 8;
     var COMPACT_CELL_CEIL = 15;
     function compactFixedHeight() {
-      return COMPACT_TILE_HEIGHT * 2 + COMPACT_TILE_GAP + COMPACT_BLOCK_GAP * 2 + COMPACT_FOOT_HEIGHT;
+      return COMPACT_TILE_HEIGHT * 2 + COMPACT_TILE_GAP + COMPACT_BLOCK_GAP * 2 + COMPACT_BOTTOM_GAP;
     }
     function heatChrome() {
       return COMPACT_HEAT_GAP * (COMPACT_HEAT_ROWS - 1);
@@ -607,7 +586,6 @@ window.__ModuleLoader__.load({
         "--dus-compact-tile-h": COMPACT_TILE_HEIGHT + "px",
         "--dus-compact-tile-gap": COMPACT_TILE_GAP + "px",
         "--dus-compact-block-gap": COMPACT_BLOCK_GAP + "px",
-        "--dus-compact-foot-h": COMPACT_FOOT_HEIGHT + "px",
         "--dus-compact-heat-gap": COMPACT_HEAT_GAP + "px"
       };
     }
@@ -661,7 +639,7 @@ window.__ModuleLoader__.load({
     }
     function bodyHeightOf(state) {
       const source = state && typeof state === "object" ? state : {};
-      return isCompact(source.style) ? source.compactBodyHeight : source.bodyHeight;
+      return isCompact(source.style) ? COMPACT_DEFAULT_BODY_HEIGHT : DEFAULT_BODY_HEIGHT;
     }
     function bodyHeightKey(style) {
       return isCompact(style) ? "compactBodyHeight" : "bodyHeight";
@@ -1008,19 +986,6 @@ window.__ModuleLoader__.load({
       }
       return { weeks, max };
     }
-    function bookComparison(totalTokens, random = Math.random) {
-      const total = typeof totalTokens === "number" && Number.isFinite(totalTokens) ? totalTokens : 0;
-      const roll = typeof random === "function" ? Number(random()) : Number.NaN;
-      const index = Number.isFinite(roll) ? Math.min(BOOKS.length - 1, Math.max(0, Math.floor(roll * BOOKS.length))) : 0;
-      const pick = BOOKS[index];
-      const ratio = pick.chars > 0 ? total / pick.chars : 0;
-      return {
-        title: pick.title,
-        titleEn: pick.titleEn,
-        chars: pick.chars,
-        ratio
-      };
-    }
 
     // client/src/panel.js
     var TABS = [
@@ -1081,8 +1046,8 @@ window.__ModuleLoader__.load({
     function shareLabel(share) {
       return (share * 100).toFixed(1) + "%";
     }
-    function overviewElement(React2, cards, heat, foot) {
-      return React2.createElement("div", { className: "dus-overview" }, cards, heat, foot);
+    function overviewElement(React2, cards, heat) {
+      return React2.createElement("div", { className: "dus-overview" }, cards, heat);
     }
     function createPanel({ React: React2, primitives: primitives2, settings: settings2 }) {
       const store = settings2 || createSettingsStore(null);
@@ -1185,18 +1150,6 @@ window.__ModuleLoader__.load({
           "aria-label": t("aria.heatmap", { weeks: grid.weeks.length, max: formatNumber(grid.max, unitScale) })
         }, weeks);
       }
-      function renderFoot(view, roll, t, unitScale) {
-        const book = bookComparison(view.totalTokens, function() {
-          return roll;
-        });
-        const title = t("book.lang") === "zh" ? book.title : book.titleEn;
-        const text = book.ratio < 1 ? t("book.less", { title }) : t("book.more", { title, ratio: formatNumber(book.ratio, unitScale) });
-        return React2.createElement(
-          "div",
-          { className: "dus-foot" },
-          React2.createElement("div", { className: "dus-foot-line" }, text)
-        );
-      }
       function renderModels(view, t, unitScale) {
         const rows = modelRows(view.perModel, view.totalTokens);
         if (rows.length === 0) {
@@ -1246,9 +1199,6 @@ window.__ModuleLoader__.load({
         });
         const load = dataState[0];
         const setLoad = dataState[1];
-        const roll = React2.useState(function() {
-          return Math.random();
-        })[0];
         const NARROW_VIEWPORT_PX2 = 560;
         const bandFor = function(width) {
           return typeof width === "number" && width > 0 && width < NARROW_VIEWPORT_PX2 ? "narrow" : "wide";
@@ -1383,14 +1333,10 @@ window.__ModuleLoader__.load({
           if (allView === null) return null;
           return renderHeat(allView, t, tips, unitScale);
         }, [allView, t, tips, unitScale]);
-        const footBody = React2.useMemo(function() {
-          if (allView === null) return null;
-          return renderFoot(allView, roll, t, unitScale);
-        }, [allView, roll, t, unitScale]);
         const overviewBody = React2.useMemo(function() {
-          if (cardsBody === null || heatBody === null || footBody === null) return null;
-          return overviewElement(React2, cardsBody, heatBody, footBody);
-        }, [cardsBody, heatBody, footBody]);
+          if (cardsBody === null || heatBody === null) return null;
+          return overviewElement(React2, cardsBody, heatBody);
+        }, [cardsBody, heatBody]);
         const modelsBody = React2.useMemo(function() {
           if (view === null) return null;
           return renderModels(view, t, unitScale);
@@ -1464,10 +1410,15 @@ window.__ModuleLoader__.load({
       // with a negative margin so it fuses with the composer; a stats panel fused
       // to the input would read as part of the composer, so this one is held off
       // it by its own margin instead.
+      // THE POSITION. The reference stacks hero title → usage panel → input box in
+      // one centred column, and the panel is held off the box by the stack's own
+      // gap rather than by a margin of its own. An earlier 4px top + 8px bottom
+      // margin doubled that gap, which read as the panel floating between the two
+      // instead of belonging to the box below it.
       ".dus-root { box-sizing: border-box; flex: none;",
       "  width: calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance));",
       "  max-width: var(--dsh-composer-card-max-width);",
-      "  margin: 4px auto 8px; }",
+      "  margin: 0 auto; }",
       // The panel is the ONE bordered shell (CDS 1-border rule). It reuses the
       // composer card's OWN elevation recipe verbatim — `--dsw-elevation-soft`
       // with its stroke color set to the L2 border token — so the panel sits on
@@ -1503,25 +1454,51 @@ window.__ModuleLoader__.load({
       "  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
       "  pointer-events: none;",
       "  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2), var(--dsw-elevation-soft); }",
-      // Head: plain switch buttons — tabs left, ranges right. NO track, NO ring:
-      // the earlier pill-track + raised-thumb recipe wrapped the buttons in a
-      // second surface, which read as an extra layer around every switch. Now the
-      // only state feedback is one soft fill on the selected button.
-      ".dus-head { display: flex; align-items: center; gap: 2px; }",
+      // Head: two groups of ghost chips — view tabs left, range pills right, the
+      // free width between them. NO track, NO ring: an earlier pill-track +
+      // raised-thumb recipe wrapped the buttons in a second surface, which read as
+      // an extra layer around every switch.
+      //
+      // ONE CHIP FOR BOTH GROUPS. The reference (`home-panel.css:208-228`) sets its
+      // tabs and its range pills from a single rule — 12/18 type, `1px 8px`, a 5px
+      // radius, tertiary label — and lets the SELECTED one differ only by a fill
+      // step plus primary ink. Ours gave the tabs their own size (12.5/20), their
+      // own padding and their own weight, so the row read as two hierarchies rather
+      // than one control. Both groups now share the chip, which also removes the
+      // half-pixel type size: 12.5px lands between the theme's UI sizes, and any
+      // UI-font-size change moves it off a whole pixel.
+      //
+      // NO WEIGHT CHANGE ON SELECTION either (`home-panel.css:222-228` changes fill
+      // and colour only). A weight jump re-measures the label, so the chip visibly
+      // grows and the neighbours slide when the user clicks — the row should not
+      // move under the pointer.
+      //
+      // 5px IS HALF THE MEDIUM RADIUS, not a new literal: the reference rounds a
+      // 20px-tall control to half its height, and `--dsw-radius-md` is the radius
+      // this panel already uses for every other chip-shaped thing.
+      ".dus-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }",
       ".dus-head-spacer { flex: 1; min-width: 4px; }",
       ".dus-tabs, .dus-ranges { display: inline-flex; align-items: center; gap: 2px; }",
-      // Button geometry: flat text buttons, no border in any state so picking one
-      // never shifts the row. The selected button is a single filled chip — no
-      // hairline, no shadow. Tabs are primary text, ranges the quieter variant.
-      ".dus-range, .dus-tab { border: 0; border-radius: var(--dsw-radius-md);",
-      "  background: transparent; cursor: pointer; font: inherit; font-variant-numeric: tabular-nums;",
-      "  transition: color .12s ease, background-color .12s ease; }",
-      ".dus-range { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; padding: 3px 10px; }",
-      ".dus-tab { color: var(--dsw-alias-label-secondary); font-size: 12.5px; line-height: 20px; padding: 3px 12px; }",
-      ".dus-range:hover, .dus-tab:hover { color: var(--dsw-alias-label-primary); }",
+      ".dus-range, .dus-tab { border: 0; border-radius: calc(var(--dsw-radius-md, 10px) / 2);",
+      "  background: transparent; color: var(--dsw-alias-label-tertiary);",
+      "  cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; padding: 1px 8px;",
+      "  font-variant-numeric: tabular-nums;",
+      "  transition: color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),",
+      "    background-color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)); }",
+      // Hover is a wash, not just a colour change, and never on the chip that is
+      // already selected — that chip already carries the stronger fill.
+      '.dus-range:hover:not([data-active="true"]),',
+      '.dus-tab:hover:not([data-active="true"]) {',
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);",
+      "  color: var(--dsw-alias-label-primary); }",
       ".dus-range:active, .dus-tab:active { transform: scale(.97); }",
+      // The selected chip sits ONE STEP DEEPER than the surface under it, mixed
+      // from the label ink (`home-panel.css:222-228`). `--dsw-alias-bg-module-platform`
+      // alone is `#f7f7f5` in light mode — about two steps from a white card
+      // (`docs/theme-defects.md` §3) — so a chip drawn with it reads as unselected.
       '.dus-range[data-active="true"], .dus-tab[data-active="true"] {',
-      "  background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font-weight: 500; }",
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, var(--dsw-alias-bg-module-platform));",
+      "  color: var(--dsw-alias-label-primary); }",
       // Body: ONE fixed height for BOTH tabs, and the only place the setting is
       // consumed. Models fills it and scrolls inside; Overview fills it too and is
       // TOP-ALIGNED, so its reserved height simply pads the shorter tab (the
@@ -1552,22 +1529,42 @@ window.__ModuleLoader__.load({
       "  gap: var(--dus-overview-gap, 10px);",
       "  height: 100%; min-height: 0; overflow-y: hidden; }",
       // Six tiles, three across (two across under the 560px breakpoint). They are
-      // fills, never outlined boxes: the tile boundary is the tint step between
-      // `--dsw-alias-bg-module-platform` and the panel surface behind it — CDS
-      // low-contrast surface layering. The type sizes carry floors: the packed tier
-      // stops at 10px/15px (label/value), never smaller.
+      // fills, never outlined boxes: the tile boundary is the tint step between the
+      // tile and the panel surface behind it — CDS low-contrast surface layering.
+      // The type sizes carry floors: the packed tier stops at 10px/15px
+      // (label/value), never smaller.
+      //
+      // THE FILL IS A SHARE OF THE LABEL INK, MIXED INTO THE PANEL SURFACE. Taking
+      // the reference's 15% over its layer-2 card (`home-overview.css:12-21`) and
+      // running it over `--dsw-alias-bg-module-platform` would double-apply the
+      // step this panel already has from `--dsw-alias-bg-base`. 11% is the share
+      // that lands the tile on the same visible step in light: the ink is #141413
+      // and the panel is #fcfcfb, so the mix is a hair darker than the grey
+      // `bg-module-platform` while staying a step ABOVE the heat band's own surface
+      // — the tile still reads as the front layer, and one recipe serves dark.
       ".dus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));",
       "  gap: var(--dus-grid-gap, 6px); }",
       ".dus-card { display: flex; flex-direction: column; gap: var(--dus-card-gap, 2px);",
       "  padding: var(--dus-card-pad, 8px) 10px;",
-      "  border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }",
+      "  border-radius: var(--dsw-radius-md);",
+      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 11%, var(--dsw-alias-bg-base)); }",
+      // The label is the tile's quiet half and the figure its loud one, and the
+      // reference keeps that as its ONLY size pairing (12/16 label over 13/18
+      // figure, `home-overview.css:23-44`). The label truncates in one line for the
+      // same reason the figure does: "Favorite model" and "Total tokens" are longer
+      // than the zh labels, and a wrapped label would make one tile taller than its
+      // neighbours on a two-row grid.
       ".dus-card-label { color: var(--dsw-alias-label-tertiary);",
       "  font-size: var(--dus-card-label-size, 11px); line-height: var(--dus-card-label-lh, 15px);",
-      "  letter-spacing: .02em; }",
+      "  letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
       ".dus-card-value { color: var(--dsw-alias-label-primary); font-weight: 600;",
       "  font-size: var(--dus-card-value-size, 17px); line-height: var(--dus-card-value-lh, 22px);",
       "  font-variant-numeric: tabular-nums; overflow: hidden;",
       "  text-overflow: ellipsis; white-space: nowrap; }",
+      // The favourite model is a NAME, not a figure: the reference drops its weight
+      // to the label's own (`home-overview.css:46-50`), which stops a long id from
+      // reading as another count and from competing with the totals beside it.
+      '.dus-card[data-card="model"] .dus-card-value { font-weight: 400; }',
       // Heatmap: one column per SEVEN-DAY BLOCK, oldest left, TODAY at the
       // bottom-right corner. The grid is anchored at today and counted backward
       // (`buildHeatmap`), so the newest square is always in the corner and every
@@ -1649,17 +1646,11 @@ window.__ModuleLoader__.load({
       "  background: var(--dsw-alias-border-l2); }",
       ".dus-model-fill { height: 100%; border-radius: inherit;",
       "  background: var(--dsw-alias-state-business-primary); }",
-      // The comparison is exactly one line — no byline and no basis. A hairline
-      // divider (CDS one-directional rule) separates it from the tiles above. Its
-      // padding and leading follow the same tier as the cards (`layout.js`), with the
-      // 12px font size untouched — the foot is prose, so it is the LAST thing to give
-      // and it never shrinks past its own line box.
-      ".dus-foot { display: flex; flex-direction: column;",
-      "  padding-top: var(--dus-foot-pad, 8px);",
-      "  border-top: .5px solid var(--dsw-alias-border-l2);",
-      "  color: var(--dsw-alias-label-tertiary); font-size: 12px;",
-      "  line-height: var(--dus-foot-lh, 17px); }",
-      ".dus-foot-line { color: var(--dsw-alias-label-secondary); }",
+      // No caption and no divider above one. The bottom of this tab is the heat
+      // grid, and the space the comparison line used to take is simply not
+      // reserved: the body keeps its fixed height, so it lands as the quiet strip
+      // the footnote used to occupy. `.dus-note` still paints the empty-state line
+      // (an activity-free window has no grid at all).
       ".dus-note { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; padding: 4px 0; }",
       // — Settings rows -----------------------------------------------------------
       //
@@ -1780,10 +1771,13 @@ window.__ModuleLoader__.load({
       // new-session screen, and this option only changes the panel.
       //
       // EVERY RULE IS SCOPED to the root attribute the panel writes, so the classic
-      // look above is byte-identical to what shipped and the option can be removed
-      // by deleting this block. The reference is a 480px plain card: one tone of
-      // wash for the panel, tiles one tone deeper, the heat grid directly on the
-      // card with no band of its own, and no divider above the caption.
+      // look above is untouched by this block and the option can be removed
+      // by deleting it. What the compact rules now carry is only what genuinely
+      // DIFFERS from classic: the head chip and the tile both already use the
+      // reference's own geometry in the base rules, so this block keeps the surface
+      // (the card's layer-2 wash) and the compact rhythm. The reference is a 480px
+      // plain card: one tone of wash for the panel, tiles one tone deeper, the heat
+      // grid directly on the card with no band of its own.
       //
       // THE FIRST RULE MATCHES THE ROOT ITSELF, NOT A DESCENDANT. `data-dus-style`
       // is written ON `.dus-root` (panel.js), so a `[data-dus-style] .dus-root`
@@ -1793,7 +1787,7 @@ window.__ModuleLoader__.load({
       // the rest keep the descendant form.
       '.dus-root[data-dus-style="compact"] { width: 480px;',
       "  max-width: calc(100% - var(--dsh-composer-side-clearance, 0px) - var(--dsh-composer-side-clearance, 0px));",
-      "  margin: 4px auto 8px; }",
+      "  margin: 0 auto; }",
       // A flat wash, no outline and no elevation: the reference card is a fill, not
       // a raised surface. 4% of the label ink over the layer-2 tone is the whole
       // recipe — it flips with the theme on its own, so no dark override is needed.
@@ -1802,20 +1796,17 @@ window.__ModuleLoader__.load({
       "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, var(--dsw-alias-bg-layer-2));",
       "  --dsw-elevation-stroke-color: transparent;",
       "  box-shadow: none; }",
-      // The head keeps the same two clusters but Claude's smaller chip: 12/18 type
-      // with a 1px vertical pad, and a 5px radius on a 20px control (half its
-      // height, the same rounding rule the reference states).
-      '[data-dus-style="compact"] .dus-tab,',
-      '[data-dus-style="compact"] .dus-range { padding: 1px 8px; border-radius: 5px;',
-      "  font-size: 12px; line-height: 18px; font-weight: 400; }",
+      // The head chip IS the reference's chip in both styles now (12/18 type, a
+      // 1px vertical pad, half the medium radius), so only the surface differs: the
+      // compact panel is a layer-2 wash, and its selected chip is mixed over that
+      // rather than over `bg-module-platform`. No weight change on selection in
+      // either style — the reference changes fill and colour only
+      // (`home-panel.css:222-228`), and a weight jump re-measures the label.
       '[data-dus-style="compact"] .dus-range[data-active="true"],',
-      '[data-dus-style="compact"] .dus-tab[data-active="true"] { font-weight: 500;',
+      '[data-dus-style="compact"] .dus-tab[data-active="true"] {',
       "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, var(--dsw-alias-bg-layer-2)); }",
-      '[data-dus-style="compact"] .dus-range:hover:not([data-active="true"]),',
-      '[data-dus-style="compact"] .dus-tab:hover:not([data-active="true"]) {',
-      "  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent); }",
       '[data-dus-style="compact"] .dus-body { gap: 12px; }',
-      // Overview: the reference's own rhythm — tiles, grid, caption, 12px apart.
+      // Overview: the reference's own rhythm — tiles and grid, 12px apart.
       '[data-dus-style="compact"] .dus-overview { gap: var(--dus-compact-block-gap, 12px); }',
       // Tiles: three across at EVERY width (the reference's own arrangement). They
       // hold a short label and a 13px figure, so they stay legible well below the
@@ -1854,29 +1845,14 @@ window.__ModuleLoader__.load({
       '[data-dus-style="compact"] .dus-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, var(--dsw-alias-bg-layer-2)); }',
       '[data-dus-style="compact"] .dus-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 65%, var(--dsw-alias-bg-layer-2)); }',
       '[data-dus-style="compact"] .dus-heat-cell[data-level="4"] { background: var(--dsw-alias-state-business-primary); }',
-      // The caption is a plain line on the card: no divider above it and no padding
-      // of its own, 12/16 in the tertiary tone exactly as the reference sets it.
+      // NO CAPTION, NO DIVIDER, NO RESERVED LINE. The compact card used to end in
+      // one truncated comparison line, and `compact-layout.js` still reserves its
+      // 16px (`COMPACT_FOOT_HEIGHT`) inside `compactFixedHeight()` — deliberately,
+      // so that deleting the line does NOT enlarge the heat columns: the budget the
+      // cell size is computed from is unchanged, and 252 still draws a 14px grid of
+      // seven uncut rows. The 16px now surfaces as a quiet strip under the grid,
+      // which is the card's bottom inset.
       //
-      // THE CAPTION IS ONE LINE, AND SAYS SO IN CSS. The compact arithmetic
-      // (`compact-layout.js`) reserves exactly `COMPACT_FOOT_HEIGHT` = 16px for it:
-      // 252 = 136 (tiles + gaps) + 116 (the 14px grid) + 16, with zero slack. A
-      // caption that wrapped — a longer sentence, or the English locale — needed two
-      // 16px lines, and `.dus-body { overflow: hidden }` cut the second one through
-      // the middle of its glyphs with no scrollbar to show it had happened.
-      //
-      // The alternative (shrink the caption's box and let the heat block absorb the
-      // difference) cannot work: at 252 the grid already takes every spare pixel, so
-      // a *smaller* reservation buys nothing for a longer text, and a *larger* one
-      // would have to come out of the grid's seven rows or out of the persisted 252.
-      // So the line is truncated visibly instead — one line, an ellipsis at the
-      // trailing edge, and the full sentence still in the DOM for a screen reader.
-      // `height` is pinned to the same token the arithmetic uses, so what is reserved
-      // and what is painted are the same number rather than merely usually equal.
-      '[data-dus-style="compact"] .dus-foot { padding-top: 0; border-top: 0; flex: none;',
-      "  height: var(--dus-compact-foot-h, 16px); overflow: hidden;",
-      "  font-size: 12px; line-height: var(--dus-compact-foot-h, 16px); }",
-      '[data-dus-style="compact"] .dus-foot-line { color: var(--dsw-alias-label-tertiary);',
-      "  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
       // The models tab keeps the shared body, its silent scroll and its rows; only
       // the row rhythm gets the compact spacing.
       '[data-dus-style="compact"] .dus-model { gap: 4px; padding: 6px 0; }',
@@ -2088,46 +2064,6 @@ window.__ModuleLoader__.load({
           t: props.t
         });
       }
-      function PanelHeightRow(props) {
-        const t = typeof props.t === "function" ? props.t : fallbackTranslate;
-        const state = React2.useSyncExternalStore(settings2.subscribe, settings2.getState);
-        const style = state.style;
-        const height = bodyHeightOf(state);
-        const span = MAX_BODY_HEIGHT3 - MIN_BODY_HEIGHT3;
-        const fill = span > 0 ? Math.round((height - MIN_BODY_HEIGHT3) / span * 100) : 0;
-        return React2.createElement(
-          "div",
-          { className: "dus-row" },
-          React2.createElement(
-            "div",
-            { className: "dus-row-text" },
-            React2.createElement("div", { className: "dus-row-title" }, t("settings.height.title")),
-            React2.createElement("div", { className: "dus-row-desc" }, t("settings.height.desc"))
-          ),
-          React2.createElement(
-            "div",
-            { className: "dus-row-control" },
-            React2.createElement("input", {
-              type: "range",
-              className: "dus-row-slider",
-              min: MIN_BODY_HEIGHT3,
-              max: MAX_BODY_HEIGHT3,
-              step: BODY_HEIGHT_STEP,
-              value: height,
-              "aria-label": t("settings.height.title"),
-              "aria-valuetext": height + " px",
-              // The style this slider was rendered for: the readout and the write
-              // then cannot disagree about which field they belong to.
-              "data-style": isCompact(style) ? "compact" : "classic",
-              style: { "--dus-fill": fill + "%" },
-              onChange: function(event) {
-                settings2.setBodyHeight(parseInt(event.target.value, 10), style);
-              }
-            }),
-            React2.createElement("span", { className: "dus-row-value" }, height + " px")
-          )
-        );
-      }
       function StyleRow(props) {
         const t = typeof props.t === "function" ? props.t : fallbackTranslate;
         const state = React2.useSyncExternalStore(settings2.subscribe, settings2.getState);
@@ -2238,9 +2174,13 @@ window.__ModuleLoader__.load({
           ctx.effect(function() {
             const placement = registerSettingsRows({
               slots,
+              // The height row is deliberately absent: both styles are FIXED at
+              // their designed heights (classic 344px, compact 252px). A slider let
+              // the reader shrink the card until the heat band lost rows or the
+              // caption clipped, and those failures were silent; the number is now
+              // the style's own contract, not a preference.
               rows: [
                 { id: STYLE_ROW_ID, order: STYLE_ROW_ORDER, component: StyleRow },
-                { id: SETTINGS_ROW_ID, order: SETTINGS_ROW_ORDER, component: PanelHeightRow },
                 { id: UNITS_ROW_ID, order: UNITS_ROW_ORDER, component: UnitRow }
               ],
               warn: warnOnce

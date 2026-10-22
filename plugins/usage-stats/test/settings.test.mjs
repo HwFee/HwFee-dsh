@@ -477,8 +477,10 @@ test('the overview tab fills the body and never scrolls vertically', function ()
   // The type that may shrink carries its floors as the CSS fallbacks.
   assert.match(ruleBody(PANEL_CSS, 'dus-card-label'), /font-size:\s*var\(--dus-card-label-size,\s*11px\)/)
   assert.match(ruleBody(PANEL_CSS, 'dus-card-value'), /font-size:\s*var\(--dus-card-value-size,\s*17px\)/)
-  assert.match(ruleBody(PANEL_CSS, 'dus-foot'), /font-size:\s*12px/,
-    'the foot is prose: its size never changes, only its leading')
+  // The caption and its divider are gone, and nothing reintroduces a rule above
+  // the bottom of the tab: the tab now ends at the heat grid.
+  assert.ok(!/\.dus-foot\b/.test(PANEL_CSS), 'no caption rule may come back')
+  assert.ok(!/dus-foot-line/.test(PANEL_CSS), 'no caption line rule either')
 })
 
 test('equal height comes from .dus-body + the 100% overview filler, never from a growing heat band', function () {
@@ -639,7 +641,7 @@ function flatten(tree) {
   return out
 }
 
-test('the panel reads the shared store and rewrites the variable live', function () {
+test("the panel renders at its style's fixed height, whatever is stored", function () {
   const React = makeReactStub()
   const storage = makeStorage()
   const store = createSettingsStore(storage)
@@ -651,35 +653,40 @@ test('the panel reads the shared store and rewrites the variable live', function
 
   const root = flatten(render()).find(function (node) { return node.props?.className === 'dus-panel' })
   assert.ok(root, 'the panel rendered')
-  assert.equal(root.props.style[BODY_HEIGHT_VAR], '344px', 'default height on the panel root')
+  assert.equal(root.props.style[BODY_HEIGHT_VAR], '344px', 'classic renders at its designed height')
   // The same inline style carries the Overview shrink lengths (layout.js), so
-  // one store read drives both the tab height and the graphics scale.
+  // one read drives both the tab height and the graphics scale.
   assert.equal(root.props.style['--dus-heat-cell-max'], '18px')
 
-  // A drag in General settings goes through the same store: the next panel
-  // render must carry the new value, with no reload and no remount.
+  // A height write is now a no-op on the render: the number belongs to the
+  // style, not to a preference. This is what keeps the heat band from losing
+  // rows and the caption from clipping when an old value is still in storage.
   store.setBodyHeight(456)
   const after = flatten(render()).find(function (node) { return node.props?.className === 'dus-panel' })
-  assert.equal(after.props.style[BODY_HEIGHT_VAR], '456px')
-  assert.equal(after.props.style['--dus-heat-cell-max'], '22px',
-    'a taller body hands the band the full 22px cap')
-  assert.equal(JSON.parse(storage.getItem(STORAGE_KEY)).bodyHeight, 456)
+  assert.equal(after.props.style[BODY_HEIGHT_VAR], '344px',
+    'a stale height write cannot resize the card')
+  assert.equal(after.props.style['--dus-heat-cell-max'], '18px')
+
+  // Switching the style is what changes the height, and it lands on the design
+  // value for the style now in view.
+  store.setStyle('compact')
+  const compact = flatten(render()).find(function (node) { return node.props?.className === 'dus-panel' })
+  assert.equal(compact.props.style[BODY_HEIGHT_VAR], COMPACT_DEFAULT_BODY_HEIGHT + 'px')
 })
 
 test('the overview tab renders one .dus-overview wrapper around its sections', function () {
-  // The CSS fix only works if panel.js actually wraps the three Overview
+  // The CSS fix only works if panel.js actually wraps the two Overview
   // sections in the filler element: `.dus-body` height → `.dus-overview` 100%
   // → `.dus-heat` flexes. Asserted as a structure so the rule cannot be
   // shipped against a bare Fragment.
   const React = makeReactStub()
   const cards = { section: 'cards' }
   const heat = { section: 'heat' }
-  const foot = { section: 'foot' }
-  const node = overviewElement(React, cards, heat, foot)
+  const node = overviewElement(React, cards, heat)
   assert.equal(node.type, 'div')
   assert.equal(node.props.className, 'dus-overview')
-  assert.deepEqual(node.children, [cards, heat, foot],
-    'cards, heat band and foot stay in this order inside one wrapper')
+  assert.deepEqual(node.children, [cards, heat],
+    'cards then the heat band, inside one wrapper')
 })
 
 // ------------------------------------------------------------ locale copy
@@ -785,7 +792,7 @@ function lifecycleRows() {
     inject(key, callback) { callback(); return function () {} },
     register(options, component) {
       // The dock occupant lands here too; only the settings rows are collected.
-      if (options.id === SETTINGS_ROW_ID || options.id === UNITS_ROW_ID) {
+      if (options.id === STYLE_ROW_ID || options.id === UNITS_ROW_ID) {
         registrations.push({ options: options, component: component })
       }
       return function () {}
@@ -821,7 +828,7 @@ function textOf(tree, className) {
   return node === undefined ? null : node
 }
 
-test('one formatter reaches the cards, model rows, heatmap text and book line', function () {
+test('one formatter reaches the cards, model rows and heatmap text', function () {
   // Explicit short scale: the cards carry the scaled values, and each card's
   // `title` is the SAME string (screen reader and screen agree).
   const short = renderUnitPanel({ lang: 'en', mode: 'short' })
@@ -877,23 +884,17 @@ test('the models list uses the same scale as the cards', function () {
   assert.equal(myriadTokens.props.children, '18.8亿')
 })
 
-test('the book comparison line uses the selected scale', function () {
-  // `roll` is pinned with Math.random so the book (and therefore the ratio) is
-  // deterministic: BOOKS[0] has 730,000 chars → ~2,571 copies.
-  const originalRandom = Math.random
-  Math.random = function () { return 0 }
-  try {
-    const short = renderUnitPanel({ lang: 'en', mode: 'short' })
-    const foot = textOf(short.tree, 'dus-foot-line')
-    assert.ok(foot, 'expected the book line')
-    assert.match(String(foot.props.children), /"ratio":"2\.6K"/)
+test('the panel no longer renders a comparison caption', function () {
+  // The user removed the "你用掉的 token 约是《三国演义》的 12K 倍。" line and the
+  // rule above it. Both the element and the rule are gone; a caption that came
+  // back would also need its own height reservation back in `layout.js`, which
+  // the layout tests keep as a bare budget (`bottomGap`).
+  const short = renderUnitPanel({ lang: 'en', mode: 'short' })
+  assert.equal(textOf(short.tree, 'dus-foot'), null, 'no caption box')
+  assert.equal(textOf(short.tree, 'dus-foot-line'), null, 'no caption line')
 
-    const myriad = renderUnitPanel({ lang: 'zh', mode: 'myriad' })
-    const footZh = textOf(myriad.tree, 'dus-foot-line')
-    assert.match(String(footZh.props.children), /"ratio":"2,571"/)
-  } finally {
-    Math.random = originalRandom
-  }
+  const zhPanel = renderUnitPanel({ lang: 'zh', mode: 'myriad' })
+  assert.equal(textOf(zhPanel.tree, 'dus-foot-line'), null, 'nor in the zh dictionary')
 })
 
 test('the panel cannot regress to a second formatter', function () {
@@ -902,8 +903,10 @@ test('the panel cannot regress to a second formatter', function () {
   const source = readFileSync(new URL('../client/src/panel.js', import.meta.url), 'utf8')
   assert.doesNotMatch(source, /formatTokens\(|formatCount\(/,
     'the unlocalised helper names must be gone')
-  assert.ok((source.match(/formatNumber\(/g) || []).length >= 8,
-    'cards, model rows, heat count, heat max and the book ratio all go through it')
+  // Six card values + the heat tooltip count + the heatmap's max (its
+  // `aria-label`) + two per model row (tokens and the aria text).
+  assert.ok((source.match(/formatNumber\(/g) || []).length >= 6,
+    'cards, model rows, heat count and heat max all go through it')
   assert.match(source, /title:\s*card\.value/, 'the card tooltip carries the visible string')
   assert.match(source, /'aria-label':\s*text/, 'the heat cell aria text is the same formatted text')
 })
@@ -934,15 +937,17 @@ test('the unit row renders ONE switch, not a segmented control', function () {
     'the captured element is a snapshot; the store is the source of truth')
 })
 
-test('both settings rows register on the theme page with ids 40/41', function () {
+test('both settings rows register on the theme page, style above units', function () {
   const rendered = lifecycleRows()
-  assert.equal(rendered.registrations.length, 2, 'dock + both rows is a different list; rows only here')
+  assert.equal(rendered.registrations.length, 2, 'dock + the rows is a different list; rows only here')
   assert.deepEqual(rendered.registrations.map(function (row) { return row.options.name }),
     ['settings.appearance.item', 'settings.appearance.item'])
+  // The height row is gone on purpose: each style carries its own height, so
+  // there is no number left for the reader to set.
   assert.deepEqual(rendered.registrations.map(function (row) { return row.options.id }),
-    [SETTINGS_ROW_ID, UNITS_ROW_ID])
+    [STYLE_ROW_ID, UNITS_ROW_ID])
   assert.deepEqual(rendered.registrations.map(function (row) { return row.options.order }),
-    [SETTINGS_ROW_ORDER, UNITS_ROW_ORDER])
+    [STYLE_ROW_ORDER, UNITS_ROW_ORDER])
 })
 
 // ------------------------------------------- the route fence's shared contract

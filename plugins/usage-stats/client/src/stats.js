@@ -14,8 +14,6 @@
  * non-deterministic across machines.
  */
 
-import { BOOKS } from './constants.js'
-
 const DAY_MS = 86400000
 
 /**
@@ -436,40 +434,4 @@ export function buildHeatmap(perDay, range, now) {
   }
 
   return { weeks, max }
-}
-
-// ------------------------------------------------------------ fun comparison
-
-/**
- * Pick ONE book at random and size the token spend against it.
- *
- * The pick is the point. A single comparison reads as a joke; five side by
- * side read as a chart. The hero re-rolls it on every mount, so opening
- * New Session twice hands the user two different books. `random` is injectable
- * so tests can pin the choice.
- *
- * The result is data, not a sentence: `title`/`titleEn`/`chars`/`ratio`. The
- * panel interpolates those into its own localized `book.*` strings, because
- * this module is pure arithmetic with no locale handle — and because dropping
- * the sentence here is what lets the same pick serve both languages.
- *
- * A copy costs `chars` tokens because Chinese runs close to one token per
- * character in these tokenizers. That conversion is deliberately approximate;
- * the printed comparison is one line with no byline or basis.
- */
-export function bookComparison(totalTokens, random = Math.random) {
-  const total = typeof totalTokens === 'number' && Number.isFinite(totalTokens) ? totalTokens : 0
-  const roll = typeof random === 'function' ? Number(random()) : Number.NaN
-  const index = Number.isFinite(roll)
-    ? Math.min(BOOKS.length - 1, Math.max(0, Math.floor(roll * BOOKS.length)))
-    : 0
-  const pick = BOOKS[index]
-  const ratio = pick.chars > 0 ? total / pick.chars : 0
-
-  return {
-    title: pick.title,
-    titleEn: pick.titleEn,
-    chars: pick.chars,
-    ratio,
-  }
 }
