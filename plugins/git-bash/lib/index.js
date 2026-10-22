@@ -19,7 +19,7 @@
  * @module @hwfee/dsh-git-bash
  */
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { DEFAULT_MODE, MODES, chooseShell, readMode } from './mode.js'
 import { createResolver, execAsync } from './resolve.js'
 import { createModeRoute } from './mode-route.js'
@@ -86,10 +86,16 @@ export function apply(ctx) {
     () => ctx.tools.register(createRunShellTool(current, {
       // OPTIONAL ON PURPOSE. The host composes exactly one `ctx.shell` executor
       // (pwsh-sandbox on Windows), but a profile may leave it out. `ctx.get`
-      // reads without an inject requirement, so the plugin still mounts and
-      // `run_shell` falls back to direct execution.
+      // reads without an inject requirement, so the plugin still mounts — and
+      // `run_shell` then fails CLOSED rather than spawning unconfined. See
+      // `resolveSandboxDecision`.
       getShell: () => (typeof ctx.get === 'function' ? ctx.get('shell') : undefined),
       getWorkingDirectory: () => (typeof ctx.get === 'function' ? ctx.get('workingDirectory') : undefined),
+      // THE TWO SERVICES THAT MAKE THE DIRECT PATH ADMISSIBLE. Without these the
+      // session's mode cannot be resolved, and `run_shell` refuses instead of
+      // guessing.
+      getSandboxPolicy: () => (typeof ctx.get === 'function' ? ctx.get('sandboxPolicy') : undefined),
+      getSessions: () => (typeof ctx.get === 'function' ? ctx.get('sessions') : undefined),
     })),
     'dsh-git-bash: run_shell tool',
   )
@@ -202,6 +208,8 @@ export function describe(result, mode) {
  * @param {object} [services] optional host services, read lazily
  * @param {() => object | undefined} [services.getShell] `ctx.shell`, the host executor
  * @param {() => object | undefined} [services.getWorkingDirectory] `ctx.workingDirectory`
+ * @param {(path: string, args: string[], cwd?: string, signal?: AbortSignal) => Promise<object>} [services.run]
+ *        the direct executor, injected for tests; defaults to the real spawn
  * @returns the tool definition `ctx.tools.register` expects
  */
 export function createRunShellTool(current, services = {}) {
@@ -283,6 +291,20 @@ export function createRunShellTool(current, services = {}) {
         && typeof hostShell.execute === 'function'
         && typeof hostShell.resolve === 'function'
 
+      // THE SESSION'S SANDBOX POLICY, RESOLVED BEFORE ANYTHING SPAWNS.
+      //
+      // This plugin used to ignore it entirely, and that is a fail-OPEN bug, not
+      // a missing nicety: on Windows the Git Bash path cannot delegate, so it
+      // spawned through `child_process` — outside the sandbox, outside approval,
+      // whatever mode the session was in. A `read-only` session could still
+      // write, and the old code only *said* so in the result, after the command
+      // had already run. A disclosure printed afterwards is not a control.
+      //
+      // The policy is resolved here, once, and it decides whether the direct
+      // path is allowed at all.
+      const decision = resolveSandboxDecision(exec, services)
+      if (decision.ok !== true) throw new Error(messageFor(decision.reason, decision.detail))
+
       // WHICH MODES MAY CROSS THE HOST BOUNDARY.
       //
       // PowerShell does: the host executor IS pwsh on Windows, and nesting a
@@ -290,17 +312,43 @@ export function createRunShellTool(current, services = {}) {
       // pwsh cannot create the MSYS process (NtCreateDirectoryObject,
       // 0xC0000022 — reproduced live), so delegating would turn every command
       // into a spawn failure. POSIX has one shell, so it always delegates.
-      //
-      // The direct path is the pre-delegation behaviour. It is REPORTED (via
-      // 'direct' + a note), never silent: a user reading the tool result must be
-      // able to tell that this call did not cross the sandbox.
       const delegate = shouldDelegate(shell.kind, platform, hasHost)
-      if (delegate) return runThroughHost(hostShell, shell, args, exec)
+      // The resolved policy rides into the executor, so the session's actual mode
+      // is enforced there instead of the executor falling back to its own default
+      // — which was the second half of the same fail-open bug: the request used
+      // to omit `sandboxPolicy`, so even the delegated path ignored the session.
+      if (delegate) return runThroughHost(hostShell, shell, args, exec, decision.policy)
 
-      const direct = await runInShell({ kind: shell.kind, path: shell.path }, { ...args, workdir: shell.workdir })
-      const note = !hasHost
-        ? 'Ran directly: this profile has no ctx.shell executor.'
-        : 'Ran directly: the Windows host sandbox cannot start Git Bash (nested MSYS process creation is denied), so this command did not cross the sandbox.'
+      // FROM HERE ON THE COMMAND RUNS WITHOUT THE SANDBOX, so the ONLY admissible
+      // case is a session that explicitly grants full access. Anything else —
+      // read-only, workspace-write, an unrecognised mode, or a policy service
+      // that could not be consulted — refuses, and refuses BEFORE spawning.
+      if (decision.mode !== 'danger-full-access') {
+        throw new Error(messageFor('sandbox-denied', decision.mode))
+      }
+
+      // THE SIGNAL CROSSES THIS PATH TOO. It used to be dropped here: the host
+      // path forwarded `exec.signal` to the executor, while the direct path
+      // called `runInShell` with only the arguments — so a cancelled tool call
+      // kept its shell (and whatever it had started) running to completion, and
+      // the late output was returned into a turn the user had already stopped.
+      // Measured before the fix: aborting a `sleep 3` call still resolved after
+      // 3.7 s with stdout "LATE". See test/tool.test.mjs.
+      //
+      // `services.run` is the executor seam: it defaults to the real spawn and
+      // exists so the cancellation guarantee above can be asserted without
+      // starting a process.
+      const direct = await runInShell(
+        { kind: shell.kind, path: shell.path },
+        { ...args, workdir: shell.workdir, signal: exec.signal },
+        services.run,
+      )
+      // POSITIVE, NOT RESIDUAL. The old note existed to admit that the call had
+      // bypassed the sandbox; now the call is only here because the session
+      // granted full access, so the note states the permission instead of
+      // excusing the bypass.
+      const note = `Ran directly: the session grants danger-full-access, so this command `
+        + `did not cross the sandbox${hasHost ? '' : ' (this profile also has no ctx.shell executor)'}.`
       return { ...direct, via: 'direct', note }
     },
     presentCall: (args) => ({
@@ -313,15 +361,116 @@ export function createRunShellTool(current, services = {}) {
 }
 
 /**
+ * Resolve the sandbox policy for one call, and decide whether the direct path is
+ * admissible at all.
+ *
+ * FAIL CLOSED IN EVERY DIRECTION. The honest question is not "did the caller
+ * pass a policy" but "what is this session actually allowed to do". Three facts
+ * make that answerable, and each has a failure branch that must deny:
+ *
+ *   1. `ctx.sandboxPolicy.resolve({ session })` is the host's single owner of
+ *      the per-call policy (`defaultMode` under the session's logged mode).
+ *      Without that service the plugin cannot learn the mode, so it denies —
+ *      "unconfined because I could not ask" is the same hazard as
+ *      "unconfined because nobody checked".
+ *   2. A session is only available as `exec.agent`; `sessions.get(agent.id)`
+ *      turns it into the `Session` the policy service expects. A throw, a
+ *      missing store, or a session that is not live all deny.
+ *   3. An unrecognised `mode` denies. A future host mode is not evidence of
+ *      permission.
+ *
+ * The resolved policy is RETURNED rather than re-derived downstream, so the
+ * delegated path enforces exactly what the direct path was judged against.
+ *
+ * @param {object} [exec] the tool execution context (`agent`, `signal`)
+ * @param {object} [services] the injected service readers
+ * @returns {{ ok: true, mode: string, policy: object } | { ok: false, reason: string, detail?: string }}
+ *          the decision; a failure is a VALUE, so `execute` can name the fix
+ */
+export function resolveSandboxDecision(exec, services = {}) {
+  const getPolicy = typeof services.getSandboxPolicy === 'function'
+    ? services.getSandboxPolicy
+    : () => undefined
+  const getSessions = typeof services.getSessions === 'function'
+    ? services.getSessions
+    : () => undefined
+
+  let policyService
+  try {
+    policyService = getPolicy()
+  } catch {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'the sandbox-policy service threw' }
+  }
+  if (policyService === undefined || policyService === null) {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'this profile composes no ctx.sandboxPolicy' }
+  }
+  if (typeof policyService.resolve !== 'function') {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'the sandbox-policy service has no resolve()' }
+  }
+
+  // THE SESSION IS THE UNIT THE MODE IS LOGGED AGAINST. Without one there is no
+  // mode to enforce, so the deployment default cannot be assumed to be
+  // permissive.
+  const agent = exec === undefined || exec === null ? undefined : exec.agent
+  if (agent === undefined || agent === null || typeof agent.id !== 'string') {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'the call carries no session' }
+  }
+
+  let sessions
+  try {
+    sessions = getSessions()
+  } catch {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'the sessions service threw' }
+  }
+  if (sessions === undefined || sessions === null || typeof sessions.get !== 'function') {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'this profile composes no ctx.sessions' }
+  }
+
+  let session
+  try {
+    session = sessions.get(agent.id)
+  } catch {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'looking up the session threw' }
+  }
+  if (session === undefined || session === null) {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'the session is not live' }
+  }
+
+  let policy
+  try {
+    policy = policyService.resolve({ session })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason: 'sandbox-unverified', detail: 'resolve() threw: ' + detail }
+  }
+  if (policy === null || typeof policy !== 'object' || typeof policy.mode !== 'string') {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'resolve() returned no usable policy' }
+  }
+  if (!SANDBOX_MODES.includes(policy.mode)) {
+    return { ok: false, reason: 'sandbox-unverified', detail: 'unknown sandbox mode "' + policy.mode + '"' }
+  }
+  return { ok: true, mode: policy.mode, policy }
+}
+
+/**
+ * The sandbox modes this host defines, mirroring `SandboxMode`.
+ *
+ * Listed rather than trusted, so a typo or a future value fails closed
+ * (`resolveSandboxDecision` denies anything outside this set).
+ */
+export const SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access']
+
+/**
  * The sentence a user reads when the chosen shell is missing.
  *
  * Each reason names the fix, because the failure is always one of three
  * configuration facts and never the command's fault.
  *
  * @param {string} reason the failure code
+ * @param {string} [detail] the specific fact behind a refusal
  * @returns {string} the message
  */
-export function messageFor(reason) {
+export function messageFor(reason, detail) {
   switch (reason) {
     case 'gitbash-not-found':
       return 'Git Bash is selected but was not found. Install Git for Windows, or set '
@@ -333,6 +482,35 @@ export function messageFor(reason) {
       return 'The selected shell mode is not available on this platform.'
     case 'no-shell-found':
       return 'No usable shell was found. Install Git for Windows, or set DSH_GIT_BASH.'
+    // REFUSED, NOT FAILED. The command never started, which is the point: these
+    // two sentences have to say so, and name the way forward, or the model will
+    // retry the same call or assume the command ran and failed.
+    //
+    // THE SENTENCE MUST NOT OFFER TO ESCALATE. An earlier version ended with
+    // "or raise this session to danger-full-access", which reads as an
+    // instruction the model can follow — and a model that raises its own
+    // sandbox mode to get its command through has defeated the control this
+    // refusal exists to enforce. The refusal therefore names the ONE safe
+    // redirection (PowerShell, which runs inside the sandbox) and, when the
+    // command is genuinely a POSIX-only script, says plainly that the user has
+    // to choose. It never invites either the model or its reader to widen the
+    // session's permissions.
+    case 'sandbox-denied':
+      return 'run_shell refused to run in Git Bash: this session is in "'
+        + String(detail === undefined ? 'an unverified' : detail) + '" mode, and Git Bash on Windows '
+        + 'cannot run inside the host sandbox (the sandboxed pwsh cannot create the MSYS '
+        + 'process, 0xC0000022). NOTHING WAS EXECUTED. Do not retry the same command here and do '
+        + 'not change the sandbox mode to make it work. Choose one of these instead: run the '
+        + 'command with the pwsh / run_shell tool in Windows PowerShell mode, which enforces the '
+        + 'sandbox; rewrite it as an equivalent PowerShell command; or tell the user that this '
+        + 'specific command needs a POSIX shell and let them decide.'
+    case 'sandbox-unverified':
+      return 'run_shell refused to run: the sandbox policy for this session could not be '
+        + 'determined (' + String(detail === undefined ? 'no reason given' : detail) + '), and Git Bash '
+        + 'on Windows cannot run inside the sandbox anyway. NOTHING WAS EXECUTED. Running it '
+        + 'unconfined without knowing the session mode is not an acceptable fallback. Use the '
+        + 'pwsh / run_shell tool in Windows PowerShell mode instead; if that is unavailable, this '
+        + 'profile cannot safely run shell commands and the user has to fix the composition.'
     default:
       return 'The configured shell could not be started: ' + reason
   }
@@ -350,20 +528,30 @@ export function messageFor(reason) {
  * model needs to see it (`grep` that matched nothing exits 1).
  *
  * @param {{ kind: string, path: string }} shell the executable
- * @param {{ command: string, workdir?: string }} args the call arguments
- * @param {(path: string, args: string[], cwd?: string) => Promise<object>} [run]
+ * @param {{ command: string, workdir?: string, signal?: AbortSignal }} args the call arguments
+ * @param {(path: string, args: string[], cwd?: string, signal?: AbortSignal) => Promise<object>} [run]
  *        the executor, injected for tests
+ * @param {AbortSignal} [signal] cancellation, forwarded to the executor
  * @returns {Promise<object>} the tool result
  */
-export async function runInShell(shell, args, run = defaultRun) {
+export async function runInShell(shell, args, run = defaultRun, signal = args?.signal) {
   const command = typeof args?.command === 'string' ? args.command : ''
   if (command.trim() === '') throw new Error('run_shell needs a non-empty `command`')
+  // AN ALREADY-CANCELLED CALL MUST NOT SPAWN AT ALL. The host can cancel between
+  // dispatch and body start; spawning first and killing after would still start
+  // the command (a `rm`, a `git push`) for a turn that is already over.
+  if (signal?.aborted === true) throw abortError(signal)
 
   const argv = shell.kind === 'gitbash' || shell.kind === 'posix-bash'
     ? ['-lc', command]
     : ['-NoProfile', '-NonInteractive', '-Command', command]
 
-  const outcome = await run(shell.path, argv, args?.workdir)
+  const outcome = await run(shell.path, argv, args?.workdir, signal)
+  // A kill that lands while the child is exiting still resolves with a numeric
+  // exit code, so the abort is reported from the signal rather than inferred
+  // from the code: otherwise a cancelled call would look like a normal failure
+  // of the command the user never let finish.
+  if (signal?.aborted === true) throw abortError(signal)
   return {
     shell: shell.path,
     kind: shell.kind,
@@ -371,6 +559,37 @@ export async function runInShell(shell, args, run = defaultRun) {
     stdout: outcome.stdout,
     stderr: outcome.stderr,
   }
+}
+
+/**
+ * The error a cancelled call reports.
+ *
+ * Named `AbortError` because that is the name the host's tool layer and the
+ * model both recognise as cancellation rather than as the command failing.
+ *
+ * IT ALWAYS CARRIES `stderr`. Two call sites cancel a call — before dispatch and
+ * during the run — and the host surfaces `stderr` while a plain `error.message`
+ * may never reach the user. Leaving it undefined on one of them made the cleanup
+ * limitation invisible on exactly the path that had no cleanup to do, which is
+ * the shape that later reads as "the kill worked".
+ *
+ * @param {AbortSignal} [signal] the signal that fired
+ * @param {string} [note] the cleanup note; defaults to the standard cancel marker
+ * @returns {Error} an error whose `name` is `AbortError`
+ */
+export function abortError(signal, note) {
+  const reason = signal?.reason
+  const detail = typeof note === 'string' && note !== '' ? note : terminationNote('abort', {})
+  const base = reason instanceof Error && reason.name !== 'AbortError' && reason.message !== ''
+    ? 'run_shell was cancelled: ' + reason.message
+    : 'run_shell was cancelled before the command finished'
+  // THE NOTE GOES IN BOTH PLACES. `stderr` is what the host renders; `message` is
+  // what a log or a bare `catch` prints. A marker that reaches only one of them
+  // is invisible on the other path.
+  const error = new Error(base + '\n' + detail.trimEnd())
+  error.name = 'AbortError'
+  error.stderr = detail
+  return error
 }
 
 /**
@@ -449,15 +668,26 @@ export function delegatedCommand(shell, command, platform = process.platform) {
  * `run_shell`'s shape. `result()` rejects on infrastructure failures, which
  * propagate to the tool layer like any other tool error.
  *
+ * THE POLICY TRAVELS WITH THE REQUEST. Omitting `sandboxPolicy` used to make the
+ * executor apply its own default, so a `read-only` session's command ran under
+ * whatever the deployment default happened to be — the session mode was ignored
+ * on the delegated path too, not just the direct one. The resolved policy is
+ * passed through verbatim.
+ *
  * @param {object} hostShell the `ctx.shell` service
  * @param {{ kind: string, path: string, workdir?: string }} shell the selected interpreter
  * @param {{ command?: string, workdir?: string }} args the call arguments
  * @param {{ signal?: AbortSignal }} [exec] the tool execution context
+ * @param {object} [policy] the resolved `SandboxExecutionPolicy` for this call
  * @returns {Promise<object>} the tool result
  */
-export async function runThroughHost(hostShell, shell, args, exec = {}) {
+export async function runThroughHost(hostShell, shell, args, exec = {}, policy) {
   const command = typeof args?.command === 'string' ? args.command : ''
   if (command.trim() === '') throw new Error('run_shell needs a non-empty `command`')
+  // AN ALREADY-CANCELLED CALL MUST NOT REACH THE EXECUTOR. The executor would
+  // start the process and only then notice the signal, which is the same hazard
+  // the direct path guards against.
+  if (exec.signal?.aborted === true) throw abortError(exec.signal)
   const workdir = typeof args?.workdir === 'string' && args.workdir !== ''
     ? args.workdir
     : shell.workdir
@@ -465,9 +695,25 @@ export async function runThroughHost(hostShell, shell, args, exec = {}) {
     command: delegatedCommand(shell, command, process.platform),
     ...(workdir === undefined ? {} : { workdir }),
     ...(exec.signal === undefined ? {} : { signal: exec.signal }),
+    ...(policy === undefined || policy === null ? {} : { sandboxPolicy: policy }),
   }
   const handle = await hostShell.execute(hostShell.resolve(request))
   const result = await handle.result()
+  // A CANCELLED RUN IS NOT A RESULT. The executor's contract says an abort
+  // RESOLVES with `aborted: true` and no exit code; reporting that as
+  // `exitCode: -1` would hand the model a successful tool result for a command
+  // the user stopped. It becomes the same `AbortError` the direct path throws, so
+  // the host sees one cancellation shape from both routes.
+  if (result?.aborted === true || exec.signal?.aborted === true) {
+    // The executor owned the tree, so cleanup truth lives there: it reports
+    // whether the kill finished, and that is what the note says instead of a
+    // claim this layer cannot verify.
+    const note = typeof result?.stderr?.text === 'string' ? result.stderr.text : ''
+    throw abortError(exec.signal, appendNote(note, terminationNote('abort', {
+      treeConfirmed: null,
+      treeDetail: 'cleanup was the host executor\'s responsibility',
+    })))
+  }
   return {
     shell: shell.path,
     kind: shell.kind,
@@ -505,35 +751,375 @@ export async function resolveWorkdir(args, exec, getService) {
 }
 
 /**
+ * The deadline for one command, and how long a kill may take before we stop
+ * waiting for it. Both are constants rather than tool fields: widening the wire
+ * schema is a separate decision, and these two are policy, not caller input.
+ */
+export const DEFAULT_TIMEOUT_MS = 120_000
+
+/**
+ * THE BOUND ON CLEANUP.
+ *
+ * A killed shell does not necessarily close its stdio: a grandchild that
+ * inherited the pipe keeps `close` from firing until IT exits — measured in the
+ * hours for a long-lived child. So cancellation gets a bounded window to do its
+ * work, after which the pipes are destroyed and the call returns anyway. The
+ * number is 3–5 s because that is long enough for `taskkill /T /F` to finish and
+ * short enough that a user pressing stop sees a result.
+ */
+export const TREE_KILL_GRACE_MS = 4_000
+
+/** Marker prefixes appended to stderr, so the limit is stated where the model reads it. */
+export const TIMEOUT_MARKER = '[dsh-git-bash] timed out'
+export const ABORT_MARKER = '[dsh-git-bash] cancelled'
+export const MAXBUFFER_MARKER = '[dsh-git-bash] output limit exceeded'
+/** A death this layer did not cause, so `-1` is never mistaken for a timeout or a cap. */
+export const KILLED_MARKER = '[dsh-git-bash] terminated'
+/** The honest "I could not prove the tree died" marker. Never emitted as success. */
+export const TREE_MARKER = '[dsh-git-bash] process tree may still be running'
+
+/**
+ * The stderr note for one termination.
+ *
+ * @param {'timeout' | 'abort' | 'maxBuffer' | 'killed'} kind what stopped the command
+ * @param {{ timeoutMs?: number, treeConfirmed?: boolean | null, treeDetail?: string, runtimeEnforced?: boolean, signalName?: string }} facts
+ *        `runtimeEnforced` marks the case where NODE reported the limit instead
+ *        of us — then the sentence must not claim we stopped anything.
+ *        `signalName` names the signal for a death this layer did not cause.
+ * @returns {string} the note, ending with a newline
+ */
+export function terminationNote(kind, facts = {}) {
+  const lines = []
+  const runtime = facts.runtimeEnforced === true
+  if (kind === 'timeout') {
+    lines.push(TIMEOUT_MARKER + ' after ' + String(facts.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+      + 'ms; the command was stopped and the output above is what it produced first.')
+  } else if (kind === 'abort') {
+    lines.push(ABORT_MARKER + ': the user stopped this call; the command was stopped and the '
+      + 'output above is what it produced first.')
+  } else if (kind === 'killed') {
+    // SOMEBODY ELSE KILLED IT. A signal death has no exit code, so `-1` alone would
+    // be indistinguishable from a timeout or a cap; naming the signal is the only
+    // thing that tells the model "this was terminated, do not just retry".
+    lines.push(KILLED_MARKER + ' by signal ' + String(facts.signalName ?? 'unknown')
+      + '; the output above is what it produced before it was terminated.')
+  } else if (runtime) {
+    // HONEST VARIANT. The runtime killed the shell on its own, so this layer
+    // never got to run the tree kill while the root was still alive. Claiming
+    // "it was stopped" here would be a false statement about the grandchildren.
+    lines.push(MAXBUFFER_MARKER + ': the command produced more output than the limit allows. '
+      + 'The runtime enforcing the limit stops the shell it started, and cannot be relied on to '
+      + 'stop anything that shell started; treat the process tree as unverified.')
+  } else {
+    lines.push(MAXBUFFER_MARKER + ': the command produced more output than the limit allows; '
+      + 'it was stopped and the output above is truncated.')
+  }
+  // ONLY WHEN IT IS TRUE. Reporting a clean stop we cannot prove is the failure
+  // mode this whole module exists to avoid, so an unconfirmed tree says so and
+  // names the reason.
+  if (facts.treeConfirmed === false) {
+    lines.push(TREE_MARKER + ' (' + String(facts.treeDetail ?? 'the tree kill did not complete')
+      + '); a child process started by this command may still be alive.')
+  }
+  return lines.join('\n') + '\n'
+}
+
+/** Append a note to captured stderr without losing what the command printed. */
+function appendNote(stderr, note) {
+  const text = typeof stderr === 'string' ? stderr : ''
+  if (note === '') return text
+  return text === '' || text.endsWith('\n') ? text + note : text + '\n' + note
+}
+
+/**
+ * Build a runner, optionally with a shorter deadline.
+ *
+ * The deadline is injected HERE rather than exposed on the tool schema: the
+ * production value is a policy constant, and the tests need a short one to prove
+ * the tree really dies without waiting two minutes. `services.run` receives the
+ * result, so the tool layer stays unchanged.
+ *
+ * @param {{ timeoutMs?: number, graceMs?: number, platform?: string, maxBuffer?: number, onChild?: (child: object) => void }} [options]
+ *        `onChild` is a TEST SEAM, in the same spirit as `services.run`: it hands
+ *        the live child to a caller that needs to inspect the real streams (the
+ *        regression that proves no runtime-owned collector shares them).
+ * @returns {(command: string, args: string[], cwd?: string, signal?: AbortSignal) => Promise<{ exitCode: number, stdout: string, stderr: string }>}
+ */
+export function createRunner(options = {}) {
+  const timeoutMs = typeof options.timeoutMs === 'number' ? options.timeoutMs : DEFAULT_TIMEOUT_MS
+  const graceMs = typeof options.graceMs === 'number' ? options.graceMs : TREE_KILL_GRACE_MS
+  const platform = options.platform ?? process.platform
+  const maxBuffer = typeof options.maxBuffer === 'number' ? options.maxBuffer : 8 * 1024 * 1024
+  const onChild = typeof options.onChild === 'function' ? options.onChild : undefined
+  return (command, args, cwd, signal) => runOnce({ command, args, cwd, signal, timeoutMs, graceMs, platform, maxBuffer, onChild })
+}
+
+/**
  * Run an argv and resolve the outcome instead of rejecting on a nonzero exit.
  *
- * @param {string} command the executable
- * @param {string[]} args its arguments
- * @param {string} [cwd] working directory
+ * WHY THE BUILT-IN `timeout` IS NOT USED. `child_process`'s own timeout kills the
+ * process it spawned and nothing else. Measured on this machine: a shell that had
+ * started a grandchild was killed, the grandchild kept running (1/1/1 alive), and
+ * — worse — the `close` event never fired while that grandchild held the stdio
+ * pipes, so the call could hang far past its deadline. The deadline is therefore
+ * OUR timer, and it goes through exactly the same kill path as cancellation.
+ *
+ * THE STOP PATH, in order:
+ *
+ *   1. `beginStop(kind)` runs once. It marks the reason, clears the deadline
+ *      timer, and asks `killTree` to kill the whole tree.
+ *   2. `killTree` uses `taskkill /T /F` on Windows — the only thing that reaches
+ *      grandchildren of a shell — and falls back to `child.kill()` if that
+ *      fails, recording WHY it is unconfirmed.
+ *   3. A grace timer bounds the wait. If the child has not closed when it fires,
+ *      the stdio pipes are destroyed (a grandchild holding them must not keep the
+ *      handle open) and the call settles from the output captured so far.
+ *
+ * The output is accumulated from `data` events rather than trusted from the
+ * callback, because on the grace path the callback may never deliver the bytes
+ * the command already printed.
+ *
+ * @param {{ command: string, args: string[], cwd?: string, signal?: AbortSignal, timeoutMs: number, graceMs: number, platform: string, maxBuffer: number }} spec
  * @returns {Promise<{ exitCode: number, stdout: string, stderr: string }>}
  */
-function defaultRun(command, args, cwd) {
+function runOnce(spec) {
+  const { command, args, cwd, signal, timeoutMs, graceMs, platform, maxBuffer, onChild } = spec
   return new Promise((resolve, reject) => {
-    execFile(command, args, {
-      cwd: cwd === undefined ? undefined : cwd,
-      windowsHide: true,
-      timeout: 120_000,
-      maxBuffer: 8 * 1024 * 1024,
-    }, (error, stdout, stderr) => {
-      // A spawn failure has no exit code and no output; that is the only case
-      // worth rejecting.
-      if (error !== null && typeof error.code !== 'number') {
+    let settled = false
+    /** What stopped the command: null while it is still legitimately running. */
+    let stopped = null
+    /** true = the tree was confirmed dead; false = it was not; null = not attempted. */
+    let treeConfirmed = null
+    let treeDetail = ''
+    let deadlineTimer = null
+    let graceTimer = null
+    const out = []
+    const err = []
+
+    const stdoutText = () => out.join('')
+    const stderrText = () => err.join('')
+
+    const clearTimers = () => {
+      if (deadlineTimer !== null) { clearTimeout(deadlineTimer); deadlineTimer = null }
+      if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null }
+    }
+
+    /**
+     * Settle exactly once, whichever of close / grace / spawn failure arrives first.
+     *
+     * With `spawn` there is no `(error, stdout, stderr)` callback: the exit facts
+     * arrive as `(code, signal)` on `close`, and a spawn failure arrives as an
+     * `error` event. Both route here, and the output is always the text this layer
+     * collected — never a second copy held by the runtime.
+     *
+     * @param {Error | null} error a spawn failure, or null for a normal close
+     * @param {number | null} [code] the exit code from `close`
+     * @param {string | null} [signalName] the terminating signal from `close`
+     */
+    const deliver = (error, code, signalName) => {
+      if (settled) return
+      settled = true
+      clearTimers()
+      if (signal !== undefined && onAbort !== null) signal.removeEventListener('abort', onAbort)
+
+      // CANCELLATION IS NOT A RESULT. The host has to be able to tell "the user
+      // stopped this" apart from "the command exited nonzero", so it rejects with
+      // a named error that also carries the cleanup limitation on `stderr`.
+      if (stopped === 'abort') {
+        reject(abortError(signal, appendNote(stderrText(), terminationNote('abort', { treeConfirmed, treeDetail }))))
+        return
+      }
+
+      if (stopped === 'timeout') {
+        resolve({
+          exitCode: -1,
+          stdout: stdoutText(),
+          stderr: appendNote(stderrText(), terminationNote('timeout', { timeoutMs, treeConfirmed, treeDetail })),
+        })
+        return
+      }
+
+      if (stopped === 'maxBuffer') {
+        resolve({
+          exitCode: -1,
+          stdout: stdoutText(),
+          stderr: appendNote(stderrText(), terminationNote('maxBuffer', { treeConfirmed, treeDetail })),
+        })
+        return
+      }
+
+      if (error !== null && error !== undefined) {
+        // A genuine spawn failure (ENOENT/EACCES) has no exit facts and no output.
+        // With `spawn` there is no internal limit to mistake for one: the cap is
+        // ours, enforced in `onData` while the root is still alive.
         reject(error)
         return
       }
-      resolve({
-        exitCode: error === null ? 0 : error.code,
-        stdout: String(stdout ?? ''),
-        stderr: String(stderr ?? ''),
-      })
+
+      // A signal death MAY have no exit code — POSIX reports `code === null` with a
+      // signal name, while Windows still delivers a number (measured: bash
+      // self-SIGTERM exits 3840). The number is passed through untouched, because
+      // it is the fact that distinguishes a signal from a command failure. Only a
+      // null code falls back to `-1`, and then the note names the signal so the
+      // `-1` is never an unexplained status.
+      if (typeof code === 'number') {
+        resolve({ exitCode: code, stdout: stdoutText(), stderr: stderrText() })
+        return
+      }
+      const note = signalName === undefined || signalName === null
+        ? ''
+        : appendNote(stderrText(), terminationNote('killed', { signalName }))
+      resolve({ exitCode: -1, stdout: stdoutText(), stderr: note })
+    }
+
+    /**
+     * Kill the whole tree, once.
+     *
+     * `child.killed` is deliberately not consulted: Node sets it when `kill()` is
+     * called, which says nothing about a grandchild — and on Windows the tree kill
+     * is a separate `taskkill` process, so its own exit is the only evidence.
+     */
+    const killTree = () => {
+      if (child === null || child === undefined) { treeConfirmed = false; treeDetail = 'no child process'; return }
+      if (platform === 'win32' && typeof child.pid === 'number') {
+        execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true }, (error) => {
+          if (error === null || error === undefined) { treeConfirmed = true; return }
+          treeConfirmed = false
+          treeDetail = 'taskkill failed: ' + String(error.message || error.code || 'unknown error')
+          // Fall back to the process we do own. That does not make the tree
+          // confirmed, so the note above still reaches the user.
+          try { child.kill() } catch { /* already gone */ }
+        })
+        return
+      }
+      try {
+        child.kill('SIGTERM')
+        treeConfirmed = true
+      } catch (error) {
+        treeConfirmed = false
+        treeDetail = 'kill failed: ' + String(error instanceof Error ? error.message : error)
+      }
+    }
+
+    /** Mark why the command is being stopped and start the bounded cleanup. */
+    const beginStop = (kind) => {
+      if (settled || stopped !== null) return
+      stopped = kind
+      if (deadlineTimer !== null) { clearTimeout(deadlineTimer); deadlineTimer = null }
+      // EVERY STOP GOES THROUGH THE TREE KILL. There is no longer a runtime-owned
+      // limit that pre-empts this layer: the cap is enforced in `onData` while the
+      // root is alive, so this is always the one place that can reach grandchildren.
+      killTree()
+      graceTimer = setTimeout(() => {
+        graceTimer = null
+        // THE PIPES MUST GO. A surviving grandchild holding them is exactly what
+        // keeps `close` from firing; destroying them lets this call return, and
+        // the settle below reports the partial output we already captured.
+        try { child?.stdout?.destroy() } catch { /* already closed */ }
+        try { child?.stderr?.destroy() } catch { /* already closed */ }
+        if (treeConfirmed === null) {
+          treeConfirmed = false
+          treeDetail = 'the tree kill did not complete within ' + String(graceMs) + 'ms'
+        }
+        deliver(null, null, null)
+      }, graceMs)
+    }
+
+    /**
+     * Accumulate one chunk under the cap, and enforce the cap OURSELVES.
+     *
+     * WHY OUR OWN CHECK. Two things made the runtime's limit the wrong owner:
+     *
+     *   1. Node's enforcement kills the shell IT spawned and nothing else, so the
+     *      grandchildren survived — while the stderr note said the command "was
+     *      stopped". A false statement about cleanup.
+     *   2. Node's limit counts bytes in its own internal copy, and that copy is
+     *      not something a second listener can bound (see the `spawn` note below).
+     *      Counting here means our array is the ONLY copy, and it is capped.
+     *
+     * MEMORY STAYS BOUNDED, which is the whole point of a cap: chunks are dropped
+     * once the budget is spent, so the grace window cannot accumulate unbounded
+     * output. Nothing else accumulates it either, because `spawn` installs no
+     * collector of its own.
+     */
+    let budget = Math.max(0, Number(maxBuffer) || 0)
+    const onData = (bucket) => (chunk) => {
+      if (settled) return
+      const text = String(chunk)
+      if (budget <= 0) {
+        // Once the cap is exceeded the command is stopped on this tick; keep
+        // discarding so a fast writer cannot fill memory in the meantime.
+        return
+      }
+      if (text.length > budget) {
+        bucket.push(text.slice(0, budget))
+        budget = 0
+        // THE ROOT IS STILL ALIVE HERE, so this is the one place the tree kill
+        // can actually reach the grandchildren.
+        beginStop('maxBuffer')
+        return
+      }
+      budget -= text.length
+      bucket.push(text)
+    }
+
+    // `spawn`, NOT `execFile`, and that is a memory-safety decision rather than a
+    // stylistic one.
+    //
+    // `execFile` installs its OWN `data` listener on both pipes and accumulates
+    // into an internal array, unconditionally: with `maxBuffer: Infinity` its
+    // handler is literally `ArrayPrototypePush(_stdout, chunk)` and returns. A
+    // second listener cannot prevent that — listeners are additive, both receive
+    // every chunk. So raising `maxBuffer` to Infinity to keep Node from killing
+    // the root first had a price the code below did not pay: the internal copy
+    // grew without bound, which is exactly what a cap exists to prevent.
+    //
+    // `spawn` has no such accumulator: the streams are handed to this layer and
+    // nothing else reads them. Our `onData` budget (above) is therefore the only
+    // copy, and it is the bound the caller asked for.
+    //
+    // NO `timeout` OPTION, on purpose: `child_process`'s own deadline kills the
+    // process it spawned and nothing else. Ours is the deadline (see above).
+    const child = spawn(command, args, {
+      cwd: cwd === undefined ? undefined : cwd,
+      windowsHide: true,
+      // stdin is not part of this contract; closing it stops a command that would
+      // otherwise wait forever for input the model never sends.
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
+
+    // Capture the bytes as they arrive: on the grace path `close` may fire after
+    // the pipes are destroyed, and only what was already collected survives.
+    child.stdout?.on('data', onData(out))
+    child.stderr?.on('data', onData(err))
+
+    // TEST SEAM: hand the live child to a caller that needs to inspect the real
+    // streams. Production never passes it, so this changes no behaviour.
+    if (onChild !== undefined) {
+      try { onChild(child) } catch { /* a test observer must not break the run */ }
+    }
+
+    // A SPAWN FAILURE HAS ITS OWN EVENT on this API; there is no callback. Without
+    // a listener it would be an unhandled 'error' and take the process down.
+    child.on('error', (error) => { deliver(error) })
+    child.on('close', (code, signal) => { deliver(null, code, signal) })
+
+    const onAbort = signal === undefined ? null : () => { beginStop('abort') }
+
+    deadlineTimer = setTimeout(() => { beginStop('timeout') }, timeoutMs)
+
+    if (onAbort !== null) {
+      if (signal.aborted === true) {
+        beginStop('abort')
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true })
+      }
+    }
   })
 }
+
+/** The production runner: the real spawn with the real deadline. */
+const defaultRun = createRunner()
 
 export { execAsync, readMode }
 

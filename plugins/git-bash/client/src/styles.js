@@ -206,7 +206,7 @@ body[data-ds-dark-theme] .dsh-gb-tool {
      so the visual distance was 12px where the margin said 2px. The output's
      margin is now the only thing controlling that gap. */
   gap: 0;
-  margin: 4px 0 8px 22px;
+  margin: 4px 10px 8px 10px;
 }
 
 /* The request: a real code surface with the "$" prompt, wrapped by default
@@ -233,7 +233,14 @@ body[data-ds-dark-theme] .dsh-gb-tool {
      fixed-height panel; a command is as long as it is, and clipping it behind a
      scroller hides the thing the card exists to show. */
   max-height: none;
-  padding: 5px calc(10px + 1ch);
+  /* 8px TOP/BOTTOM, 12px SIDES — the reverse-engineered fence inset
+     (docs/tool-cards-bash-terminal.md; same numbers in the reference's own
+     card). It replaces the old 5px-plus-a-rail pair: that 1ch term was a second
+     guess at the same inset, so the real value drifted with the code font's
+     digit width — measured 17.2px at 13px mono, i.e. 5px wider than the 12px the
+     table says, and it changed whenever the user moved the code-size setting.
+     A literal 12px is the only way the fence stays put. */
+  padding: 8px 12px;
   overflow: visible;
   /* NO FILL, ONE OUTLINE. The reference's input card carries no background
      class at all: its "card" is a 1px inset outline
@@ -385,11 +392,21 @@ body[data-ds-dark-theme] .dsh-gb-tool {
      output should simply be long. */
   max-height: none;
   overflow: visible;
-  /* 5px: the one number that controls this distance (the flex gap above it is
-     0, so nothing else contributes). */
-  /* 8px and no frame: the output belongs to the page background, not to the
-     command box above it. */
-  margin: 8px 0 0;
+  /* 5px ABOVE, NOT 8px. The gap between the command fence and its output is its
+     own number in the table (docs/tool-cards-bash-terminal.md), separate from
+     the 8px top inset inside the fence — the two were being read as one value,
+     which left the output sitting 3px too far from the command it belongs to.
+     The flex gap on .dsh-gb-tool-body is 0, so this margin is the only thing
+     contributing to that distance. Kept as margin (not row-gap) so the output
+     alone moves: a gap would also push a card that has no command above it. */
+  margin: 5px 0 0;
+  /* 5px / 8px INSET. The output is bare text on the card surface, so without
+     its own padding its first glyph starts at the card's left edge while the
+     command above it starts 12px in — the two blocks read as different widths
+     of the same column. The smaller inset than the fence is deliberate: the
+     output is unboxed, so it lines up optically with the fence's TEXT, not with
+     the fence's border. */
+  padding: 5px 8px;
   background: transparent;
   border: 0;
   outline: 0;
@@ -452,8 +469,15 @@ body[data-ds-dark-theme] .dsh-gb-tool {
   font-size: inherit;
 }
 /* CODE IS MONO, THE ROW TITLE IS NOT. This used to be scoped to the whole
-   card (`*`), which also caught .dsh-gb-tool-title and turned the tool name
-   into monospace. Only the command box and the output box are code. */
+   card with a universal child selector, which also caught .dsh-gb-tool-title
+   and turned the tool name into monospace. Only the command box and the output
+   box are code.
+   NO BACKTICKS IN THIS COMMENT. Writing that selector name here in a code span
+   ended the enclosing template literal: the sheet evaluated to a string times a
+   string, i.e. NaN, installCss threw on CSS.trim, and apply() died BEFORE the
+   tool.call.toolview registrations below it — the shell card silently fell back
+   to the host's generic card with no error anywhere. This is the third variant
+   of the same mistake in this file. */
 [data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-request,
 [data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-request *,
 [data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-respond,

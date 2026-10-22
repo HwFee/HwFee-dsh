@@ -1,6 +1,6 @@
 {
   "name": "@hwfee/dsh-git-bash",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "DeepSeek Harness 的 Git Bash 默认 shell：把 Windows 上的默认命令解释器从 PowerShell 换成 Git Bash，并暴露一个 run_shell 工具。自动从 git --exec-path 定位 Git Bash（WSL 的 bash 不算），找不到时降级而不是让插件消失。 / Git Bash as the default shell for DeepSeek Harness on Windows: resolves Git Bash from `git --exec-path` (never the WSL stub), exposes a run_shell tool, and degrades visibly instead of vanishing when the shell is missing.",
   "type": "module",
   "main": "lib/index.js",
@@ -56,7 +56,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/mode.test.mjs && node test/mode-route.test.mjs && node test/resolve.test.mjs && node test/tool.test.mjs && node test/store.test.mjs && node test/settings-row.test.mjs && node test/tool-view.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/stylesheet.test.mjs && node test/mode.test.mjs && node test/mode-route.test.mjs && node test/resolve.test.mjs && node test/tool.test.mjs && node test/process-tree.test.mjs && node test/store.test.mjs && node test/settings-row.test.mjs && node test/tool-view.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10"
