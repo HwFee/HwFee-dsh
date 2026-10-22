@@ -19,7 +19,6 @@
  */
 
 import { createCard } from './card.js'
-import { tryCompileCard } from './sandbox.js'
 import { installCardCss } from './styles.js'
 import { en, zh } from './locales.js'
 import { LOCALE_NS, NODE_KIND, SLOT } from './constants.js'
@@ -39,8 +38,9 @@ import { createSettingsRow } from './settings-row.js'
  *
  * The bridge is optional at every step: an older host, a profile without the
  * conversation plugin, or a session that has no binding all yield null, and the
- * card then renders without `interact` — degraded, not broken. A missing bridge
- * is reported to the snippet at call time (sandbox.js), not hidden here.
+ * card then renders without a send path — degraded, not broken. It is only ever
+ * invoked from the confirmation button the CARD renders outside the frame (see
+ * `card.js`), never from a message the frame sent.
  *
  * @param {object} ctx the plugin's client context
  * @param {unknown} sessionId the scope id the slot handed us
@@ -79,7 +79,7 @@ export function createConversationBridge(ctx, sessionId) {
  * @returns {(ctx: object) => void} the plugin's `apply`
  */
 export function createLifecycle({ React, toolName, primitives }) {
-  const Card = createCard({ React, toolName, tryCompile: tryCompileCard, readSpec: readUiSpec })
+  const Card = createCard({ React, toolName, readSpec: readUiSpec })
   const SettingsRow = createSettingsRow({ React, primitives })
 
   return function apply(ctx) {

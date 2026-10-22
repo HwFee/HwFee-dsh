@@ -188,7 +188,8 @@ test('the client half never reads an undeclared service off `ctx`', async functi
   //
   // No stack, no field name — the plugin simply stops existing. It took a real
   // boot failure to find it, so the shape is asserted statically from here on.
-  const files = ['index.js', 'lifecycle.js', 'card.js', 'render-ui-node.js', 'sandbox.js', 'styles.js']
+  const files = ['index.js', 'lifecycle.js', 'card.js', 'render-ui-node.js', 'styles.js',
+    'frame-bridge.js', 'frame-html.js', 'theme-snapshot.js']
   const declared = clientIndex.inject
 
   for (const file of files) {

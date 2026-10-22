@@ -26,6 +26,10 @@ export const en = {
   'setting.titlePlacement.below': 'Centred below the content',
   'setting.titlePlacementHint': 'Where a generated card puts its title.',
   'card.sendFailed': 'This card could not send its message',
+  'card.sendChoice': 'Send this choice',
+  'card.dismissChoice': 'Discard',
+  'card.pendingHint': 'This card is asking to send a message',
+  'card.frameNavigated': 'This card tried to load another page, so it was stopped. Its source is below.',
   'aria.toggleSource': 'Toggle the source of this card',
   'aria.card': 'Interactive card rendered from a render_ui call',
 }
@@ -46,6 +50,10 @@ export const zh = {
   'setting.titlePlacement.below': '内容下方，居中',
   'setting.titlePlacementHint': '生成的卡片把标题放在哪里。',
   'card.sendFailed': '这张卡片没能发出消息',
+  'card.sendChoice': '发送这条选择',
+  'card.dismissChoice': '丢弃',
+  'card.pendingHint': '这张卡片请求发送一条消息',
+  'card.frameNavigated': '这张卡片试图加载另一个页面，已被拦下。源码在下方。',
   'aria.toggleSource': '展开或收起这张卡片的源码',
   'aria.card': '由 render_ui 调用渲染的交互卡片',
 }

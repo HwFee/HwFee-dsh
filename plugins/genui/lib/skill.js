@@ -120,7 +120,12 @@ syntax error. Use \`h\` (an alias for \`React.createElement\`) or
 
 The snippet receives one extra function, \`interact(text)\`. Call it when the user
 does something that should change the conversation — a choice, a submission, a
-reset — and the text is delivered to you as a user message on the next turn.
+reset.
+
+**It does not send. It asks.** The host shows \`text\` under the card with a
+confirmation button, and only the user's click puts the message into the
+conversation. So the text must read as a complete sentence the user would be
+willing to send:
 
 \`\`\`js
 const [choice, setChoice] = React.useState(null)
@@ -130,7 +135,7 @@ return h('div', null,
       key: mode,
       onClick: () => { setChoice(mode); interact('Use ' + mode + ' mode.') },
     }, mode)),
-  choice !== null && h('p', null, 'Sent: ' + choice))
+  choice !== null && h('p', null, 'Selected: ' + choice))
 \`\`\`
 
 Rules for using it:
@@ -141,44 +146,39 @@ Rules for using it:
 - **Say what happened, in the user's voice.** \`interact('Set the range to 7 days')\`
   reads as a user instruction. \`interact('{"range":7}')\` makes the next turn
   guess. Write one short imperative sentence, and include the values.
-- **Do not use it for narration.** It sends a message and starts a turn; there
+- **One request at a time.** While an earlier request is waiting for the user,
+  another \`interact\` is ignored. Ask for one decision, not a stream.
+- **Do not use it for narration.** It is a message to the conversation, and there
   is no "just log this". If nothing should happen on the next turn, use state.
-- **Do not await it inside render.** Call it from an event handler.
-- A host may not provide the bridge. Awaiting \`interact\` is the only way to
-  find out, so treat a rejection as "tell the user the card cannot send" rather
-  than retrying in a loop.
+- **Do not call it from render or from a timer.** The user has to confirm it, and
+  a request that appears without a click reads as the card acting on its own.
+- A host may not provide the bridge. Then the confirmation button is absent and
+  nothing is sent; treat that as a host limitation, not a snippet bug.
 
-## What a card can do
+## What the card runs inside
 
-A card is a live view, so it gets the browser it needs:
+The snippet runs in its own **sandboxed frame** — a separate document with an
+opaque origin. That changes what is available in ways worth knowing:
 
 - **Timers work.** Use \`timers.set(fn, ms)\` and \`timers.every(fn, ms)\` — they
   are your own, and they are cleared automatically when the card unmounts.
   (\`setTimeout\` and \`setInterval\` also work, but nothing clears those for you,
   and the row is recycled constantly: prefer the scoped pair.)
-- **\`window\` and \`document\` work.** Reading \`window.innerWidth\` for a responsive
-  layout is fine. You do not get a separate document — you are in the host's
-  page, so do not mutate its DOM outside your own subtree.
-- **Network works.** \`fetch\` is available if the data is worth fetching live.
-  Prefer inlining data you already have: a card that waits on a request renders
-  its loading state on every remount.
+- **\`window\` and \`document\` are YOURS**, not the host's. Reading
+  \`window.innerWidth\` for a responsive layout is fine. You cannot reach the
+  app's DOM, its storage or its cookies — a cross-origin frame refuses those — and
+  the card is sized from its own content, so do not set a fixed height.
+- **There is no network.** The frame's Content-Security-Policy blocks \`fetch\`,
+  \`XMLHttpRequest\`, WebSocket and remote images. Inline the data you already
+  have; a card that waits on a request renders a loading state forever.
+- **Storage is not available.** \`localStorage\`, \`sessionStorage\` and
+  \`indexedDB\` do not exist in the frame. Keep state in \`React.useState\`.
+- **Theme tokens are supplied for you.** \`var(--dsw-alias-*)\` and the type/
+  radius tokens resolve in the frame because the host hands the card a snapshot
+  of its own computed theme; light and dark both work and follow a switch at
+  runtime.
 
-## What is masked
-
-Four names, each one a way to damage the APP rather than the card. Touching one
-throws a sentence saying so:
-
-| Masked | Why |
-|---|---|
-| \`localStorage\`, \`sessionStorage\` | the host keeps the user's real settings there (theme, panel sizes, plugin switches). Use \`React.useState\`. |
-| \`indexedDB\` | same hazard, larger scale. |
-| \`require\` | no module loading; build with \`h\` and the React passed in. |
-| \`Function\` | nested evaluation turns a snippet into a loader for arbitrary strings. |
-
-\`eval\` is not on that list and cannot be: strict mode forbids it as a binding
-name. Do not build a string and evaluate it.
-
-The snippet is re-evaluated every time the row remounts, so keep it cheap.
+The snippet is re-evaluated every time the card mounts, so keep it cheap.
 Anything that must survive a reload has to live in the session or a file, not in
 the card.
 

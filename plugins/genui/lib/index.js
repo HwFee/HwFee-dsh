@@ -94,8 +94,8 @@ function createRenderUiTool() {
       + 'Mermaid fenced block or a list); or one number you can state in a sentence. '
       + 'The code is a JavaScript function body returning React elements, with `h` '
       + '(createElement), `interact(text)` to send a choice back as a user message, and scoped '
-      + '`timers`. It runs in the page: no module loading, and storage APIs are blocked so a card '
-      + 'cannot touch the settings the host owns. '
+      + '`timers`. It runs in a sandboxed frame inside the card: no network, no host storage, and '
+      + '`interact` asks the user to confirm before anything is sent. '
       + 'Load the `generative-ui` skill before your first call: it carries the whole judgment '
       + 'ladder, the styling rules, and the failure modes that produce a blank card.',
     // RAW JSON SCHEMA, NOT THE `defineTool` PARAMETER SPEC.

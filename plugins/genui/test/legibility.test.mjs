@@ -286,28 +286,30 @@ test('parseComputedColor accepts the syntaxes an engine may report', function ()
   assert.equal(parseComputedColor(null), null)
 })
 
-test('the card frame wires the pass into a ref, an effect and its disposer', function () {
+test('the frame runtime wires the pass into the card subtree and disposes it', function () {
   // WHAT THIS PROVES, AND WHAT IT CANNOT. The tests above drive `legibility.js`
   // directly, so on their own they would still pass if nothing ever CALLED it —
   // the "correct module, unreachable" failure this repository has hit before.
-  // Rendering `card.js` for real needs the host React and the slot props the
-  // owner injects, so the wiring is asserted at the source, the same way the
-  // typography suite asserts CSS a browser would silently drop. The ARTIFACT is
-  // covered separately: `build-client --check` runs first in `npm test`.
-  const source = readFileSync(new URL('../client/src/card.js', import.meta.url), 'utf8')
+  //
+  // WHERE IT RUNS MOVED. The pass used to run in `card.js` over the host-rendered
+  // body. The body lives in the sandboxed frame now, so the pass runs THERE: a
+  // host-side pass could not reach the card's DOM across the origin boundary at
+  // all, and the measurement needs `getComputedStyle` on the card's own nodes.
+  const runtime = readFileSync(new URL('../client/src/frame/runtime.js', import.meta.url), 'utf8')
 
-  assert.match(source, /import \{ observeInvisibleText \} from '\.\/legibility\.js'/,
-    'the frame must import the pass')
-  assert.match(source, /React\.useRef\(null\)/, 'it needs a ref to the body element')
-  assert.match(source, /className: 'dsh-genui-body', ref: body/,
-    'THE REF MUST BE ON THE BODY: the title and the source view are not model-authored, '
-    + 'and measuring them would repair the plugin instead of the card')
-  assert.match(source, /React\.useEffect\(/, 'the pass runs after commit, so tokens have resolved')
-  assert.match(source, /return observeInvisibleText\(body\.current\)/,
-    'the effect must RETURN the disposer — a card unmounts on every scroll, and an '
+  assert.match(runtime, /import \{ observeInvisibleText \} from '\.\.\/legibility\.js'/,
+    'the runtime must import the pass')
+  assert.match(runtime, /document\.getElementById\('root'\)/,
+    'it observes the CARD root: the frame has no plugin chrome to repair')
+  assert.match(runtime, /disposeLegibility\(\)/,
+    'the disposer must be reached — a card unmounts on every scroll, and an '
     + 'observer left connected sweeps a detached subtree')
-  assert.match(source, /\}, \[spec\.code\]\)/,
-    'keyed on the snippet, so a re-compiled card re-observes the new subtree')
+
+  // And the HOST must not do it: a pass over the iframe element measures a
+  // rectangle, not the card's text, and would walk the host document instead.
+  const card = readFileSync(new URL('../client/src/card.js', import.meta.url), 'utf8')
+  assert.equal(/observeInvisibleText|repairInvisibleText/.test(card), false,
+    'the host half must not run the legibility pass over its own document')
 })
 
 test('the plugin stylesheet does not colour its own chrome with a fill token', function () {

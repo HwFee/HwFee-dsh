@@ -1,33 +1,45 @@
 /**
- * The card component.
+ * The card component: the host side of a sandboxed frame.
  *
- * It also owns the card's LEGIBILITY PASS, wired in `CardBodyFrame` below: the
- * model writes the snippet's colours, the host's palette contains translucent
- * fill tokens that look like ink by name, and choosing one paints an invisible
- * answer. `legibility.js` measures what was actually painted and restores the
- * alpha; this module only decides WHEN to measure (on mount, and once per frame
- * while the snippet re-renders).
+ * THE ISOLATION IS THE IFRAME, not a list of hidden names. The snippet runs in a
+ * document with `sandbox="allow-scripts"` and NO `allow-same-origin`, which gives
+ * it an opaque origin: it cannot read `parent.document`, `localStorage`, cookies
+ * or the host's RPC surface. The meta CSP in that document additionally constrains
+ * the web APIs a card may call — the fetch family, remote images, forms, nested
+ * frames — and it is a constraint on those declared APIs, not a claim that no
+ * network is reachable. The previous version evaluated the snippet in this realm
+ * and tried to mask dangerous globals by parameter shadowing; that was a footgun
+ * guard, it was bypassable in one property hop
+ * (`h.constructor("return localStorage")()`), and it is gone — `sandbox.js` no
+ * longer exists. The measurement lives in `.work/genui-isolation-report.md`.
  *
- * It receives the standard `tool.call.toolview` props — `phase`, `block`,
- * `toolName`, `useDisclosure`, `t` — and renders one of four states:
+ * WHAT THE HOST OWNS HERE:
  *
- *   preparing  the model is still emitting arguments; a quiet placeholder
- *   failed     the snippet did not parse, or the card threw while rendering
- *   invalid    the committed arguments are missing or rejected by `spec.js`
- *   ready      the card
+ *   1. the frame element and its height;
+ *   2. the theme snapshot handed to the frame, and its updates;
+ *   3. THE ONLY SEND PATH. A card's `interact(text)` arrives as a REQUEST. The
+ *      host renders its own button outside the frame; only a click on that
+ *      button — a trusted event the frame cannot synthesize — calls
+ *      `conversation.send`. The request text is rendered as text, never HTML.
  *
- * WHY THE ERROR BOUNDARY IS HERE AND NOT IN THE SNIPPET. A snippet that throws
- * during render would otherwise take out the whole tool row (React unmounts the
- * subtree and the host logs `slot entry crashed`). Catching it locally keeps the
- * failure visible where it happened, with the source one click away.
- *
- * The boundary is a class: `getDerivedStateFromError` has no function-component
- * equivalent in React 18, and the host ships React 18.
+ * The frame is not trusted to be well-behaved, so every message is validated by
+ * `frame-bridge.js` before it is looked at, and a frame that never loads leaves a
+ * visible sentence rather than an empty box.
  *
  * @module card
  */
 
-import { observeInvisibleText } from './legibility.js'
+import {
+  createInteractGate, validateFrameMessage, MAX_INTERACT_CHARS,
+} from './frame-bridge.js'
+import { buildFrameDocument, createNonce } from './frame-html.js'
+import { observeTheme, readThemeSnapshot } from './theme-snapshot.js'
+
+/** Class on the frame element, so the host sheet can size it. */
+const FRAME_CLASS = 'dsh-genui-frame'
+
+/** Default height before the frame reports its own, in CSS pixels. */
+const INITIAL_HEIGHT = 48
 
 /**
  * Create the card component bound to one React instance.
@@ -39,122 +51,211 @@ import { observeInvisibleText } from './legibility.js'
  * @param {object} deps
  * @param {object} deps.React the host React
  * @param {string} deps.toolName the wire tool name this card answers
- * @param {(options: { React: object, code: string }) => { ok: true, Component: Function } | { ok: false, message: string }} deps.tryCompile
- *        snippet compiler (injected so tests can drive the failure path)
  * @param {(argsRaw: string | null | undefined) => object | null} deps.readSpec
  *        the shared validator/parser from `lib/spec.js`
  * @returns {Function} the React component registered into `tool.call.toolview`
  */
-export function createCard({ React, toolName, tryCompile, readSpec }) {
+export function createCard({ React, toolName, readSpec }) {
   const h = React.createElement
 
   /**
-   * Catches a snippet that throws while rendering, and shows the message.
+   * The sandboxed frame plus everything the host owns around it.
    *
-   * Resetting on `resetKey` matters: the row is recycled as the user scrolls,
-   * and without the reset a once-broken card would stay broken for the next
-   * call rendered through the same instance.
+   * WHY THE DOCUMENT IS BUILT IN AN EFFECT, NOT DURING RENDER. `srcdoc` is an
+   * attribute: writing a new one reloads the document, which would restart the
+   * snippet on every re-render of the surrounding row (a theme flip, a scroll
+   * recycle, a disclosure toggle). One build per `spec.code`, then theme updates
+   * travel over `postMessage`.
+   *
+   * @param {object} props
+   * @param {object} props.spec the validated call
+   * @param {Function} props.t locale lookup
+   * @param {(text: string) => Promise<void>} [props.sendMessage] the conversation bridge
    */
-  class CardErrorBoundary extends React.Component {
-    constructor(props) {
-      super(props)
-      this.state = { error: null }
-    }
+  function CardFrame({ spec, t, sendMessage }) {
+    const frame = React.useRef(null)
+    const tokenRef = React.useRef('')
+    const gateRef = React.useRef(null)
+    const [height, setHeight] = React.useState(INITIAL_HEIGHT)
+    const [pending, setPending] = React.useState(null)
+    const [sent, setSent] = React.useState(false)
+    const [sendFailed, setSendFailed] = React.useState('')
+    const [frameFailed, setFrameFailed] = React.useState('')
 
-    static getDerivedStateFromError(error) {
-      return { error }
-    }
+    // The effect below is keyed on `spec.code` only — rebuilding the frame on a
+    // locale change would reload the card and restart the snippet — so the
+    // translator is read through a ref that always holds the current one.
+    const tRef = React.useRef(t)
+    tRef.current = t
 
-    componentDidUpdate(prevProps) {
-      if (prevProps.resetKey !== this.props.resetKey && this.state.error !== null) {
-        this.setState({ error: null })
+    // The gate is per mounted card: one pending request, rate limited, capped.
+    if (gateRef.current === null) gateRef.current = createInteractGate()
+
+    React.useEffect(() => {
+      const element = frame.current
+      if (element === null) return undefined
+      const view = element.ownerDocument?.defaultView
+      if (view === undefined || view === null) return undefined
+
+      const token = createNonce(view.crypto)
+      tokenRef.current = token
+      const gate = gateRef.current
+      gate.clear()
+      setPending(null)
+
+      const theme = readThemeSnapshot(view)
+
+      /**
+       * THE FRAME MAY TRY TO NAVIGATE ITSELF, and the CSP is what stops it.
+       *
+       * Measured in Chrome, same snippet and same URL in both frames: with the
+       * shipped CSP the frame's document is NOT replaced (one `load`); with the
+       * same document minus the CSP meta it IS replaced (two `load`s). So the
+       * policy does the work here, and the response is not pretending otherwise.
+       *
+       * The counter below is a BACKSTOP, not the mechanism: if a future engine
+       * ever lets a self-navigation through, a second `load` unloads the frame
+       * instead of leaving a remote page sitting in the conversation styled as
+       * the answer. It cannot leak host data either way — the frame has no read
+       * access to this page — but a stranger's page presented as the answer is
+       * its own kind of wrong.
+       *
+       * The listener is attached BEFORE `srcdoc` so the first load cannot outrun
+       * it.
+       */
+      let loads = 0
+      const onLoad = () => {
+        loads += 1
+        if (loads <= 1) return
+        element.removeAttribute('srcdoc')
+        setFrameFailed(tRef.current('card.frameNavigated'))
       }
-    }
+      element.addEventListener('load', onLoad)
+      element.setAttribute('srcdoc', buildFrameDocument({ code: spec.code, token, theme }))
+
+      /**
+       * One inbound message.
+       *
+       * `validateFrameMessage` rejects anything that is not this frame, not this
+       * token, or not a whitelisted shape. A rejection is silent by design: a
+       * sibling card's frame and a stale frame after unmount both land here, and
+       * neither is something the user should read about.
+       */
+      const onMessage = (event) => {
+        const verdict = validateFrameMessage(event, {
+          source: element.contentWindow,
+          token: tokenRef.current,
+        })
+        if (!verdict.ok) return
+
+        if (verdict.type === 'height') {
+          setHeight(verdict.height)
+          return
+        }
+        if (verdict.type === 'failed') {
+          if (verdict.detail !== '') setFrameFailed(verdict.detail)
+          return
+        }
+        // `interact` becomes a PENDING REQUEST. Nothing is sent here.
+        const outcome = gate.request(verdict.text)
+        if (!outcome.ok) return
+        setPending({ text: verdict.text })
+        setSent(false)
+        setSendFailed('')
+      }
+
+      view.addEventListener('message', onMessage)
+      const stopTheme = observeTheme(view, (snapshot) => {
+        const target = element.contentWindow
+        if (target === null) return
+        target.postMessage({ type: 'theme', token: tokenRef.current, theme: snapshot }, '*')
+      })
+
+      return function dispose() {
+        element.removeEventListener('load', onLoad)
+        view.removeEventListener('message', onMessage)
+        stopTheme()
+        gate.clear()
+        tokenRef.current = ''
+      }
+    }, [spec.code])
 
     /**
-     * Stop the snippet's timers when the card leaves the DOM.
+     * Send, from the host's own button.
      *
-     * A recycled row unmounts constantly, and a `setInterval` a snippet started
-     * has no other owner. Guarded because `onUnmount` is optional.
+     * This is the only place a card can reach the conversation, and it runs in
+     * response to a click on an element that lives in the HOST document. A frame
+     * cannot produce that click: it cannot reach this DOM, and a `postMessage`
+     * carries no user gesture. The event handler is therefore the trust boundary,
+     * not the message.
      */
-    componentWillUnmount() {
-      if (typeof this.props.onUnmount === 'function') this.props.onUnmount()
-    }
-
-    render() {
-      if (this.state.error !== null) {
-        return this.props.renderFailure(this.state.error)
+    const accept = React.useCallback(async () => {
+      const text = gateRef.current?.accept()
+      if (text === null || text === undefined) return
+      setPending(null)
+      if (typeof sendMessage !== 'function') {
+        setSendFailed('this card cannot send a message: no conversation bridge was injected')
+        return
       }
-      return this.props.children
-    }
-  }
+      try {
+        await sendMessage(text)
+        setSent(true)
+        setSendFailed('')
+      } catch (error) {
+        setSendFailed(error instanceof Error ? error.message : String(error))
+      }
+    }, [sendMessage])
 
-  /**
-   * The rendered card body: compile (once, memoized on the code) then mount.
-   *
-   * `tryCompile` is called through `useMemo` keyed on the code string, so a
-   * re-render from a parent (a theme switch, an expansion toggle) does not
-   * re-evaluate the snippet. That is the whole cost model: evaluation happens
-   * when the source changes, not when the component does.
-   */
-  function CardBody({ spec, t, send, sent, sendFailed }) {
-    const compiled = React.useMemo(
-      // `send` is part of the key: the bridge identity is stable per card, and a
-      // compiled component that captured a stale bridge would send into the
-      // wrong session after the row is recycled.
-      () => tryCompile({ React, code: spec.code, interact: send }),
-      [spec.code, send],
-    )
+    const dismiss = React.useCallback(() => {
+      gateRef.current?.clear()
+      setPending(null)
+    }, [])
 
-    if (!compiled.ok) {
-      return h(Failure, { t, title: t('card.failed'), detail: compiled.message })
-    }
-
-    const Rendered = compiled.Component
-    return h(CardErrorBoundary, {
-      resetKey: spec.code,
-      // The compiled card owns its timers; unmounting it is the moment to stop
-      // them. `dispose` is optional so a component compiled by an older build
-      // (a cached artifact) still renders.
-      onUnmount: typeof Rendered.dispose === 'function' ? Rendered.dispose : undefined,
-      renderFailure: (error) => h(Failure, {
-        t,
-        title: t('card.failed'),
-        detail: error instanceof Error ? error.message : String(error),
-      }),
-    },
-    h(Rendered),
-    // Delivery feedback lives OUTSIDE the card's own tree so a snippet cannot
-    // style it away, and below the card so it does not shift the layout the
-    // snippet computed.
-    sent ? h('div', { className: 'dsh-genui-sent', role: 'status' }, t('card.sent')) : null,
-    sendFailed !== '' ? h(Failure, { t, title: t('card.sendFailed'), detail: sendFailed }) : null)
-  }
-
-  /**
-   * The answer surface.
-   *
-   * It used to be a scroll box with an overflow fade, because the card had a
-   * fixed max height. Both are gone: a generated answer grows with the
-   * transcript and lets the conversation scroll, which is what every other block
-   * of content does. Keeping the wrapper as a plain element preserves the class
-   * the stylesheet and the e2e suite select on.
-   */
-  function CardBodyFrame({ t, spec, send, sent, sendFailed }) {
-    const body = React.useRef(null)
-    // THE LEGIBILITY PASS, keyed on the snippet so a re-compile re-observes the
-    // new subtree. It runs AFTER the commit (an effect, not during render), so
-    // the measurement sees the colours the browser actually resolved — a token
-    // that resolves to 8% alpha can only be caught after it has been resolved.
-    //
-    // The disposer is returned by the effect, which is what disconnects the
-    // observer when the row is recycled: this card unmounts on every scroll.
+    // The confirmation line expires on its own: once the user's message appears
+    // below the card, a "sent" badge would be reading back what they can see.
     React.useEffect(() => {
-      if (body.current === null) return undefined
-      return observeInvisibleText(body.current)
-    }, [spec.code])
-    return h('div', { className: 'dsh-genui-body', ref: body },
-      h(CardBody, { spec, t, send, sent, sendFailed }))
+      if (!sent) return undefined
+      const timer = globalThis.setTimeout(() => setSent(false), 4000)
+      return () => { globalThis.clearTimeout(timer) }
+    }, [sent])
+
+    return h('div', { className: 'dsh-genui-body' },
+      h('iframe', {
+        ref: frame,
+        className: FRAME_CLASS,
+        sandbox: 'allow-scripts',
+        title: spec.title,
+        // No `allow` entry grants the frame any additional permission: camera,
+        // microphone, geolocation, clipboard and fullscreen are not delegated to
+        // it. What that means concretely is the browser's to enforce per feature;
+        // this attribute is the absence of a grant, not a promise that every
+        // related API is switched off.
+        referrerPolicy: 'no-referrer',
+        // A fixed height set from the frame's own report. `scrolling="no"`
+        // keeps a nested scrollbar out of the transcript.
+        style: { height: height + 'px' },
+        scrolling: 'no',
+      }),
+      pending !== null
+        ? h('div', { className: 'dsh-genui-pending-send' },
+          h('div', { className: 'dsh-genui-pending-text' }, pending.text.slice(0, MAX_INTERACT_CHARS)),
+          h('div', { className: 'dsh-genui-pending-actions' },
+            h('button', {
+              type: 'button',
+              className: 'dsh-genui-confirm',
+              onClick: accept,
+            }, t('card.sendChoice')),
+            h('button', {
+              type: 'button',
+              className: 'dsh-genui-dismiss',
+              onClick: dismiss,
+            }, t('card.dismissChoice'))))
+        : null,
+      sent ? h('div', { className: 'dsh-genui-sent', role: 'status' }, t('card.sent')) : null,
+      sendFailed !== '' ? h(Failure, { t, title: t('card.sendFailed'), detail: sendFailed }) : null,
+      frameFailed !== ''
+        ? h(Failure, { t, title: t('card.failed'), detail: frameFailed })
+        : null)
   }
 
   /** The failure panel: what broke, in the model's own error text. */
@@ -195,53 +296,6 @@ export function createCard({ React, toolName, tryCompile, readSpec }) {
       : { expanded: false, toggle: function noop() {} }
     const showSource = disclosure.expanded === true
     const toggle = disclosure.toggle
-
-    // THE BRIDGE. `interact(text)` is the one thing a card can do that outlives
-    // it: it hands a sentence to the conversation, which is how the next turn
-    // learns what the user chose in the UI. Official MCP Apps draw the same line
-    // as `ui/message` (a view adds a message to the conversation); this is that
-    // capability expressed through the host's own `conversation.send`.
-    //
-    // Delivery state is local, and `mounted` guards the state update: the row is
-    // recycled as the user scrolls, so a send that resolves after unmount would
-    // otherwise set state on a dead component.
-    // `sent` is a MOMENT, not a state: the confirmation explains the click, and
-    // once the user's own message appears below the card the line is redundant.
-    // It expires on its own rather than accumulating one line per click.
-    //
-    // The timer is the one place this plugin uses one, and it is cleared on
-    // unmount — the repository audit's observer/storage rules exist because
-    // leaked timers outlive a recycled row.
-    const [sent, setSent] = React.useState(false)
-    const [sendFailed, setSendFailed] = React.useState('')
-    const mounted = React.useRef(true)
-    React.useEffect(() => () => { mounted.current = false }, [])
-
-    React.useEffect(() => {
-      if (!sent) return undefined
-      const timer = globalThis.setTimeout(() => { if (mounted.current) setSent(false) }, 4000)
-      return () => { globalThis.clearTimeout(timer) }
-    }, [sent])
-
-    // The sandbox owns what counts as a valid message; this layer owns the
-    // feedback. It re-reports success and failure as state and rethrows so the
-    // snippet's own `await interact(...)` sees the rejection too.
-    const send = React.useCallback(async (message) => {
-      if (typeof props.sendMessage !== 'function') {
-        throw new Error('this card cannot send a message: no conversation bridge was injected')
-      }
-      try {
-        await props.sendMessage(message)
-        if (mounted.current) {
-          setSent(true)
-          setSendFailed('')
-        }
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error)
-        if (mounted.current) setSendFailed(detail)
-        throw error
-      }
-    }, [props.sendMessage])
 
     if (phase === 'preparing') return h(Pending, { t })
 
@@ -285,17 +339,6 @@ export function createCard({ React, toolName, tryCompile, readSpec }) {
     // toggle and a "why a card" footer is now: a title line, the answer, and an
     // optional footnote.
     //
-    // The rationale moved from a visible footer into the title's tooltip
-    // (`title` attribute on the heading). It explains the MODEL's choice, which
-    // is useful when you wonder "why did it draw this instead of answering?" but
-    // is not something to read on every card — and in a transcript it read as
-    // the app talking about itself.
-    //
-    // TITLE PLACEMENT IS A SETTING, because it is taste rather than correctness.
-    // `above` (the default) puts the heading over the content, centred — the
-    // shape a chart or a figure wants, and what ZCode's visuals do. `below` is
-    // for readers who want the content to lead. `inline` keeps the original
-    // left-aligned heading in the same line as the source affordance.
     // React's own contract for an external store, rather than a framework-built
     // hook prop: `useSyncExternalStore(subscribe, getSnapshot)` is guaranteed to
     // re-render this component when the settings row writes.
@@ -340,7 +383,7 @@ export function createCard({ React, toolName, tryCompile, readSpec }) {
     // and the CSS class carries that.
     placement === 'above' ? head('dsh-genui-head-centered') : null,
     placement === 'left' ? head('dsh-genui-head-left') : null,
-    h(CardBodyFrame, { t, spec, send, sent, sendFailed }),
+    h(CardFrame, { spec, t, sendMessage: props.sendMessage }),
     placement === 'below' ? head('dsh-genui-head-centered dsh-genui-head-below') : null,
     placement !== 'left' ? h('div', { className: 'dsh-genui-actions' }, sourceToggle) : null,
     showSource
@@ -395,8 +438,8 @@ function readRationale(argsRaw) {
 /**
  * Human byte size for the header badge.
  *
- * The badge exists so a reader can tell "this is a big card" from "this is a
- * line of markup" without opening the source.
+ * The badge exists so a reader can tell "this is a big card" from "a line of
+ * markup" without opening the source.
  *
  * @param {number} bytes size in bytes
  * @returns {string} e.g. `820 B`, `3.1 KB`

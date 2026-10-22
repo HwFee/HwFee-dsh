@@ -1,8 +1,8 @@
-# dsh-genui · 生成式界面
+# @hwfee/dsh-genui · 生成式界面
 
 DeepSeek Harness（DSH）的生成式 UI 插件：模型调用 `render_ui`，把你正在做的那件事**就地画成一张可交互卡片**——条形图、对比表、表单、配置开关——而不是先写成一段话再让你自己想象。
 
-卡片不是图片。它的按钮能改状态，也能把选择**发回对话**，所以模型可以接着你的选择往下做。
+卡片不是图片。它的按钮能改状态，也能把选择交给你确认后**发回对话**，所以模型可以接着你的选择往下做。
 
 ## 安装与卸载
 
@@ -23,8 +23,9 @@ dsh plugin --profile desktop remove @hwfee/dsh-genui
 模型调用 `render_ui` 后，工具行原地变成一张卡片：
 
 - **标题栏** —— 卡片标题、代码体积、`查看源码` 开关（源码按需展开，不占正文）
-- **卡片正文** —— 模型写的界面，用宿主主题令牌着色，亮暗模式自动跟随
+- **卡片正文** —— 模型写的界面，跑在沙箱 frame 里，用宿主主题令牌着色，亮暗模式自动跟随；高度由卡片自己上报，随内容变化
 - **脚注** —— 模型写的一句话：为什么这里用卡片而不是文字
+- **确认条**（仅当卡片请求发消息时出现）—— 在 frame **外面**，显示待发送的那句话，以及「发送这条选择 / 丢弃」两个按钮
 
 卡片出错时不会白屏：解析失败、渲染抛错、参数读不出来，都会在卡片位置显示原因，并把源码留在开关后面。
 
@@ -35,36 +36,53 @@ dsh plugin --profile desktop remove @hwfee/dsh-genui
 插件自带一个 `generative-ui` 技能，模型在第一次调用前会先加载它。技能教三件事：
 
 1. **什么时候值得用卡片** —— 答案是「一个可以看、可以改的东西」时；只是复述段落时不要用
-2. **沙箱规则** —— 卡片里没有网络、没有定时器、没有 DOM，`interact` 是唯一的出口
+2. **卡片跑在什么里** —— 独立沙箱 frame：状态用 `React.useState`，CSP 挡掉成文的网络 API，读不到宿主存储，回话用 `interact` 并由用户确认
 3. **怎么长得像应用的一部分** —— 用哪些主题令牌，亮暗模式都成立
 
 你不用手动加载它；在对话里直接说「画一张……的卡片」即可。
 
 ## 卡片能做什么，不能做什么
 
-**能：** 读数据、算数、画图、用 `useState` 做本地交互（选中、展开、输入）、把结果通过 `interact(text)` 发回对话。
+**能：** 读数据、算数、画图、用 `useState` 做本地交互（选中、展开、输入）、用定时器做动画、读自己那个 frame 的 `window.innerWidth` 做响应式、把选择通过 `interact(text)` 交给用户确认。
 
-**不能：** 联网、读文件、用定时器、碰页面 DOM、把状态存进浏览器。这些限制是为了让卡片**可安全重放**：会话重开时卡片是从当初的参数重新渲染的，而不是从某个内存状态恢复。
+**不能：** 联网（frame 的 CSP 关掉了 `fetch` / `XMLHttpRequest` / WebSocket 与远程图片）、读宿主的页面 / 存储 / cookie（opaque origin 下这些是**读不到**，不是「藏起来」）、自己把消息发进对话（`interact` 只生成一条待确认请求）。
 
-## 安全边界（请如实理解）
+## 安全边界（按当前实现写）
 
-沙箱是**防误用的护栏，不是隔离容器**。卡片代码与宿主 UI 跑在同一个 JavaScript realm、同一个页面源，宿主 React 实例直接传进去。被屏蔽的名字（`fetch`、`window`、`document`、`localStorage`、`globalThis`、定时器等）会在使用时抛出一句告诉模型该怎么改的错误。
+**隔离靠的是 iframe，不是一串被屏蔽的变量名。** 卡片代码跑在一个 `sandbox="allow-scripts"`、**没有** `allow-same-origin` 的 iframe 里，所以那个文档是 **opaque origin**：`parent.document`、`localStorage`、宿主的 cookie 与 RPC 面都读不到——跨源窗口会直接拒绝这些属性访问。旧版把代码放在宿主 realm 里再屏蔽若干全局名，那种做法一个属性跳转就能绕过（`h.constructor("return localStorage")()`），相关实现已经删除。
 
-这层护栏挡得住「模型顺手写了 `fetch`」，挡不住蓄意的构造函数链逃逸。真正的隔离需要双 iframe + 独立源 + CSP + postMessage 桥——官方 MCP Apps 规范就是这么做的，也是本插件将来若要处理不可信数据时的方向。
+| 层 | 做法 |
+|---|---|
+| **origin** | `srcdoc` + `sandbox="allow-scripts"`，没有 `allow-same-origin`。没有写 `allow` 属性，也就是说**没有额外授予任何权限**；具体哪些能力被禁由浏览器对该 `sandbox` 值的实际执行决定，本文不逐项断言 |
+| **CSP**（frame 文档内的 meta） | `default-src 'none'`；`connect-src 'none'`；`img-src` / `media-src` 只允许 `data:`、`blob:`；`font-src data:`；`object-src` / `frame-src` / `child-src` / `form-action` / `base-uri` 全 `'none'`；脚本只认每次渲染新生成的 nonce（`script-src 'nonce-…' 'unsafe-eval'`，编译模型代码需要 eval 语义，作用域就是这个 frame） |
+| **导航** | 卡片试图加载另一个页面时，宿主收到 `load` 事件后撤掉 `srcdoc` 并显示「试图加载另一个页面，已被拦下」，源码仍在 |
+| **React 实例** | frame 自带在构建时打包的 React / ReactDOM / Scheduler（MIT，`licenses/` 随包分发），不连 CDN、不碰宿主的模块表；卡片里拿不到宿主那个 React 实例 |
+| **主题** | 宿主把**计算后的主题值**做一份快照用 `postMessage` 送进去，主题切换时再推一次；frame 不读宿主的样式表 |
+| **消息** | 每条来自 frame 的消息都要通过三重身份校验：`event.source` 必须是宿主自己创建的那个窗口、`event.origin` 必须是 `"null"`、载荷里的随机 token 必须与写进那个文档的一致。类型只有 `height` / `interact` / `failed` 三种 |
+| **回话** | `interact(text)` 只生成一条 **pending 请求**（≤2000 字符且 ≤2000 字节、控制字符拒绝、一次只能挂一条、同一卡片限速 1 秒且最多 20 条）。宿主在 frame **外面**画「发送这条选择 / 丢弃」两个按钮；只有用户真的点下去，`conversation.send` 才会执行。frame 合成不出这个点击——它碰不到宿主 DOM，`postMessage` 也不携带用户手势 |
+| **取消** | 点「丢弃」直接作废，不发任何东西；上一条还没确认时，卡片再调 `interact` 会被忽略（不会顶掉你正在看的那句话） |
 
-当前设计的前提是：**代码来自你正在对话的模型，而这个模型本来就能跑 `bash`**。卡片没有给它新权限；它防的是「不小心丢数据」，不是「恶意代码」。
+**不承诺什么。** CSP 挡住的是**成文的那批网络 API**，不是「物理上不可能联网」：浏览器扩展、系统代理或将来新增的 API 都可能构成通道。真正的保证来自 opaque origin，不是那一行 `connect-src`。同理，frame 里的 `window` / `document` 是它**自己的**，它可以在自己的文档里读写——但那个文档里没有宿主的任何状态。
+
+**代码仍然来自模型。** 这层隔离保证的是「卡片读不到宿主的 DOM、宿主存储与 cookie，也不能自己替你说话」，不是「卡片里的代码一定无害」。它依旧会在自己的 frame 里执行模型写的一切；卡片自己收到的数据（你让它画的内容、发给它的参数）当然就在那个 frame 里，本节的承诺与这些数据无关。
+
+**跨机验收状态**：单元测试覆盖 frame 文档构造、CSP、消息校验、pending 门与主题快照；真实应用的端到端集成验收独立进行，本文不引用未完成的验收结果。
 
 ## 与官方 MCP Apps 的关系
 
 [MCP Apps](https://github.com/modelcontextprotocol/ext-apps)（2026-01-26 成为 MCP 官方扩展）用 `ui://` 资源 + 沙箱 iframe + JSON-RPC over `postMessage` 交付 UI，工具通过 `_meta.ui.resourceUri` 关联视图，视图用 `ui/message` 把消息送回对话。
 
-本插件借用了它验证过的三件事：**工具 + 视图配对**、**视图能回话**、**没有 UI 的宿主降级成文字**。没借的两件事是双 iframe 隔离和 `ui://` 资源协议——DSH 的 slot 直接渲染 React，套 iframe 会把宿主 React 和主题令牌一起挡在外面，而收益对当前调用者为零。
+本插件现在跟它同构的地方有三处：**工具 + 视图配对**、**在沙箱 iframe 里渲染**、**视图能回话（但由宿主确认后发出）**。不同在于资源交付方式——这里不用 `ui://` 资源协议，而是宿主用 `srcdoc` 现场构造那份文档，因为卡片代码来自本次工具调用，没有独立可寻址的资源需要托管；隔离本身仍然是 opaque origin + CSP。
+
+## 第三方代码
+
+frame 里的 React / ReactDOM / Scheduler 是构建时打进产物的（MIT），许可证随包分发在 `licenses/`，来源与版本见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 ## 开发者
 
 ```bash
 cd plugins/genui
-npm test            # 新鲜度检查 + 清单契约 + 59 项单测
+npm test            # 新鲜度检查 + 清单契约 + 全部单测（数字以输出为准）
 npm run build       # 重新生成 client/client.js（产物提交进 git）
 ```
 

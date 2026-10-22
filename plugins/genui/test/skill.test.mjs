@@ -277,41 +277,43 @@ test('every registration is owned by an effect that can dispose it', function ()
   }
 })
 
-test('the skill and the sandbox agree on which names are masked', function () {
-  // DRIFT GUARD, in both directions. `sandbox.js` masks a set of names and
-  // `skill.js` tells the model which ones; a name in one and not the other means
-  // either the model is warned about something that works, or it trips over
-  // something undocumented.
-  //
-  // The list is read from the SAME table the sandbox uses, so this test cannot
-  // drift into agreeing with a stale copy of it.
-  const masked = ['localStorage', 'sessionStorage', 'indexedDB', 'require', 'Function']
-  for (const name of masked) {
-    assert.ok(GENUI_SKILL.content.includes(name),
-      `the skill must mention the masked name "${name}"`)
-  }
+test('the skill describes the frame the card actually runs in', function () {
+  // DRIFT GUARD. `skill.js` is the only place the model learns what the runtime
+  // looks like, and the runtime is now an isolated frame rather than the host
+  // page. Each claim below is a fact the isolation rests on; a skill that still
+  // said "network works" would teach the model to write cards that fail, and one
+  // that omitted the frame would leave it guessing why `fetch` is missing.
+  assert.match(GENUI_SKILL.content, /sandboxed frame/, 'the frame must be named')
+  assert.match(GENUI_SKILL.content, /opaque origin/, 'and why it cannot reach the host')
+  assert.match(GENUI_SKILL.content, /no network|There is no network/i, 'the CSP must be stated')
 
-  // And the names that are now ALLOWED must be described as allowed, or a model
-  // reading the skill would keep avoiding capabilities it has.
-  for (const name of ['timers', 'fetch', 'window', 'document']) {
-    assert.ok(GENUI_SKILL.content.includes(name),
-      `the skill must mention "${name}", which a card may now use`)
+  // The names a card CANNOT use must be described as unavailable here, not as
+  // masked by name: there is no mask list any more, and a model that believed in
+  // one would try to work around it instead of using useState.
+  for (const name of ['localStorage', 'sessionStorage', 'indexedDB']) {
+    assert.ok(GENUI_SKILL.content.includes(name), `the skill must mention ${name}`)
   }
-  assert.match(GENUI_SKILL.content, /What a card can do/,
-    'the allowed set needs its own section — a masked-only table reads as "none of this works"')
+  for (const name of ['timers', 'window', 'document']) {
+    assert.ok(GENUI_SKILL.content.includes(name), `the skill must mention ${name}, which a card gets`)
+  }
+  assert.match(GENUI_SKILL.content, /What the card runs inside/,
+    'the runtime contract needs its own section — a mask table would describe a design that no longer exists')
 })
 
-test('the skill teaches interact, because a card without it is a picture', function () {
-  // The capability the first version was missing entirely: a card could render
-  // but never answer. MCP Apps calls this `ui/message`; here it is `interact`.
-  // The skill is the only place the model learns it exists, so each rule it
-  // needs is asserted by name.
+test('the skill teaches interact as a request the user confirms', function () {
+  // THE BEHAVIOUR CHANGE. `interact` used to send; it now asks. A model that
+  // still believed it sends would write "call it for narration", produce a
+  // confirmation prompt for something nobody should approve, and be confused by
+  // the extra click.
   assert.match(GENUI_SKILL.content, /interact\(text\)/, 'the signature must be shown')
+  assert.match(GENUI_SKILL.content, /does not send|It does not send/i,
+    'the model must know a card cannot send on its own')
+  assert.match(GENUI_SKILL.content, /confirm/i, 'and that the user confirms it')
+  assert.match(GENUI_SKILL.content, /One request at a time/,
+    'the single-pending rule is a card-side constraint the model has to respect')
+  assert.match(GENUI_SKILL.content, /Do not call it from render or from a timer/,
+    'a request without a click reads as the card acting on its own')
   assert.match(GENUI_SKILL.content, /useState/, 'a control should also update what is on screen')
-  assert.match(GENUI_SKILL.content, /user message|as a user message/i,
-    'the model must know the text arrives as a user turn')
-  assert.match(GENUI_SKILL.content, /do not await it inside render/i,
-    'awaiting during render is the one way to break the card')
   assert.match(GENUI_SKILL.content, /host may not provide the bridge/i,
     'a missing bridge must be described as a host limitation, not a snippet bug')
 })
@@ -325,6 +327,8 @@ test('the tool description names interact too, so a model that skips the skill s
   assert.match(description, /interact/, 'the always-visible description must name the bridge')
   assert.match(description, /user message/i,
     'and must say where the message lands, or a model treats it as a local event')
+  assert.match(description, /sandboxed frame/, 'the description must not claim the snippet runs in the page')
+  assert.match(description, /confirm/i, 'and must say that sending needs the user')
 })
 
 test('the skill states the fallback ladder, cheapest form first', function () {

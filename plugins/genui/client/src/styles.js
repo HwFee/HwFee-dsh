@@ -263,6 +263,92 @@ const CSS = `
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* ---- THE SANDBOXED FRAME ------------------------------------------------
+   The card body is a separate document now (see frame-html.js), so the host
+   only sizes it. display: block, border: 0 and width: 100% are the three
+   properties an iframe does not default to the way one expects: inline-level by
+   default (which leaves a text baseline gap under it), a 2px inset border in
+   every engine, and a 300px default width.
+
+   background: transparent keeps the frame's own document the thing that paints,
+   so a card with no surface of its own sits on the conversation the way the
+   prose around it does. */
+.dsh-genui-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color-scheme: light dark;
+}
+
+/* ---- THE CONFIRMATION ROW -----------------------------------------------
+   OUTSIDE the frame, on purpose: this is the host's own UI, so a card cannot
+   restyle it, hide it, or click it. It appears only when the card asked to send
+   something, and the message it sends is exactly the text shown here. */
+.dsh-genui-pending-send {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--dsw-alias-brand-primary);
+  border-radius: 0 var(--dsw-radius-sm) var(--dsw-radius-sm) 0;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* MODEL-AUTHORED TEXT, RENDERED AS TEXT. It is a div with a text child, never
+   markup: the frame is untrusted, and the one place its bytes reach the host
+   document must not be an HTML sink. Wrapping is on because a 2000-character
+   message is allowed. */
+.dsh-genui-pending-text {
+  font-size: var(--dsh-content-font-size, 14px);
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dsh-genui-pending-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.dsh-genui-confirm,
+.dsh-genui-dismiss {
+  font: inherit;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  padding: 4px 12px;
+  border-radius: var(--dsw-radius-sm);
+  cursor: pointer;
+}
+
+.dsh-genui-confirm {
+  border: 1px solid var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-on-brand, #ffffff);
+}
+
+.dsh-genui-dismiss {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dsh-genui-confirm:focus-visible,
+.dsh-genui-dismiss:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dsh-genui-confirm,
+  .dsh-genui-dismiss {
+    transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1), border-color 120ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
 /* ---- the settings row ---------------------------------------------------
    Mirrors the host's own general-settings rows: a title, a secondary hint, and
    the control on the right. Every value is a host token so the row matches its

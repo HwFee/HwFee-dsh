@@ -113,6 +113,65 @@ test('the files allowlist ships the runtime pieces and not the build toolchain',
   assert.ok(!manifest.files.includes('test'), 'test/ is not runtime')
 })
 
+test('the third-party licenses travel with the tarball', function () {
+  // THE OBLIGATION. React, ReactDOM and scheduler are compiled INTO the frame
+  // runtime, so their MIT notices are not reachable from the installed package
+  // unless this package ships them. A `files` list that omitted `licenses/`
+  // would publish minified third-party code with no attribution — the kind of
+  // omission that is invisible everywhere except a license audit.
+  assert.ok(manifest.files.includes('licenses'), 'files must include licenses/')
+  assert.ok(manifest.files.includes('THIRD_PARTY_NOTICES.md'), 'files must include the notices file')
+
+  for (const name of ['react', 'react-dom', 'scheduler']) {
+    const path = join(root, 'licenses', `${name}-LICENSE`)
+    assert.ok(existsSync(path), `licenses/${name}-LICENSE must exist`)
+    const text = readFileSync(path, 'utf8')
+    assert.match(text, /MIT License/, `${name}'s license must be the upstream text, not a summary`)
+    assert.match(text, /Copyright \(c\) Facebook, Inc\. and its affiliates\./,
+      `${name}'s copyright line must survive verbatim`)
+  }
+
+  // The notices must name every bundled package, so a future dependency cannot
+  // be added to the runtime without appearing here.
+  const notices = read('THIRD_PARTY_NOTICES.md')
+  for (const name of ['react', 'react-dom', 'scheduler']) {
+    assert.ok(notices.includes(`\`${name}\``), `THIRD_PARTY_NOTICES.md must name ${name}`)
+    assert.ok(notices.includes(`${name}-LICENSE`), `and point at its license file`)
+  }
+})
+
+test('the frame runtime really contains React, ReactDOM and scheduler', function () {
+  // WHAT MAKES THE NOTICES NECESSARY, asserted from the artifact. If the runtime
+  // ever stopped bundling them (a switch to the host's module table, a CDN
+  // reference), the notice would become a false claim — and the isolation would
+  // have been traded away, since the frame has no origin to resolve a module
+  // from. Both directions are checked.
+  const bundle = JSON.parse(read('client/src/frame/runtime.bundle.json'))
+  assert.equal(typeof bundle.js, 'string')
+  assert.ok(bundle.js.length > 100_000, 'the runtime is a real bundle, not a stub')
+
+  // ReactDOM's root API, React's element symbol, and scheduler's callback queue.
+  assert.match(bundle.js, /createRoot/, 'ReactDOM must be in the bundle')
+  assert.match(bundle.js, /react\.element/, "React's element type symbol must be present")
+  assert.match(bundle.js, /unstable_scheduleCallback|scheduleCallback/, 'scheduler must be in the bundle')
+
+  // And the bundle must FETCH nothing. The distinction matters: React's minified
+  // build contains XML namespace identifiers (`http://www.w3.org/1999/xhtml`) and
+  // a docs link in its error messages, and neither is a request — a test that
+  // forbade the string `http` would fail forever for the wrong reason. What must
+  // be absent is a network SINK.
+  for (const sink of ['fetch(', 'XMLHttpRequest', 'importScripts', 'WebSocket', 'sendBeacon', 'new Image']) {
+    assert.equal(bundle.js.includes(sink), false, `the frame runtime must not contain ${sink}`)
+  }
+  assert.equal(/\.src\s*=\s*["']https?:/.test(bundle.js), false, 'and must never assign a remote src')
+  assert.equal(/url\(\s*['"]?https?:/i.test(bundle.js), false, 'nor a remote css url()')
+
+  // The client artifact embeds the runtime text, which is how one shipped file
+  // serves both halves.
+  const client = read('client/client.js')
+  assert.ok(client.includes(bundle.js.slice(0, 200)), 'client/client.js must inline the frame runtime')
+})
+
 test('the package is publishable and pinned to the official registry', function () {
   assert.notEqual(manifest.private, true, 'private:true would block publishing')
   assert.equal(manifest.publishConfig?.access, 'public')
