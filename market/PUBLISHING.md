@@ -270,10 +270,13 @@ node market/check-release-assets.mjs --only cds-theme
 
 | 包 | 版本 | 首次出现 | 结果 |
 |---|---|---|---|
-| `dsh-cds-theme` | `0.1.2` | 2026-10-20 | 卡死，tarball 404，从未恢复 |
-| `dsh-cds-theme` | `0.1.3` | 2026-10-20 | 卡死，tarball 404，从未恢复 |
+| `dsh-cds-theme` | `0.1.2` | 2026-10-20 | 当天数百分钟级未落地；2026-10-22 实测 tarball 200 且在 packument 里，**已可用** |
+| `dsh-cds-theme` | `0.1.3` | 2026-10-20 | 同上：当天长时间未落地；2026-10-22 实测 tarball 200 且在 packument 里，**已可用** |
 | `dsh-cds-theme` | `0.1.4` | 2026-10-20 | 已发布，两分钟上线 |
-| `dsh-cds-theme` | `0.1.6` | 2026-10-22 | **已上传未见版本，未恢复**：`npm publish` 返回 `+ dsh-cds-theme@0.1.6`，日志有 "being processed"；官方 packument 的 `versions` 里始终没有 `0.1.6`，官方 tarball URL 404。等了约 25 分钟后换号 `0.1.7`。 |
+| `dsh-cds-theme` | `0.1.6` | 2026-10-22 | 已上传未见版本，观察窗口内未落地（`+ dsh-cds-theme@0.1.6`、日志 "being processed"；官方 packument 无 0.1.6、tarball 404） |
+| `dsh-cds-theme` | `0.1.7` | 2026-10-22 | 已上传未见版本，观察窗口内未落地；同日已建 `cds-theme-v0.1.7` Release，资产实测可装 |
+
+**结论修正（2026-10-22 实测）**：这个包上「长时间 pending」与「永久卡死」在短窗口内**不可区分**。0.1.2 / 0.1.3 曾按 404 判死、记作「从未恢复」，两天后两者 tarball 都是 200、都在 packument 里——当时只是当天没等到。所以判死需要更长窗口；在交付层面，Release 资产（`<plugin>-v<version>` tag 的 tgz）是可用的独立通道，实测 `dsh plugin add <release-url>` 落到目标版本，不依赖 npm。
 
 ---
 
