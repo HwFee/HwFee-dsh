@@ -664,15 +664,29 @@ slot             读它的那一行
 
 违反会怎样：第一次是 `svg { display: block }` 把应用里每个内联图标变成块级，文件引用图标变成单独一行；第二次是页面类（`.table`、`.text-warning`）作用到宿主文字，用户看到工具摘要/卡片外文本被染色，关掉 genui 才消失。**一个手工维护的 BARE 列表挡不住新选择器**——`test/vendor-css.test.mjs` 现在遍历整张表，任何不以 `.dsh-genui-card` 开头的选择器都会红。
 
-**2. 模型返回的可能是组件函数，不是元素。** 契约写的是「返回 React 元素的函数体」，但模型经常写 `return function Card() { … }`。React 会忽略函数子节点，于是工具报告成功、卡片只有标题、正文空白。沙箱在返回值是大写开头的函数（或带 `isReactComponent` 的类）时用 `React.createElement` 挂载它；探针必须 `try/catch`——被掩码的全局是 Proxy，`get` 会抛。
+**2. 模型返回的可能是组件函数，不是元素。** 契约写的是「返回 React 元素的函数体」，但模型经常写 `return function Card() { … }`。React 会忽略函数子节点，于是工具报告成功、卡片只有标题、正文空白。`client/src/frame/runtime.js` 在返回值是大写开头的函数（或带 `isReactComponent` 的类）时用 `React.createElement` 挂载它。
 
-违反会怎样：「说渲染好了但什么都没有」——卡片 body 为空，模型和用户都以为成功。`test/sandbox.test.mjs` 有专门一条守这个。
+违反会怎样：「说渲染好了但什么都没有」——卡片 body 为空，模型和用户都以为成功。**当前没有测试守这条**：`test/sandbox.test.mjs` 随同源沙箱一起删掉了，那条断言没有搬进 `test/frame.test.mjs`。这是已知缺口，不是「已覆盖」——补测试时把它搬进 frame 套件。
 
-**3. 卡片就是答案，正文不要复述。** `lib/skill.js` 明确要求：画了卡片之后，正文最多一句引导或结论，不要再把卡片里的数字/标签列一遍。模型写代码时也常把同一组信息画成多页签——那是它的设计，不是插件行为。
+> 历史背景：旧实现是同源求值 + 掩码全局，探针必须 `try/catch`，因为被掩码的全局是 Proxy、`get` 会抛。那段代码和那个约束都已不存在——现在没有掩码列表，因为卡片碰不到宿主。
+
+**3. 模型片段只在没有 `allow-same-origin` 的沙箱帧里执行。** 卡片的 iframe 是 `sandbox="allow-scripts"` 且**不带** `allow-same-origin`，所以它的文档是 opaque origin：宿主页面、宿主存储与 cookie 对它不可读，不是被遮住而是读不到。帧内 CSP 再挡掉成文的网络 API、导航、嵌套帧与表单。判据在 `client/src/frame-html.js`（帧文档与 CSP）与 `client/src/frame/runtime.js`（帧内运行时），边界本身由 `test/frame.test.mjs` 按来源、origin、token 三个维度断言。
+
+违反会怎样：一旦加上 `allow-same-origin`，帧与宿主同源，卡片就能读到宿主的 DOM、`localStorage` 和 cookie——实测过的三条 `SecurityError` 全部消失，隔离退化成「同一页面里的另一个 div」。
+
+**4. `interact()` 只是请求，发送由宿主确认。** 卡片调用 `interact(text)` 后，宿主在**帧外**渲染一条确认行显示待发送的原句，只有用户点那个按钮才会进 `conversation.send`；丢弃则什么都不发，已有 pending 时再来一次请求会被忽略而不是顶掉。
+
+违反会怎样：直接把 `interact` 接到 `conversation.send`，等于卡片能替用户说话——这正是本版修掉的两个问题之一（另一个是同源执行）。
+
+**5. `client/src/frame/runtime.bundle.json` 也是必须提交的构建输入。** 它是帧内运行时（含构建期打包进去的 React、ReactDOM 与 scheduler）的产物，被 `client/client.js` 内嵌。`tools/build-client.mjs --check` 会同时校验它与 `client/client.js`。
+
+违反会怎样：只提交 `client/client.js` 而不提交 `runtime.bundle.json`，fresh clone 上 `npm test` 的第一项就红，而本地因为文件在磁盘上一直绿——和「改了源码没重建」是同一类静默失败。
+
+**6. 卡片就是答案，正文不要复述。** `lib/skill.js` 明确要求：画了卡片之后，正文最多一句引导或结论，不要再把卡片里的数字/标签列一遍。模型写代码时也常把同一组信息画成多页签——那是它的设计，不是插件行为。
 
 违反会怎样：同一信息出现两遍，卡片的存在反而拉长阅读。
 
-**4. `exclusive: true` 是「这一条事件只归我」，不是「我也要看这一条」。** 宿主的 `dispatchInput` 在某个 Definition 认领了事件后，会跳过**同一 target 上所有非 exclusive 的 Definition**（`dsh-client-ui-conversation/lib/client.js:2838`）。所以认领必须精确到「自己发起的那个 call」；列车式的 `tool/result` 一律认领，等于把全部工具结果从宿主自己的行里抢走。
+**7. `exclusive: true` 是「这一条事件只归我」，不是「我也要看这一条」。** 宿主的 `dispatchInput` 在某个 Definition 认领了事件后，会跳过**同一 target 上所有非 exclusive 的 Definition**（`dsh-client-ui-conversation/lib/client.js:2838`）。所以认领必须精确到「自己发起的那个 call」；列车式的 `tool/result` 一律认领，等于把全部工具结果从宿主自己的行里抢走。
 
 违反会怎样：**工具行全部变成琥珀色的「已停止」，正文没有输出**。宿主拿不到结果，步骤关闭时 `interruption()` + `projectBlock` 会把每个调用投影成合成的 `{ isError: true, error: { code: 'interrupted' } }`（`dsh-client-ui-chat/lib/client.js:10312`、`:10351`），行状态是 `stopped`，颜色来自 `--dsw-alias-state-warn-label`。这不是 CSS 泄漏：关掉 genui 的两个 `<style>` 标签，行色一个像素都不变——`test/answer-node.test.mjs` 现在钉死「结果只 update、不 exclusive」。
 
