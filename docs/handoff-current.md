@@ -1,5 +1,11 @@
 # 当前交接：开发由用户叫停（2026-10-20 17:35）
 
+> **状态横幅（2026-10-22 核实）。本文第 5 节的「发布未做」已经过期。**
+>
+> - 六个包都已发布（`dsh-cds-theme@0.1.5`、`dsh-system-fonts@0.1.2`、`@hwfee/dsh-usage-stats@0.1.2`、`@hwfee/dsh-genui@0.1.0`、`@hwfee/dsh-git-bash@0.1.0`、`@hwfee/dsh-predict@0.1.0`），Release 按包分 tag，安装矩阵已提交。
+> - 仍未解决的是**字体授权**：npm 上 `dsh-cds-theme@0.1.5` 的 tarball 里实测含 8 个内联字面（6 Anthropic + 2 思源），见 [`market/PUBLISHING.md`](../market/PUBLISHING.md) 第 5 节。
+> - 发布步骤以 [`market/PUBLISHING.md`](../market/PUBLISHING.md) 为准；本文其余部分（各项修复的根因与证据）仍然有效。
+
 > **2026-10-20 18:25 更新：第 3 节已解决，predict 首次在真实应用里产出预测并通过 Tab 接受。** 根因有三层，全部有实机证据；见 3.1–3.3。第 3 节保留原始记录，供后来者对照「症状 → 根因」的推导过程。
 
 本文件记录用户要求停止开发时的状态，补充原始任务清单 `docs/handoff.md`，不替代仓库规则 `AGENTS.md`。

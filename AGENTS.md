@@ -676,7 +676,39 @@ slot             读它的那一行
 
 违反会怎样：**工具行全部变成琥珀色的「已停止」，正文没有输出**。宿主拿不到结果，步骤关闭时 `interruption()` + `projectBlock` 会把每个调用投影成合成的 `{ isError: true, error: { code: 'interrupted' } }`（`dsh-client-ui-chat/lib/client.js:10312`、`:10351`），行状态是 `stopped`，颜色来自 `--dsw-alias-state-warn-label`。这不是 CSS 泄漏：关掉 genui 的两个 `<style>` 标签，行色一个像素都不变——`test/answer-node.test.mjs` 现在钉死「结果只 update、不 exclusive」。
 
-## 十四、这份文件自己的规矩
+## 十四、如何派遣出这个子代理
+
+**1. 子代理默认且固定使用 `magpie / qoder-cn/dfmodel`，不准改动。** 本仓库派遣子代理时，provider 固定为 `magpie`，model 固定为 `qoder-cn/dfmodel`（目录显示名 `DeepSeek-Flash`）。除非用户之后明确要求换模型，不得替换为主代理模型、修改默认模型配置或调整允许列表。派遣只使用现有路由，不需要改 profile。
+
+当前 GPT 调用链使用的 `subagent` 参数如下；将 `description` 和 `prompt` 换成实际任务即可：
+
+```json
+{
+  "description": "执行指定任务",
+  "prompt": "这里填写子代理需要完成的具体任务与约束。",
+  "provider": "magpie",
+  "model": "qoder-cn/dfmodel",
+  "reasoning_effort": "high"
+}
+```
+
+默认推理档位为 `high`；本次已按 `magpie / qoder-cn/dfmodel` + `high` 派遣成功并完成任务。`cwd` 需要时取当前任务工作目录。返回 agent id 后等待完成通知，或用 `send_message` 继续同一个子代理。（2026-10-22 那批调用用的是 `low`，属更早档位记录。）
+
+违反会怎样：把主代理的 GPT 路由当作子代理默认值，或为了排障更换模型、修改允许列表，会违背用户固定子代理模型的要求。
+
+**2. 可选参数用省略表达，空字符串不是省略。** `list_subagent_models` 的原始约定是：`{}` 列出允许的 provider；只传 `provider` 列出允许模型；同时传 `provider` 与 `model` 查询精确模型及推理档位。只有已确认默认值解析为上述固定路由、且当前接口允许省略时，才能省略 `subagent` 的模型字段；当前 GPT 接口优先使用上面的已验证完整参数。只有工具明确支持时才能用 `null`。
+
+违反会怎样：2026-10-22 实测，`{"provider":"","model":""}` 被拒绝为 `provider must be non-empty`；反复发送同样参数不会得到模型列表。
+
+**3. 发现报错时核对配置，停止猜测和重复调用。** provider 是宿主注册的路由名；模型自称 GPT，不能据此推断 provider 叫 `openai` 或 `codex`。`qoder-cn/dfmodel` 整体是 model ID，不按 `/` 拆分。遇到 `not allowed for this Session` 时只读核对允许列表，不输出凭据，也不修改配置。当前接口无法省略参数时，用 `{"provider":"magpie","model":"qoder-cn/dfmodel"}` 精确查询；只有输入、配置或实现发生相关变化才重试原失败调用。
+
+违反会怎样：猜 provider 或拆错 model ID 会连续撞上会话路由限制；填空字符串重试会陷入同一错误循环。
+
+**4. 区分已验证事实与未确认原因。** 本次 GPT 侧可见签名把模型发现的两个参数表示成必填字符串，DSH 原始定义却允许省略；另一条子代理调用链以 `{}` 成功返回 provider 列表。具体哪层改变了 schema 尚未定位，本次按用户要求只记录经验，未修复转换链。子代理自述和模型目录只能证明声明的模型标识或显示名，服务端实际模型需要额外的上游证据。
+
+违反会怎样：未取得转换前后证据就归因于 DSH 或 Magpie，或把系统提示中的模型名当成服务端实测结果，会误报根因和模型身份。
+
+## 十五、这份文件自己的规矩
 
 这里的每条规则都对应一次真实故障。**新增规则时写清楚「违反会怎样」**——只说「应该这样」的规则，下一个人会绕过它。
 

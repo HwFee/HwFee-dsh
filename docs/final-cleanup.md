@@ -221,7 +221,9 @@ is idempotent (`panel.js:58` returns early when the tag exists).
    **What covers this instead:** `test/host.test.mjs` asserts every registration,
    order, locale namespace, the section's `children` declaration and the
    bound-wait fallback against a scripted context; `tools/verify.mjs` checks the
-   built artifact against 316 token expectations. So the REGISTRATIONS are
+   built artifact against the current token map (319 entries as of 2026-10-22;
+   it prints `override map size`, so read the number rather than trusting this
+   line). So the REGISTRATIONS are
    covered. What is NOT covered is "does Cordis itself accept this fiber on the
    shipped host" for this plugin specifically — a gap that `system-fonts`
    closes for itself and `cds-theme` does not. If someone wants it closed, the

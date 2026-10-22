@@ -1,5 +1,12 @@
 # 交接文档 · 2026-10-20
 
+> **状态横幅（2026-10-22 核实）。这份文件记录的是 2026-10-20 的状态，其中第 1 节已经过期，不要照着执行。**
+>
+> - 六个包都已发布，版本以 npm 为准：`dsh-cds-theme@0.1.5`、`dsh-system-fonts@0.1.2`、`@hwfee/dsh-usage-stats@0.1.2`、`@hwfee/dsh-genui@0.1.0`、`@hwfee/dsh-git-bash@0.1.0`、`@hwfee/dsh-predict@0.1.0`。
+> - Releases 已按包分 tag（`<plugin>-v<version>`），六个资产 URL 实测 200；`@hwfee/dsh-*` 三个包**不再 404**。
+> - 安装矩阵已跑过并提交：[`market/install-matrix.md`](../market/install-matrix.md)。
+> - 发布操作以 [`market/PUBLISHING.md`](../market/PUBLISHING.md) 为准；本文第 1 节保留原样，供对照「当时以为要做什么」。
+
 本文只记录三件事：**没有做什么**、**预期是什么**、**结果是什么**。
 
 仓库根 `AGENTS.md` 的规则全部有效，先读它。

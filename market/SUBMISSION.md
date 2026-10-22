@@ -9,13 +9,19 @@
 | 条目 | category | 状态 |
 |---|---|---|
 | `cds-theme` | `theme` | ✅ 已收录（维护者直接合入 main） |
-| `system-fonts` | `ui` | ✅ 已收录（描述经维护者改正） |
+| `system-fonts` | `ui` | ✅ 已收录（描述经维护者改正）；**本地描述待更新**，见下 |
 | `usage-stats` | `usage` | ✅ 已收录 |
-| `genui` | `ui` | ⏳ [PR #8392](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8392) 待合并 |
-| `git-bash` | `tools` | ⏳ PR #8392 待合并 |
-| `predict` | `ui` | ⏳ PR #8392 待合并 |
+| `genui` | `ui` | ✅ 已收录（[PR #8392](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8392) 已合并，2026-10-21T17:27Z） |
+| `git-bash` | `tools` | ✅ 已收录（同一 PR） |
+| `predict` | `ui` | ✅ 已收录（同一 PR） |
 
-PR #8392 只新增上述三条并在两个 README 各加三行，未改动任何既有条目（市场规则要求 PR 不碰与自己无关的条目）。
+PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何既有条目（市场规则要求 PR 不碰与自己无关的条目）。**它已经合并**——之前这张表写「待合并」，是记录过期，2026-10-22 用 `gh pr list` 核对后更正。
+
+**待办：`system-fonts` 的条目描述已落后于代码。** 本条现在写的是「内容、代码、终端三个字体槽 + 行距 + 字距」，
+但 0.1.3 起还提供了界面字体、界面字号与行内代码字号两个像素步进器。按 §「描述必须与代码一致」，
+下一次发布后应当用 `submit-to-catalog.ps1 -Apply -Update` 更新这一条自己的条目（`-Update` 是必须的：
+脚本默认只提交上游没有的条目，正是为了避免 PR 去改动已有条目）。改写时要守住那条边界：
+插件**从不写 `font-weight`**，所以任何「字重」措辞都不能出现在描述里。
 
 第一次提交是 [PR #8189](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8189)：维护者读完代码后指出 `system-fonts` 的描述与实现相反——README 与代码都明确「从不写 `font-weight`，字重归宿主主题」，而条目写了「plus weight / 另加字重」。他删掉该词后把三个条目一起合入 main，PR 关闭。本地 `market/catalog` 已同步为改正后的文本。**这就是描述必须属实的实例**：市场的评审会逐句核对代码。
 
@@ -46,6 +52,14 @@ pwsh market/submit-to-catalog.ps1 -Apply     # 开 PR
 
 脚本只提交**上游没有的**条目；已收录的不会被重写。第一次提交用的是手工流程，现已自动化并做了这件事。
 
-## 需要作者确认的一点（历史）
+## 商业字体：不再随包分发（已解决）
 
-`cds-theme` 内联了 6 个 Anthropic 商业字体（约 660 KB），无再分发授权，提交到公开目录等于向公众分发。该条目已被收录——当时的决定是随包发布并在 PR 里如实说明，`market/PUBLISHING.md` 记录了移除方法与后果。
+`cds-theme` 曾经内联了 6 个 Anthropic 商业字体（约 711 KB base64），无再分发授权，而提交
+到公开目录等于向公众分发。**这一条已经修掉**：公开构建从 0.1.6 起不再 import 这六个字面，
+`@font-face` 改用 `local()` 引用——装了该字族的机器渲染效果不变，没装的回落到系统字族；
+两个 SIL OFL 的思源子集仍然内联。
+
+已经发生的两件事要记住，它们共同说明「靠人肉检查」不够：
+
+1. 0.1.5 已经带着这六个字面发布到 npm 与 Releases。**已发布版本无法撤回**，能做的只有让新版本不再包含它。
+2. 当时 `files` 字段里根本没有 `fonts/`，`npm pack --dry-run` 也看不出问题——字节藏在 `client/client.js` 的 base64 里。所以现在的拦截是 `market/check-release-assets.mjs`：解包真实 tarball，按 SHA-256 认字面。反向验证过它抓得住 0.1.5。

@@ -64,6 +64,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PLUGINS = join(ROOT, 'plugins')
 const QUIET = process.argv.includes('--quiet')
 
+/**
+ * The font licence registry — one shared list, so this check and the plugin's own
+ * build/test/release gates cannot disagree about which faces may ship.
+ */
+const FONT_LICENCES = await import('./font-licences.mjs')
+
 // ---------------------------------------------------------- artifact sizes
 //
 // NO BUDGET. The owner removed it (2026-10-21): "把这个预算删了 … 包大一点没事".
@@ -343,21 +349,26 @@ function shorten(text) {
 //
 // WHAT MAKES THE EXEMPTION SAFE TO GRANT, and what does not:
 //   - the evaluated string is the model's own tool argument, not log data;
-//   - the same model already holds the `pwsh`/`bash` tool, so evaluating a
-//     string grants no privilege it did not have;
-//   - the sandbox parameter list masks network, timers, storage and the document
-//     (`client/src/sandbox.js`), which is a footgun guard and NOT a containment
-//     boundary — the module header says so explicitly;
-//   - `test/sandbox.test.mjs` pins both the masking and its stated limits.
+//   - the file that evaluates it runs INSIDE the card's sandboxed iframe, whose
+//     document has an opaque origin (`sandbox="allow-scripts"`, no
+//     `allow-same-origin`) and a CSP with `connect-src 'none'`. The isolation is
+//     the frame, not a mask list: `frame-html.js` builds the document, and
+//     `card.js` is the only host-side path a card message can travel;
+//   - the previous same-origin evaluator (`client/src/sandbox.js`) is DELETED.
+//     If it ever comes back, this exemption no longer covers it: the filename
+//     below is exact, and `client/src` is scanned recursively, so a new
+//     evaluator anywhere else — including a renamed copy — still fails.
+//   - `test/frame.test.mjs` pins the frame's guarantees and the message gate.
 // The exemption would NOT be grantable for a plugin that evaluates data it did
 // not itself receive as a tool argument.
 
 /** Packages allowed to evaluate a string, with the reason printed on every run. */
 const DYNAMIC_CODE_EXEMPT = {
   genui: {
-    file: 'client/src/sandbox.js',
-    why: 'evaluates the model-authored React snippet that is this plugin\'s entire feature; '
-      + 'masking and its limits are asserted in test/sandbox.test.mjs',
+    file: 'client/src/frame/runtime.js',
+    why: 'evaluates the model-authored React snippet that is this plugin\'s entire feature, '
+      + 'inside the card\'s opaque-origin sandboxed iframe; the frame boundary and the '
+      + 'confirm-before-send gate are asserted in test/frame.test.mjs',
   },
 }
 
@@ -404,6 +415,81 @@ function checkDynamicCode(plugin) {
 }
 
 // -------------------------------------------------------- 4. freshness
+
+/**
+ * NO LICENCE-BOUND FONT BYTES IN A PUBLISHED BUNDLE.
+ *
+ * Six Anthropic web faces in the cds-theme repository carry no redistribution
+ * grant. A build-time `dataurl` loader can make them part of `client/client.js`,
+ * and a base64 string in a published package IS redistribution — invisible in the
+ * source, invisible in `files`, and invisible to every other check here.
+ *
+ * The plugin's own build refuses and its suite fails, but those only run inside
+ * that plugin's directory. This repo-level check is the backstop for the case
+ * those two miss: a stale artifact committed alongside a re-added import, or a
+ * second plugin importing the same bytes.
+ *
+ * THE FACE IDENTITIES ARE STATIC, AND THAT IS THE POINT. This check used to read
+ * each restricted file out of `plugins/<name>/fonts/` and `continue` when it was
+ * missing — so on a checkout without those files (they are untracked now, because
+ * storing them publicly IS the distribution this check exists to prevent) it
+ * passed every bundle without looking at anything. `tools/font-licences.mjs`
+ * holds a 96-byte prefix and a sha256 per face instead, so the check works with
+ * no local bytes and keeps naming the face it found.
+ *
+ * WHEN A LOCAL COPY EXISTS IT IS CHECKED AS WELL, and a mismatch FAILS. Two
+ * different failures, deliberately separated: "you inlined a restricted face" and
+ * "the file on this machine is not the face the registry describes". The second
+ * must never be downgraded to a pass — a swapped file under a known name is how
+ * an unlicensed replacement would travel.
+ *
+ * Reported as a FAIL, not a note: redistribution is not a size preference.
+ */
+function checkFontLicences(plugins) {
+  const { RESTRICTED_FACE_FILES, dataUrlPrefix, verifyFingerprints } = FONT_LICENCES
+  for (const plugin of plugins) {
+    const artifactPath = join(plugin.dir, 'client', 'client.js')
+    if (statSafe(artifactPath) === null) continue
+    const artifact = readFileSync(artifactPath, 'utf8')
+
+    // Every restricted face the registry knows about, regardless of which plugin
+    // holds a copy: a face inlined into ANY bundle is published.
+    const leaked = RESTRICTED_FACE_FILES.filter(function (file) {
+      return artifact.includes(dataUrlPrefix(file))
+    })
+    // A local copy whose bytes differ is searched by its own prefix too, so a
+    // swapped file cannot hide behind the registry's number.
+    const localPath = join(plugin.dir, 'fonts')
+    for (const file of RESTRICTED_FACE_FILES) {
+      const path = join(localPath, file)
+      if (statSafe(path) === null) continue
+      const prefix = 'data:font/woff2;base64,' + readFileSync(path).subarray(0, 96).toString('base64')
+      if (artifact.includes(prefix) && !leaked.includes(file)) leaked.push(file)
+    }
+
+    if (leaked.length > 0) {
+      fail('font-licence', plugin.name,
+        `${leaked.length} restricted face(s) inlined in client/client.js: ${leaked.join(', ')}. `
+        + 'Those faces carry no redistribution grant — mark them `redistributable: false` '
+        + 'in client/src/fonts.js and remove their import from client/src/font-assets.js.')
+    } else {
+      pass('font-licence', plugin.name, 'no restricted font bytes in client/client.js')
+    }
+
+    // Only the plugin whose fonts the registry describes can drift; others have
+    // no local copies of these files at all.
+    const { drifted } = verifyFingerprints()
+    const mine = drifted.filter(function (item) { return item.path.startsWith(plugin.dir) })
+    if (mine.length > 0) {
+      fail('font-fingerprint', plugin.name,
+        `${mine.length} local face(s) differ from their committed fingerprint: `
+        + mine.map(function (item) { return item.file }).join(', ')
+        + '. A swapped face under a known name would pass every other gate. Restore the'
+        + ' original bytes; do not edit tools/font-licences.mjs to match an unlicensed'
+        + ' replacement.')
+    }
+  }
+}
 
 function checkFreshness(plugin) {
   const script = join(plugin.dir, 'tools', 'build-client.mjs')
@@ -1046,6 +1132,7 @@ async function main() {
     checkUnsafeDom(plugin)
     checkDynamicCode(plugin)
     checkFreshness(plugin)
+    checkFontLicences([plugin])
     checkObserverLife(plugin)
     checkStorageGuard(plugin)
     checkLocaleDisposers(plugin)

@@ -55,19 +55,23 @@ if (-not $ReportPath) {
   $ReportPath = Join-Path $RepoRoot 'market/install-matrix.md'
 }
 
-# The packages this repository ships. Each one releases INDEPENDENTLY: the three
-# versions move separately (cds-theme 0.1.4, system-fonts 0.1.1, usage-stats
-# 0.1.2), so they cannot share one release tag. Releases are per package,
-# `<plugin>-v<version>`, and the asset inside drops the scope from a scoped name
-# (`@hwfee/dsh-usage-stats` ships as `hwfee-dsh-usage-stats-<v>.tgz`).
-$packages = @(
-  @{ Dir = 'plugins/cds-theme';    Name = 'dsh-cds-theme';          Tag = 'cds-theme';    Asset = 'dsh-cds-theme-{v}.tgz' }
-  @{ Dir = 'plugins/genui';        Name = '@hwfee/dsh-genui';       Tag = 'genui';        Asset = 'hwfee-dsh-genui-{v}.tgz' }
-  @{ Dir = 'plugins/git-bash';     Name = '@hwfee/dsh-git-bash';    Tag = 'git-bash';     Asset = 'hwfee-dsh-git-bash-{v}.tgz' }
-  @{ Dir = 'plugins/predict';      Name = '@hwfee/dsh-predict';     Tag = 'predict';      Asset = 'hwfee-dsh-predict-{v}.tgz' }
-  @{ Dir = 'plugins/system-fonts'; Name = 'dsh-system-fonts';       Tag = 'system-fonts'; Asset = 'dsh-system-fonts-{v}.tgz' }
-  @{ Dir = 'plugins/usage-stats';  Name = '@hwfee/dsh-usage-stats'; Tag = 'usage-stats';  Asset = 'hwfee-dsh-usage-stats-{v}.tgz' }
-)
+# The packages this repository ships, DERIVED from `plugins/*` rather than typed
+# out here. The hand-written array that used to live at this spot listed six
+# packages in two files (this one and verify-mount.ps1); a seventh plugin would
+# have been silently skipped by whichever copy nobody remembered to edit, and the
+# report would still have said ALL GREEN. `market/packages.ps1` computes the list
+# from `dsh.bundle` and derives the per-package release tag and asset name:
+# each package releases INDEPENDENTLY, so they cannot share one release tag.
+# Scoped names drop the scope in the asset (`@hwfee/dsh-usage-stats` ships as
+# `hwfee-dsh-usage-stats-<v>.tgz`).
+. (Join-Path $PSScriptRoot 'packages.ps1')
+$packages = @(Get-ReleasePackages -RepoRoot $RepoRoot | ForEach-Object {
+  # `Asset` is the concrete filename; the matrix substitutes the live version, so
+  # keep the shape it fills in (`{v}`) rather than swapping the string, which
+  # would depend on the version never appearing twice in a filename.
+  $bare = ($_.Name -replace '^@', '' -replace '/', '-')
+  @{ Dir = $_.Dir; Name = $_.Name; Tag = $_.Slug; Asset = "$bare-{v}.tgz" }
+})
 
 $releaseBase = 'https://github.com/HwFee/HwFee-dsh/releases/download'
 $results = New-Object System.Collections.ArrayList

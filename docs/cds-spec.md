@@ -656,7 +656,7 @@ inset 0 0 0 0px hsla(0,0%,8%,0.10),
 
 **实现裁定（2026-10-21）— 原版 Anthropic 字体，不做降级回退。**
 
-参考仓库的 `agents:21-23` 禁止二进制字体，所以它只能用系统回退。本主题按用户要求直接内联 **6 个原版 Anthropic Web 可变字体**（Sans / Serif / Mono × Roman / Italic）：文件在 `plugins/cds-theme/fonts/`，字体名表为 `Anthropic Sans Web Text` / `Anthropic Serif Web Text Light` / `Anthropic Mono Web`，版本 `26.043.1`，厂商 `BSPK x Geist x Anthropic`；构建时由 `client/src/fonts.js` 转成 `data:font/woff2` 内联进 `client.js`（宿主 CSP 含 `font-src data:`，无需网络）。
+参考仓库的 `agents:21-23` 禁止二进制字体，所以它只能用系统回退。本主题按用户要求直接使用 **6 个原版 Anthropic Web 可变字体**（Sans / Serif / Mono × Roman / Italic）：字体名表为 `Anthropic Sans Web Text` / `Anthropic Serif Web Text Light` / `Anthropic Mono Web`，版本 `26.043.1`，厂商 `BSPK x Geist x Anthropic`。**这 6 个文件不在仓库里**：它们是本机的未跟踪工作副本（`.gitignore` 精确列名），fresh clone 不含，发布包里也零字节 —— 详见下面的授权提示。
 
 所以字体栈以 CSS 的 `"anthropic-sans" / "anthropic-serif" / "anthropic-mono"` 开头，Inter / JetBrains Mono **不参与**：
 
@@ -668,7 +668,11 @@ mono:  "anthropic-mono", ui-monospace, "Cascadia Mono", Consolas, var(--font-cjk
 
 **中文不是降级，也无法用 Anthropic 字体**：三个 Anthropic 字体合计 0 个 CJK 码位（README 实测 625 个码位、CJK 为 0），中文必须走思源黑体/宋体子集；主题对它们做了 `avar` 轴偏移，使同名义字重下的竖干粗细与 Anthropic 一致（`NotoSansSC-Shifted-VF.woff2` / `NotoSerifSC-Shifted-330.woff2`）。手动选过字体时，以 `dsh-system-fonts` 的选择为准。
 
-**授权提示**：原版字体没有公开再分发授权，内联进发布包等于向用户分发；这一点记录在 `market/PUBLISHING.md`，是本仓库已知的风险，不是遗漏。
+**授权提示（2026-10-22 核实，处理已落地）**：原版字体没有公开再分发授权，内联进发布包等于向用户分发。npm 上 `dsh-cds-theme@0.1.5` 的 tarball 实测内含 8 个 `data:font/woff2`（6 Anthropic + 2 思源），也就是说这个问题已经发生过，不只是「已知风险」。
+
+工作区的实现已改成：**只内联 2 个自制思源子集**（SIL OFL），6 个 Anthropic 面标 `redistributable: false`，`fontSourcesFor()` 对它们只输出 `local("Anthropic Sans" / "Anthropic Serif" / "Anthropic Mono")`——本机装了才生效，字节不进包。产物实测从 8 个内联降到 2 个。这 6 个源文件也已 `git rm --cached`（本机文件保留、历史不动、`.gitignore` 精确列名），公开仓库不再分发它们。
+
+守卫共四处，都读同一张静态指纹表 `tools/font-licences.mjs`（每面一条 `sha256` + 前 96 字节 base64，不含二进制），因此在**没有那 6 个商业源的 fresh clone 上依然生效**，并能指名报出是哪一个字面：`client/src/fonts.js`（`redistributable` 标记）、`tools/build-client.mjs`（licence gate）、`test/fonts.test.mjs`（产物断言 + `git ls-files` 未跟踪断言）、`tools/audit.mjs` 与 `market/check-release-assets.mjs`（仓库级与发布级）。本机副本与指纹不一致即 drift FAIL，不降级放行。复核步骤见 `market/PUBLISHING.md` 第 5 节。**已发布的 `0.1.5` 不会追溯修改**，需要新版本号才生效；第 7.2 节里把 Anthropic 族名写在字体栈首位这件事不再意味着一份随包分发的字体。
 
 ### 7.3 7 阶字号阶梯
 

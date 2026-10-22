@@ -79,7 +79,7 @@ DSH 的会话日志（`*.zstd`）是**多个 zstd 压缩帧首尾直接拼接**�
 ```bash
 npm ci           # 仅安装开发期打包工具 esbuild，零运行时依赖
 npm run build    # 编译客户端产物：client/src/* -> client/client.js
-npm test         # 产物新鲜度检查 + 8 个测试文件（共 158 条测试）
+npm test         # 产物新鲜度检查 + 清单契约 + 8 个测试文件（条数以输出为准）
 ```
 
 详细的接口与缓存设计契约见仓库根目录的 [`docs/usage-stats-contract.md`](../../docs/usage-stats-contract.md)。

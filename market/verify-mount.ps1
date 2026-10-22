@@ -34,15 +34,36 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$packages = @(
-  @{ Dir = 'plugins/cds-theme';    Name = 'dsh-cds-theme';          RowId = 'dsh-cds-theme' }
-  @{ Dir = 'plugins/genui';        Name = '@hwfee/dsh-genui';       RowId = 'dsh-genui' }
-  @{ Dir = 'plugins/git-bash';     Name = '@hwfee/dsh-git-bash';    RowId = 'dsh-git-bash' }
-  @{ Dir = 'plugins/predict';      Name = '@hwfee/dsh-predict';     RowId = 'dsh-predict' }
-  @{ Dir = 'plugins/system-fonts'; Name = 'dsh-system-fonts';       RowId = 'dsh-system-fonts' }
-  @{ Dir = 'plugins/usage-stats';  Name = '@hwfee/dsh-usage-stats'; RowId = 'dsh-usage-stats' }
-)
-if ($Package) { $packages = @($packages | Where-Object { $_.Name -eq $Package }) }
+# Derived, not typed out. This file used to carry its own array of six packages
+# with a hand-written RowId each; a new plugin was skipped by whichever of the two
+# arrays nobody edited, and the check still printed ALL N PLUGIN(S) MOUNT
+# CORRECTLY. See market/packages.ps1.
+. (Join-Path $PSScriptRoot 'packages.ps1')
+$packages = @(Get-ReleasePackages -RepoRoot $RepoRoot | ForEach-Object {
+  # RowId is the plugin's internal identity (patch `id`), read from its own patch
+  # rather than guessed from the package name: `@hwfee/dsh-usage-stats` registers
+  # the row id `dsh-usage-stats`, and the two must not be conflated.
+  #
+  # THE `- ` MATTERS. The patch row is `    - id: dsh-cds-theme`, so a pattern
+  # anchored at `^\s*id:` matches nothing and yields an empty row id — silently,
+  # because an empty string is still a string. Verified: an earlier version of
+  # this derivation returned '' for all six packages.
+  $patch = Join-Path $_.DirPath 'cordis.patch.yml'
+  $rowId = if (Test-Path $patch) {
+    [regex]::Match((Get-Content $patch -Raw), '(?m)^\s*-?\s*id:\s*[''"]?([^''"\r\n]+)[''"]?\s*$').Groups[1].Value.Trim()
+  } else { '' }
+  if (-not $rowId) {
+    Write-Host "  FAIL  $($_.Name): cannot read the row id from $patch" -ForegroundColor Red
+    $script:failures++
+  }
+  @{ Dir = $_.Dir; Name = $_.Name; RowId = $rowId; DirPath = $_.DirPath }
+})
+if ($Package) { $packages = @($packages | Where-Object { $_.Name -eq $Package -or $_.RowId -eq $Package }) }
+
+if ($packages.Count -eq 0) {
+  Write-Host 'No package matched. Nothing was verified.' -ForegroundColor Red
+  exit 1
+}
 
 $failures = 0
 
@@ -88,7 +109,12 @@ foreach ($p in $packages) {
     $failures++
   } else {
     $patchText = Get-Content $installedPatch -Raw
-    $rowNames = [regex]::Matches($patchText, '(?m)^\s*name:\s*[''"]?([^''"\r\n]+)[''"]?\s*$') |
+    # `-?` so both YAML spellings are read: the two-line form this repository
+    # writes (`    - id: x` / `      name: y`) and the compact one (`    - name: y`).
+    # Without it the compact form yields zero names, and the check then reports
+    # "the patch inserts no named row" for a patch that is perfectly fine — a false
+    # FAIL that would send the next person hunting the wrong problem.
+    $rowNames = [regex]::Matches($patchText, '(?m)^\s*-?\s*name:\s*[''"]?([^''"\r\n]+)[''"]?\s*$') |
       ForEach-Object { $_.Groups[1].Value.Trim() }
 
     if ($rowNames.Count -eq 0) {

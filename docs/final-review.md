@@ -181,7 +181,9 @@ These are the ones I would stake the acceptance on.
    every key a {light,dark} pair: true
    non-pairs: 0
    ```
-   Matches `docs/reference-absorption-ledger.md:32` and `:145` exactly.
+   Matches `docs/reference-absorption-ledger.md:32` and `:145` as they read on 2026-10-18.
+
+   > **2026-10-22 更正：这个数字过期了。** 现在 `buildTokens(DEFAULT_STATE)` 返回 **319** 个键（173 配色 + 133 排印 + 13 圆角/阴影/缓动），四个强调色预设下都是 319；新增的 3 个是 UI 字号角色（`--dsw-font-family-ui`、`--dsw-font-size-ui`、`--dsw-font-size-ui-delta`）加入时没同步本文与 ledger。复审当时的结论（每个键都是 `{light,dark}` 对、没有非成对项）依然成立。复现：`node plugins/cds-theme/tools/verify.mjs | Select-String 'override map size'`。
 
 7. **Retired-item rule counts in the doc are correct.** `codeBlockDetails` = **6** rules and `markdownBody` = **10** rules, confirmed by counting rules per emitted section. (My first count said 5 and 11; that was my boundary error, not the doc's — the doc counts by section block, which is the right unit.)
 

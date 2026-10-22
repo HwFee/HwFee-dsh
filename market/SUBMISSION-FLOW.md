@@ -10,6 +10,10 @@
 |---|---|
 | `market/PUBLISHING.md` | npm 认证与发布细节（token、403、卡死版本） |
 | `market/SUBMISSION.md` | 市场目录的条目内容与仓库年龄门槛 |
+| `market/packages.ps1` | 可发布包清单的唯一来源：从 `plugins/*` 的 `dsh.bundle` 推导，并算出 Release tag 与资产名 |
+| `market/check-release-assets.mjs` | 发布资产闸门：解包真实 tarball，拒绝无再分发授权的字体内联 |
+| `market/publish-pending.ps1` | 构建 → 测试 → 闸门 → 发布 → 版本/tarball/shasum 多重校验 → 写发布记录 |
+| `market/publish-record.md` | 每次发布的 tarball SHA-1/SHA-256 与 npm integrity（Release 资产要对得上） |
 | `market/test-install-paths.ps1` | 安装矩阵：5 条安装路径 + 跨用例 |
 | `market/verify-mount.ps1` | 挂载验证：行名解析、bundle id、Host `apply` |
 | `market/submit-to-catalog.ps1` | 只提交上游还没有的条目，开 PR |
@@ -46,13 +50,24 @@ export NPM_TOKEN='npm_…'
 npm publish --//registry.npmjs.org/:_authToken="$NPM_TOKEN"
 ```
 
-推荐用现成脚本，它会按清单逐个 build → test → publish → 校验：
+推荐用现成脚本，它会按清单逐个 build → test → 资产闸门 → publish → 校验：
 
 ```sh
 pwsh market/publish-pending.ps1
 ```
 
 **注意 shell 展开**：`NPM_TOKEN='…' npm publish --…="$NPM_TOKEN"` 里 `$NPM_TOKEN` 在赋值生效前就展开成空，结果是 `ENEEDAUTH`。要么先 `export`，要么直接写值。
+
+**token 可能只在 User 作用域。** 在本机实测过：Process 作用域三个候选名全空，值存在于
+User 作用域的 `NPM_TOKEN`。脚本只读 Process 里继承到的变量，所以调用前要显式注入：
+
+```powershell
+$env:NPM_TOKEN = [Environment]::GetEnvironmentVariable('NPM_TOKEN','User').Trim()
+pwsh market/publish-pending.ps1
+```
+
+这仍然满足「不写 npmrc、不进仓库」——变量只活在这一次 shell 里。**判据不是 `npm whoami`**：
+granular token 本来就不支持 whoami，401 不代表失效。
 
 **验收**：不是看 `+ name@version`，而是下面两条都成立：
 
@@ -62,6 +77,36 @@ curl -sI https://registry.npmjs.org/<name>/-/<name>-<version>.tgz   # 200
 ```
 
 卡在暂存区的版本（`409 Cannot publish over previously published versions`）无法清除，**换一个新版本号**，别连着烧版本号。
+
+### 2b. 资产闸门：包里不能有不能分发的字体
+
+```sh
+node market/check-release-assets.mjs            # 六个包
+node market/check-release-assets.mjs --dir plugins/cds-theme
+```
+
+它**不看 `files` 字段**，而是真的 `npm pack` 解包、逐字节扫，包括 JS 里内联的
+`data:font` base64。判定方式是把每个 font payload 的 SHA-256 与 `plugins/*/fonts/`
+下的原件比对：
+
+| 形态 | 判定 |
+|---|---|
+| 商业字面（Anthropic 等），内联或散文件 | **FAIL** —— 仓库里那份只是开发用工作副本 |
+| 对不上任何已知 face | **FAIL** —— 「不知道是什么」不算通过 |
+| 散落的字体文件（即使是 OFL） | **FAIL** —— 可发布的字面一律经 `font-assets.js` 内联，散文件说明重复打包或误打包 |
+| OFL 字面内联（Noto） | 通过，并逐个打印名字，豁免可见 |
+
+「散文件也 FAIL」这条比「无授权才 FAIL」更严，是故意的：把 `files` 放宽到 `fonts/`
+之后，两个 Noto 虽然可再分发，但一样是重复打包。已用放宽 `files` 的临时副本反向验证：
+八个字体文件全部被点名拒绝。
+
+这条闸门存在的原因：`dsh-cds-theme@0.1.5` 的 `files` 里根本没有 `fonts/`，但
+`client/client.js` 内联了 6 个 Anthropic 商业字面（约 711 KB base64），**文件列表检查
+和 `npm pack --dry-run` 都看不出来**。反向验证过：拿 0.1.5 的 tarball 喂给它，它准确
+报出六个字面及字节偏移。
+
+**release notes 必须写明**：从这一版起不再内置 Anthropic 字体，改为 `local()` 引用
+（装了该字族的机器照旧，没装的回落到系统字族）。两个 OFL 思源子集仍然内联。
 
 ---
 
@@ -77,7 +122,14 @@ gh release create <plugin>-v<version> <临时目录>/<asset>.tgz \
 
 例：`@hwfee/dsh-usage-stats` → tag `usage-stats-v0.1.2`，资产 `hwfee-dsh-usage-stats-0.1.2.tgz`。
 
-**验收**：资产 URL 返回 200，且资产 shasum 与 npm 上的 `dist.shasum` 一致。
+tag 与资产名都由 `market/packages.ps1` 推导，不是手写：tag 用**目录名**（`@hwfee/…` 做不成合法 git tag），资产名**去掉 scope**（`npm pack` 与已发布 tarball 都是这个名字）。脚本里有 `Assert-ReleaseNaming` 断言这条推导，改错会直接抛错而不是发出一个 404。
+
+**验收**：资产 URL 返回 200，且资产 shasum 与 npm 上的 `dist.shasum` 一致。对得上的依据是
+`market/publish-record.md`——发布脚本每次都会写下 tarball 的 SHA-1（即 `dist.shasum`）、
+SHA-256（GitHub 显示的 digest）与 npm `dist.integrity`。**跑过但没记录的哈希等于没法核对。**
+
+Release notes 里要写清这次发布用户能感知到什么。特别地，`dsh-cds-theme` 从 0.1.6 起
+**不再内置 Anthropic 商业字体**（改为 `local()` 引用 + 系统字族回落），必须写明。
 
 ---
 
@@ -151,7 +203,7 @@ pwsh market/submit-to-catalog.ps1 -Apply     # 建分支、复制条目、开 PR
 ## 8. 记录与提交
 
 ```sh
-git add market/install-matrix.md market/catalog market/index.json AGENTS.md
+git add market/install-matrix.md market/publish-record.md market/catalog market/index.json AGENTS.md
 git commit -m "…"
 ```
 
@@ -164,7 +216,10 @@ git commit -m "…"
 ## 完成判据
 
 - [ ] `npm view` 与 tarball URL 都成立（不是只看 `npm publish` 的输出）
+- [ ] `node market/check-release-assets.mjs` 六包全 PASS（无商业/未识别字体内联）
+- [ ] `market/publish-record.md` 有本次每个包的 SHA-1/SHA-256/integrity
 - [ ] 每个包有对应 `<plugin>-v<version>` Release，资产 200、shasum 与 npm 一致
+- [ ] Release notes 写明用户能感知的变化（cds-theme 0.1.6 起不再内置 Anthropic 字体）
 - [ ] `install-matrix.md` 除预期的 `git-subdir` 外无 FAIL
 - [ ] `verify-mount.ps1` 全绿
 - [ ] `market/catalog` 与 `market/index.json` 覆盖本次的插件与版本
