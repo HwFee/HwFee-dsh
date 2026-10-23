@@ -10,7 +10,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 const {
-  MODE_KEY, SHELL_GLOBAL, createModeStore, createShellInfoStore, describeShell,
+  MODE_KEY, SANDBOX_NOTE_KEY, SHELL_GLOBAL, createModeStore, createSandboxNoteStore,
+  createShellInfoStore, describeShell,
 } = await import('../client/src/store.js')
 const { LEGACY_BOOLEAN_KEY } = await import('../lib/mode.js')
 
@@ -191,4 +192,54 @@ test('forMode returns a STABLE reference per mode', function () {
 test('getSnapshot is stable too, for the same reason', function () {
   const store = createShellInfoStore({ [SHELL_GLOBAL]: { active: { path: '/usr/bin/bash', kind: 'posix-bash' } } })
   assert.equal(store.getSnapshot(), store.getSnapshot())
+})
+
+// ------------------------------------------------ the sandbox-note preference
+
+test('the sandbox-note preference DEFAULTS TO ON', function () {
+  // A security disclosure must not disappear on upgrade. Every "I cannot tell"
+  // path — no storage, no key, unreadable storage, a corrupt value — answers
+  // TRUE, and only the exact string 'false' turns it off.
+  assert.equal(createSandboxNoteStore(fakeStorage()).getSnapshot(), true, 'fresh install')
+  assert.equal(createSandboxNoteStore(undefined).getSnapshot(), true, 'no storage at all')
+  assert.equal(createSandboxNoteStore({ getItem: () => null, setItem: () => {} }).getSnapshot(), true)
+  for (const value of ['true', '0', '', 'no', '{}', 'FALSE']) {
+    assert.equal(createSandboxNoteStore(fakeStorage({ [SANDBOX_NOTE_KEY]: value })).getSnapshot(), true,
+      'a value that is not exactly "false" reads as ON: ' + JSON.stringify(value))
+  }
+})
+
+test('the preference persists across a reload', function () {
+  const storage = fakeStorage()
+  createSandboxNoteStore(storage).set(false)
+  assert.equal(storage.data[SANDBOX_NOTE_KEY], 'false', 'stored under this plugin\'s own key')
+  assert.equal(createSandboxNoteStore(storage).getSnapshot(), false, 'and read back after a reload')
+})
+
+test('the preference notifies on a real change only', function () {
+  const store = createSandboxNoteStore(fakeStorage())
+  const seen = []
+  store.subscribe(() => seen.push(store.getSnapshot()))
+  store.set(true)     // already on
+  store.set(false)
+  store.set(false)    // repeated
+  store.set(true)
+  assert.deepEqual(seen, [false, true])
+})
+
+test('a storage that throws still lets the preference change for this session', function () {
+  const hostile = { getItem() { throw new Error('SecurityError') }, setItem() { throw new Error('QuotaExceeded') } }
+  const store = createSandboxNoteStore(hostile)
+  assert.equal(store.getSnapshot(), true, 'an unreadable preference reads as ON')
+  store.set(false)
+  assert.equal(store.getSnapshot(), false, 'the click still hides the line now')
+})
+
+test('dispose stops notifications on the preference too', function () {
+  const store = createSandboxNoteStore(fakeStorage())
+  let count = 0
+  store.subscribe(() => { count += 1 })
+  store.dispose()
+  store.set(false)
+  assert.equal(count, 0)
 })

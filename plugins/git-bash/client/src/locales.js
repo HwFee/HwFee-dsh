@@ -37,6 +37,11 @@ export const en = {
   // The trajectory entrance in the command box's corner. Named for what the
   // user gets, not for the mechanism ("inspect" reads like a developer verb).
   'run.inspect': 'View in trajectory',
+  // The settings row for the sandbox-note switch. The hint states what the
+  // switch does NOT hide: the model is still told the command left the sandbox.
+  'sandboxNote.title': 'Show the sandbox note',
+  'sandboxNote.hint': 'Under a shell result, say when the command ran outside the sandbox. '
+    + 'Turning this off hides the line here only — the model is still told.',
 }
 
 export const zh = {
@@ -61,4 +66,6 @@ export const zh = {
   'run.stopped': '已停止运行命令',
   'run.copy': '复制命令',
   'run.inspect': '在轨迹中查看',
+  'sandboxNote.title': '显示沙箱提示',
+  'sandboxNote.hint': '在 shell 结果下标注该命令未经过沙箱。关闭只隐藏这里的这行说明：模型仍然会被告知。',
 }

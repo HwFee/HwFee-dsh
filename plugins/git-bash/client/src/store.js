@@ -19,6 +19,16 @@ import { PLUGIN_ID } from './constants.js'
 /** Where the user's mode lives. Renaming it loses every user's choice. */
 export const MODE_KEY = PLUGIN_ID + ':mode'
 
+/**
+ * Where the "show the sandbox note" preference lives.
+ *
+ * A UI preference and nothing else: it hides one line of COPY under a shell
+ * result. It must never be read by `lib/index.js`, because the model-facing
+ * `(unsandboxed)` marker is the security disclosure and the model has to keep
+ * seeing it whether or not this box is ticked.
+ */
+export const SANDBOX_NOTE_KEY = PLUGIN_ID + ':showSandboxNote'
+
 /** The boot global the host publishes (mirrors `SHELL_GLOBAL` in lib/index.js). */
 export const SHELL_GLOBAL = '__dshGitBash'
 
@@ -122,6 +132,67 @@ export function createModeStore(storage) {
       if (!MODES.includes(value) || value === current) return
       current = value
       writeMode(storage, MODE_KEY, value)
+      for (const listener of listeners) listener()
+    },
+    dispose() { listeners.clear() },
+  }
+}
+
+/**
+ * The editable "show the sandbox note" preference.
+ *
+ * DEFAULT TRUE, and it has to stay that way: the line is a security disclosure.
+ * A user who upgrades must keep seeing it until they explicitly turn it off, so
+ * every read path — absent key, unreadable storage, a corrupt value — answers
+ * `true`. Only the exact string `'false'` turns it off, because that is the one
+ * spelling `writeSandboxNote` ever writes.
+ *
+ * WHAT IT DOES NOT DO. It hides the line under a shell result in THIS UI. It is
+ * never consulted by the host: the `(unsandboxed)` marker in the tool result's
+ * content is what tells the model the command did not cross the sandbox, and it
+ * is emitted unconditionally. Turning this off cannot make a command look
+ * sandboxed to the model.
+ *
+ * @param {Storage | undefined} storage the storage object
+ * @returns {{ getSnapshot: () => boolean, subscribe: Function, set: Function, dispose: Function }}
+ */
+export function createSandboxNoteStore(storage) {
+  const read = () => {
+    if (storage === null || storage === undefined) return true
+    try {
+      // ONLY 'false' TURNS IT OFF. A stored '0', a JSON blob from a future
+      // version, or a legacy boolean string all read as ON, which is the safe
+      // direction for a disclosure.
+      return storage.getItem(SANDBOX_NOTE_KEY) !== 'false'
+    } catch {
+      // Private mode throws on the property READ itself, before any method.
+      return true
+    }
+  }
+
+  let current = read()
+  const listeners = new Set()
+
+  return {
+    getSnapshot: () => current,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    /**
+     * @param {boolean} value the new state
+     */
+    set(value) {
+      const next = value !== false
+      if (next === current) return
+      current = next
+      if (storage !== null && storage !== undefined) {
+        try {
+          storage.setItem(SANDBOX_NOTE_KEY, next ? 'true' : 'false')
+        } catch {
+          // The change still applies for this session; the next launch retries.
+        }
+      }
       for (const listener of listeners) listener()
     },
     dispose() { listeners.clear() },

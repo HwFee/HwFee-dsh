@@ -5,10 +5,11 @@
  */
 
 import { en, zh } from './locales.js'
-import { LOCALE_NS, SETTINGS_ROW_ID } from './constants.js'
+import { LOCALE_NS, SETTINGS_ROW_ID, SANDBOX_NOTE_ROW_ID } from './constants.js'
 import { createSettingsRow } from './settings-row.js'
+import { createSandboxNoteRow } from './sandbox-note-row.js'
 import { createRunShellRow } from './tool-view.js'
-import { createModeStore, createShellInfoStore } from './store.js'
+import { createModeStore, createSandboxNoteStore, createShellInfoStore } from './store.js'
 import { installCss } from './styles.js'
 
 /** The Cordis event the mode is published on. Mirrors `MODE_EVENT` in lib/index.js. */
@@ -34,6 +35,7 @@ export const MODE_MARKER_HEADER = 'x-dsh-git-bash'
  */
 export function createLifecycle({ React, primitives }) {
   const ShellRow = createSettingsRow({ React, primitives })
+  const SandboxNoteRow = createSandboxNoteRow({ React })
   const RunShellRow = createRunShellRow({ React })
 
   return function apply(ctx) {
@@ -68,6 +70,15 @@ export function createLifecycle({ React, primitives }) {
     // rather than waiting for a reload.
     const modeStore = createModeStore(storage)
     ctx.effect(() => () => modeStore.dispose(), 'dsh-git-bash: mode store')
+
+    // WHETHER THE CARD STATES THAT A COMMAND LEFT THE SANDBOX.
+    //
+    // A PAGE-SIDE PREFERENCE ONLY. The host never reads it: the model-facing
+    // marker (`· direct (unsandboxed)`) is emitted unconditionally in the result
+    // content, so turning this off hides a line of copy from the user and cannot
+    // hide the fact from the model. See `createSandboxNoteStore`.
+    const sandboxNoteStore = createSandboxNoteStore(storage)
+    ctx.effect(() => () => sandboxNoteStore.dispose(), 'dsh-git-bash: sandbox note store')
 
     const publish = () => {
       const mode = modeStore.getSnapshot()
@@ -111,6 +122,23 @@ export function createLifecycle({ React, primitives }) {
       }),
     }, ShellRow))
 
+    // THE SANDBOX-NOTE SWITCH — ITS OWN ROW, IN THE SAME SLOT.
+    //
+    // `settings.general.item` is where this plugin already owns its shell row;
+    // one setting per row is how the host composes that list, and a second entry
+    // with its own id and order is the supported shape. It is deliberately NOT
+    // in cds-theme's `settings.appearance.item` (the theme's own panel): the
+    // setting belongs to this plugin's subject, it has to work with the theme
+    // uninstalled, and its strings ship in this plugin's locale namespace.
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item',
+      id: SANDBOX_NOTE_ROW_ID,
+      // One step below the shell row (43) so the two read as a pair.
+      order: 44,
+      locale: LOCALE_NS,
+      inject: () => ({ noteStore: sandboxNoteStore }),
+    }, SandboxNoteRow))
+
     // THE TOOL'S OWN CARD. Every command-shaped tool renders through this one
 // view so the conversation reads the same whichever shell ran:
 //
@@ -129,6 +157,10 @@ export function createLifecycle({ React, primitives }) {
         key: wireName,
         priority: 100,
         locale: LOCALE_NS,
+        // THE PREFERENCE REACHES THE CARD. Without this the note line would be
+        // shown unconditionally and the switch would look broken. Ordinary prop,
+        // not `hooks:` — the row is a plain function component (see store.js).
+        inject: () => ({ noteStore: sandboxNoteStore }),
       }, RunShellRow))
     }
   }

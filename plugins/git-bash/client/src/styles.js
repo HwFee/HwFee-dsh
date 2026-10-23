@@ -110,6 +110,64 @@ const CSS = `
   color: var(--dsw-alias-brand-primary);
 }
 
+/* The switch on the sandbox-note row: the host's own switch geometry
+   (36x20, 999px, 2px inset, 16px thumb travelling 16px, on-state
+   --dsw-alias-brand-primary), so it sits on the same rhythm as the shipped
+   switches in the same list. Copied rather than imported: the host's own Switch
+   component is not part of the primitives table this plugin relies on, and a
+   missing export would blank the whole settings row.
+
+   NO BORDER OF ITS OWN, same reason as the settings row selector above: the
+   theme draws the separators, and a local rule loses the specificity race. */
+.dsh-git-bash-toggle {
+  position: relative;
+  flex: none;
+  align-self: flex-start;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dsw-alias-border-l3);
+  cursor: pointer;
+  transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dsh-git-bash-toggle[aria-checked="true"] {
+  background: var(--dsw-alias-brand-primary);
+}
+
+.dsh-git-bash-toggle:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary));
+  outline-offset: 2px;
+}
+
+.dsh-git-bash-toggle-thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-primary-foreground, #ffffff);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dsh-git-bash-toggle[aria-checked="false"] .dsh-git-bash-toggle-thumb {
+  background: var(--dsw-alias-switch-thumb, #ffffff);
+}
+
+.dsh-git-bash-toggle[aria-checked="true"] .dsh-git-bash-toggle-thumb {
+  transform: translate(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsh-git-bash-toggle,
+  .dsh-git-bash-toggle-thumb {
+    transition: none;
+  }
+}
+
 /* ---- the run_shell tool card --------------------------------------
    The reference (Claude Code desktop) draws a shell call as one boxed
    command line and then the output as BARE flowing text. Colours are the
@@ -492,6 +550,24 @@ body[data-ds-dark-theme] .dsh-gb-tool {
   /* !important: the theme pins the TEXT family on every non-code descendant of\n     the conversation with !important, and a card div is not code/pre — a\n     plain declaration here would lose and the command would render in Sans. */
   font-family: var(--ds-font-family-code) !important;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* THE SANDBOX SENTENCE: PROSE UNDER THE OUTPUT, NOT CAPTURED OUTPUT.
+   It used to be the tool result's second line, so the model paid for it on every
+   request. The host now sends it as data.meta.note and this rule renders it,
+   which is why it is NOT styled as code: no code face, no pre-wrap of a command,
+   and a tertiary ink because it is an explanation, not a result. Gated by the
+   showSandboxNote preference in the row itself, so there is no display:none here
+   — an absent preference must render the line, and a CSS hide would be a second,
+   silently reversed source of truth for a disclosure. */
+[data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-note {
+  margin: 2px 0 0;
+  padding: 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--dsw-font-family) !important;
+  font-size: calc(12px + var(--dsh-content-font-delta, 0px));
+  line-height: 18px;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 /* ---- typography measured from the reference's terminal view ----------

@@ -44,6 +44,10 @@ POSIX 上不找 Git for Windows，直接取 PATH 里的 `bash`。
 | **Windows PowerShell** | 只用 pwsh，找不到也不回落 Git Bash |
 | **Git Bash** | 只用 Git Bash，找不到也不回落 PowerShell |
 
+同一处还有第二行 **显示沙箱提示**（开关，**默认开**）：控制命令结果下那行「这条命令没走沙箱」的说明是否显示。
+
+**它只影响界面，不影响模型。** 工具结果内容里的 `· direct (unsandboxed)` 标记由宿主侧无条件写出，和这个开关没有任何连接——关掉之后界面少一行字，但模型仍然知道命令没走沙箱。默认开，是因为这行是安全披露：升级上来的用户不会突然看不见它。
+
 **「选中了某个 shell」和「这次会话能不能跑它」是两件事。** 自动模式不会因为沙箱策略临时换解释器——那会让同一个设置在不同会话里跑出不同 shell，看起来像工具坏了。Windows 上的对应关系：
 
 | 会话策略（Windows） | Git Bash | Windows PowerShell |
@@ -64,10 +68,12 @@ POSIX 上不存在这一列的差异：`bash` 就是宿主自己的 shell，命�
 
 **非零退出不是错误。** `grep` 没匹配到会退出 1，那是一个结果而不是故障，工具照常返回退出码和输出。只有「shell 根本起不来」才算错误。
 
-**每条结果都标明路径：`· host` 还是 `· direct`，而且能不能走 `· direct` 由会话的沙箱策略决定。**
+**每条结果都标明路径：`· host` 还是 `· direct (unsandboxed)`，而且能不能走 `· direct` 由会话的沙箱策略决定。**
 
 - `· host`：命令交给了宿主的 `ctx.shell`（Windows 上是 `pwsh-sandbox`），沙箱、取消、工作目录、进程生命周期都归宿主。会话的沙箱模式会随请求一起交给执行器，不会被丢掉。
-- `· direct`：插件自己 spawn。**Git Bash 在 Windows 上只能走这条**——沙箱里的 pwsh 无法创建 MSYS 进程（`NtCreateDirectoryObject 0xC0000022`，已实测）。而它是**没有沙箱**的，所以只在会话明确是 `danger-full-access` 时才允许。
+- `· direct (unsandboxed)`：插件自己 spawn。**Git Bash 在 Windows 上只能走这条**——沙箱里的 pwsh 无法创建 MSYS 进程（`NtCreateDirectoryObject 0xC0000022`，已实测）。而它是**没有沙箱**的，所以只在会话明确是 `danger-full-access` 时才允许。括号里的一个词就是全部安全语义：这句文本每次请求都进模型上下文，所以完整说明放在 `presentationMeta` 里给界面，内容里只留标记。
+
+> 完整说明改成**界面文字**：`Ran directly: the session grants danger-full-access, so this command did not cross the sandbox.` 以前它是结果的第二行，约 39 token/次、常驻上下文；现在它走 `data.meta`，界面照样显示，模型只看到 `(unsandboxed)`。设置里可以关掉这行显示，**但模型侧的标记不受影响**。
 
 **受限会话里 Git Bash 会被拒绝，这是刻意的（fail closed）。** 只读、`workspace-write`、以及任何无法判定模式的会话，`run_shell` 会在**启动任何进程之前**报错并说明原因，什么也不执行。提示给出的是「改用 Windows PowerShell」——它能在沙箱内跑；插件不会替你换解释器，也不会劝你提权。
 
@@ -83,9 +89,10 @@ Ran a command                       ← 描述（模型没写时用「已运行�
 │ $ grep -rn "box-shadow" src  │   ← 带 $ 前缀的命令，命令/参数/字符串分色
 └──────────────────────────────┘
 输出的前几行直接流淌在卡片里……        ← 无标签、无第二个框
+Ran directly: the session grants danger-full-access, so this command did not cross the sandbox.  ← 沙箱说明（来自 data.meta，可在设置里关闭）
 ```
 
-罐头输出（`[gitbash · …] exit 0 · direct` 那几行）保持原样，它是结果的一部分。卡片默认自动换行，长输出在 280px 后内部滚动，不会把对话撑高。
+罐头输出（`[gitbash · …] exit 0 · direct (unsandboxed)` 那一行）保持原样，它是结果的一部分。卡片默认自动换行，长输出在 280px 后内部滚动，不会把对话撑高。
 
 ## 与宿主 shell 的关系
 

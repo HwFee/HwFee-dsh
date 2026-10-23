@@ -262,16 +262,34 @@ export function createRunShellTool(current, services = {}) {
         },
       },
       render(_args, value) {
-        // THE PATH IS ALWAYS STATED. "host" means the command crossed
-        // `ctx.shell` (sandbox / cancellation apply); "direct" means the plugin
-        // spawned it itself because the host cannot start this shell. Leaving
-        // the host case unmarked made the two indistinguishable in the result.
-        const route = value.via === 'host' ? ' · host' : value.via === 'direct' ? ' · direct' : ''
+        // THE PATH IS ALWAYS STATED, IN ONE WORD. "host" means the command crossed
+        // `ctx.shell` (sandbox / cancellation apply); "direct (unsandboxed)" means
+        // the plugin spawned it itself because the host cannot start this shell.
+        // Leaving the host case unmarked made the two indistinguishable.
+        //
+        // WHY THE PARENTHESIS AND NOT THE SENTENCE. This text is what the model is
+        // charged for on EVERY request, and the sandbox admission used to be a
+        // whole second line here (about 39 tokens per call, measured). One word
+        // carries the same security fact, so the sentence moved to
+        // `presentationMeta` below, where it reaches the UI and not the context.
+        const route = value.via === 'host' ? ' · host' : value.via === 'direct' ? ' · direct (unsandboxed)' : ''
         const parts = [`[${value.kind} · ${value.shell}] exit ${value.exitCode}${route}`]
-        if (typeof value.note === 'string' && value.note !== '') parts.push(value.note)
         if (value.stdout !== '') parts.push(value.stdout)
         if (value.stderr !== '') parts.push('stderr: ' + value.stderr)
         return [{ type: 'text', text: parts.join('\n') }]
+      },
+      // THE FULL SENTENCE, FOR THE UI ONLY. The registry hands this object to the
+      // page as `data.meta` (never to the provider), so the card can still state
+      // "the session grants danger-full-access, so this command did not cross the
+      // sandbox" while the model only pays for the marker above.
+      //
+      // NULL, NOT AN OBJECT WITH AN UNDEFINED FIELD. The registry snapshots this
+      // value as lossless JSON (`snapshotProjection`), which REJECTS `undefined`
+      // wherever it appears — returning `{ note: undefined }` on the delegated
+      // path would fail the whole tool call with `output.presentationMeta
+      // returned non-lossless JSON`. `null` is the supported "no metadata" value.
+      presentationMeta(_args, value) {
+        return typeof value.note === 'string' && value.note !== '' ? { note: value.note } : null
       },
     },
     async execute(args, exec) {
@@ -343,7 +361,14 @@ export function createRunShellTool(current, services = {}) {
         { ...args, workdir: shell.workdir, signal: exec.signal },
         services.run,
       )
-      // POSITIVE, NOT RESIDUAL. The old note existed to admit that the call had
+      // THE NOTE IS UI COPY NOW, NOT CONTEXT. It used to be the second line of the
+      // tool result, where every call paid for it in the model's input on every
+      // request. `output.presentationMeta` below sends the same sentence to
+      // `data.meta`, which the page reads and the provider never sees; the
+      // result content carries only the `(unsandboxed)` marker. The per-user
+      // switch that hides the line is `showSandboxNote`.
+      //
+      // POSITIVE, NOT RESIDUAL. The old wording admitted that the call had
       // bypassed the sandbox; now the call is only here because the session
       // granted full access, so the note states the permission instead of
       // excusing the bypass.

@@ -442,6 +442,13 @@ test('danger-full-access is the ONE mode that may run the direct path', async fu
   assert.equal(result.via, 'direct')
   assert.match(result.note, /danger-full-access/,
     'the note must state the PERMISSION that admitted the call, not excuse a bypass')
+  // THE NOTE NO LONGER RIDES IN THE CONTENT. It is emitted as
+  // `presentationMeta` (below) so the UI keeps it and the model's context does
+  // not, and the content states the same fact as `(unsandboxed)`.
+  const content = tool.output.render({ command: 'echo ok' }, result)[0].text
+  assert.match(content, /· direct \(unsandboxed\)/)
+  assert.doesNotMatch(content, /Ran directly/)
+  assert.match(tool.output.presentationMeta({ command: 'echo ok' }, result).note, /danger-full-access/)
 })
 
 // REGRESSION: Git Bash cannot be delegated on Windows.
@@ -490,16 +497,68 @@ test('the result render says whether the host executor ran it', function () {
   // Host and direct results used to look identical ("direct" was the only
   // marker, and it was appended only for the direct path). A model reading
   // "exit 0" could not tell a sandboxed run from one that bypassed it.
+  //
+  // THE MARKER IS NOW ONE WORD. `direct (unsandboxed)` states the security fact
+  // the old sentence stated, at a fraction of the tokens: this text is charged
+  // to the model on EVERY request, and the sentence cost about 39 tokens per
+  // call before it moved to `presentationMeta`.
   const tool = toolWith({ ok: true })
   const host = tool.output.render({}, {
     shell: 's', kind: 'pwsh', exitCode: 0, stdout: '', stderr: '', via: 'host',
   })[0].text
-  assert.match(host, /\] exit 0 · host$/)
+  assert.match(host, /\] exit 0 · host$/, 'the delegated path still says so, and claims no sandbox status')
   const direct = tool.output.render({}, {
     shell: 's', kind: 'gitbash', exitCode: 0, stdout: '', stderr: '',
     via: 'direct', note: 'Ran directly: no sandbox.',
   })[0].text
-  assert.match(direct, /\] exit 0 · direct\nRan directly: no sandbox\.$/)
+  assert.match(direct, /\] exit 0 · direct \(unsandboxed\)$/,
+    'the unconfined path must name itself in the content')
+})
+
+test('the sandbox sentence is NOT in the content, and IS in presentationMeta', function () {
+  // WHY THIS IS TWO ASSERTIONS AND NOT ONE. The sentence is a disclosure the
+  // user must keep seeing, and it is also the bulk of the per-call context cost.
+  // Splitting it across the two channels is the whole point of the change, so
+  // both halves are pinned: content must be free of it, meta must still carry it.
+  const tool = toolWith({ ok: true })
+  const value = {
+    shell: 's', kind: 'gitbash', exitCode: 0, stdout: 'ok\n', stderr: '',
+    via: 'direct', note: 'Ran directly: the session grants danger-full-access, so this command did not cross the sandbox.',
+  }
+  const content = tool.output.render({}, value)[0].text
+  assert.match(content, /\(unsandboxed\)/)
+  assert.doesNotMatch(content, /Ran directly/, 'the sentence must not reach the model')
+  assert.doesNotMatch(content, /danger-full-access/, 'nor the policy wording')
+
+  const meta = tool.output.presentationMeta({}, value)
+  assert.equal(typeof meta, 'object')
+  assert.match(meta.note, /danger-full-access/,
+    'the full explanation still reaches the UI through data.meta')
+  assert.match(meta.note, /did not cross the sandbox/)
+})
+
+test('presentationMeta returns null, never undefined, when there is no note', function () {
+  // THE CRASH THIS PINS. The registry snapshots `presentationMeta`'s return value
+  // as lossless JSON, and `undefined` is not lossless — `{ note: undefined }`
+  // fails the whole tool call with "output.presentationMeta returned
+  // non-lossless JSON". The delegated (`via: 'host'`) path has no note at all,
+  // which is exactly when that shape would be produced.
+  const tool = toolWith({ ok: true })
+  const delegated = { shell: 's', kind: 'pwsh', exitCode: 0, stdout: '', stderr: '', via: 'host' }
+  assert.equal(tool.output.presentationMeta({}, delegated), null)
+  assert.equal(tool.output.presentationMeta({}, { ...delegated, note: '' }), null)
+})
+
+test('a hostile note value cannot smuggle text into the content', function () {
+  // `note` is what the host writes, so this is about the render's own contract:
+  // it must ignore the field entirely, whatever it holds.
+  const tool = toolWith({ ok: true })
+  for (const note of ['Ran directly: x', 42, null, { length: 3 }]) {
+    const text = tool.output.render({}, {
+      shell: 's', kind: 'k', exitCode: 0, stdout: 'ok', stderr: '', via: 'direct', note,
+    })[0].text
+    assert.equal(text, '[k · s] exit 0 · direct (unsandboxed)\nok')
+  }
 })
 
 test('stderr is surfaced when present, omitted when empty', function () {

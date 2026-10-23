@@ -126,6 +126,30 @@ export function resultText(block) {
 }
 
 /**
+ * The sandbox sentence the host put on the result's `meta`, if any.
+ *
+ * WHY IT COMES FROM `meta` AND NOT FROM THE CONTENT. The sentence used to be the
+ * second line of the tool result, which the model paid for on every request. It
+ * is now `output.presentationMeta` — the registry hands that object to the page
+ * as `data.meta` and never to the provider — so the card can keep stating
+ * "this ran outside the sandbox" at no context cost. The model still gets the
+ * marker (`· direct (unsandboxed)`) inside the content, always.
+ *
+ * @param {object} block the settled Tool result block
+ * @returns {string} the sentence, or an empty string
+ */
+export function sandboxNote(block) {
+  const note = block?.meta !== null && typeof block?.meta === 'object' ? block.meta.note : undefined
+  return typeof note === 'string' ? note.trim() : ''
+}
+
+/** A subscription that never fires, for a row rendered without the preference. */
+const NO_SUBSCRIPTION = function subscribe() { return function unsubscribe() {} }
+
+/** The default when no preference store reaches the row: the line is SHOWN. */
+const ALWAYS_SHOWN = function getSnapshot() { return true }
+
+/**
  * Build the `run_shell` row.
  *
  * @param {object} deps
@@ -255,6 +279,18 @@ export function createRunShellRow({ React }) {
     const command = typeof args?.command === 'string' ? args.command : ''
     const description = typeof args?.description === 'string' ? args.description.trim() : ''
     const output = done ? resultText(block) : ''
+    const note = done ? sandboxNote(block) : ''
+    // THE USER'S PREFERENCE, READ FROM ITS OWN STORE. Absent — an older host, or a
+    // card rendered in a test — means SHOWN, which is the default and the safe
+    // direction for a security disclosure. `useSyncExternalStore` is called
+    // unconditionally (with a constant no-op pair when there is no store) so the
+    // hook order cannot change between renders.
+    const noteStore = props.noteStore !== null && typeof props.noteStore === 'object' ? props.noteStore : null
+    const noteShown = React.useSyncExternalStore(
+      noteStore === null ? NO_SUBSCRIPTION : noteStore.subscribe,
+      noteStore === null ? ALWAYS_SHOWN : noteStore.getSnapshot,
+    )
+    const shownNote = note !== '' && noteShown === true ? note : ''
     const interrupted = done && block.error?.code === 'interrupted'
     const state = !done
       ? (block?.phase === 'preparing' ? 'preparing' : 'running')
@@ -341,7 +377,17 @@ export function createRunShellRow({ React }) {
           h(CopyCommandButton, { text: command, label: t('run.copy') })),
         output !== ''
           ? h('pre', { className: 'dsh-gb-tool-respond' }, output)
-          : null)
+          : null,
+        // THE SANDBOX SENTENCE, ON ITS OWN LINE UNDER THE OUTPUT.
+        //
+        // It used to live inside the result content, which the model paid for on
+        // every request. Now the host sends it as `data.meta.note` and this row
+        // renders it — same words, no context cost — unless the user turned the
+        // line off in settings. Its own class, because it is a note and not
+        // captured output: no code face, no pre-wrap of a command.
+        shownNote === ''
+          ? null
+          : h('div', { className: 'dsh-gb-tool-note', 'data-sandbox-note': '' }, shownNote))
       : null)
   }
 

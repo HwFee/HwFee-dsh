@@ -46,6 +46,7 @@ window.__ModuleLoader__.load({
     var PLUGIN_ID = "@hwfee/dsh-git-bash";
     var LOCALE_NS = "dsh-git-bash";
     var SETTINGS_ROW_ID = PLUGIN_ID + "-shell";
+    var SANDBOX_NOTE_ROW_ID = PLUGIN_ID + "-sandbox-note";
 
     // client/src/locales.js
     var en = {
@@ -74,7 +75,11 @@ window.__ModuleLoader__.load({
       "run.copy": "Copy command",
       // The trajectory entrance in the command box's corner. Named for what the
       // user gets, not for the mechanism ("inspect" reads like a developer verb).
-      "run.inspect": "View in trajectory"
+      "run.inspect": "View in trajectory",
+      // The settings row for the sandbox-note switch. The hint states what the
+      // switch does NOT hide: the model is still told the command left the sandbox.
+      "sandboxNote.title": "Show the sandbox note",
+      "sandboxNote.hint": "Under a shell result, say when the command ran outside the sandbox. Turning this off hides the line here only \u2014 the model is still told."
     };
     var zh = {
       "shell.title": "\u9ED8\u8BA4 shell",
@@ -97,7 +102,9 @@ window.__ModuleLoader__.load({
       "run.running": "\u6B63\u5728\u8FD0\u884C\u547D\u4EE4",
       "run.stopped": "\u5DF2\u505C\u6B62\u8FD0\u884C\u547D\u4EE4",
       "run.copy": "\u590D\u5236\u547D\u4EE4",
-      "run.inspect": "\u5728\u8F68\u8FF9\u4E2D\u67E5\u770B"
+      "run.inspect": "\u5728\u8F68\u8FF9\u4E2D\u67E5\u770B",
+      "sandboxNote.title": "\u663E\u793A\u6C99\u7BB1\u63D0\u793A",
+      "sandboxNote.hint": "\u5728 shell \u7ED3\u679C\u4E0B\u6807\u6CE8\u8BE5\u547D\u4EE4\u672A\u7ECF\u8FC7\u6C99\u7BB1\u3002\u5173\u95ED\u53EA\u9690\u85CF\u8FD9\u91CC\u7684\u8FD9\u884C\u8BF4\u660E\uFF1A\u6A21\u578B\u4ECD\u7136\u4F1A\u88AB\u544A\u77E5\u3002"
     };
 
     // lib/mode.js
@@ -173,6 +180,7 @@ window.__ModuleLoader__.load({
 
     // client/src/store.js
     var MODE_KEY = PLUGIN_ID + ":mode";
+    var SANDBOX_NOTE_KEY = PLUGIN_ID + ":showSandboxNote";
     var SHELL_GLOBAL = "__dshGitBash";
     function createShellInfoStore(carrier) {
       const raw = carrier === void 0 ? void 0 : carrier[SHELL_GLOBAL];
@@ -227,6 +235,45 @@ window.__ModuleLoader__.load({
           if (!MODES.includes(value) || value === current) return;
           current = value;
           writeMode(storage, MODE_KEY, value);
+          for (const listener of listeners) listener();
+        },
+        dispose() {
+          listeners.clear();
+        }
+      };
+    }
+    function createSandboxNoteStore(storage) {
+      const read = () => {
+        if (storage === null || storage === void 0) return true;
+        try {
+          return storage.getItem(SANDBOX_NOTE_KEY) !== "false";
+        } catch {
+          return true;
+        }
+      };
+      let current = read();
+      const listeners = /* @__PURE__ */ new Set();
+      return {
+        getSnapshot: () => current,
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+        /**
+         * @param {boolean} value the new state
+         */
+        set(value) {
+          const next = value !== false;
+          if (next === current) return;
+          current = next;
+          if (storage !== null && storage !== void 0) {
+            try {
+              storage.setItem(SANDBOX_NOTE_KEY, next ? "true" : "false");
+            } catch {
+            }
+          }
           for (const listener of listeners) listener();
         },
         dispose() {
@@ -316,6 +363,36 @@ window.__ModuleLoader__.load({
       return ShellRow;
     }
 
+    // client/src/sandbox-note-row.js
+    function createSandboxNoteRow({ React: React2 }) {
+      const h = React2.createElement;
+      function SandboxNoteRow(props) {
+        const t = typeof props.t === "function" ? props.t : function untranslated(key) {
+          return key;
+        };
+        const shown = React2.useSyncExternalStore(props.noteStore.subscribe, props.noteStore.getSnapshot);
+        return h(
+          "div",
+          { className: "dsh-git-bash-row", id: SANDBOX_NOTE_ROW_ID },
+          h(
+            "div",
+            { className: "dsh-git-bash-main" },
+            h("div", { className: "dsh-git-bash-title" }, t("sandboxNote.title")),
+            h("div", { className: "dsh-git-bash-hint" }, t("sandboxNote.hint"))
+          ),
+          h("button", {
+            type: "button",
+            className: "dsh-git-bash-toggle",
+            role: "switch",
+            "aria-checked": shown === true,
+            "aria-label": t("sandboxNote.title"),
+            onClick: () => props.noteStore.set(shown !== true)
+          }, h("span", { className: "dsh-git-bash-toggle-thumb" }))
+        );
+      }
+      return SandboxNoteRow;
+    }
+
     // client/src/tool-view.js
     var OPERATORS = ["&&", "||", "|", ";", ">>", ">", "<"];
     var WORD_BREAK = /* @__PURE__ */ new Set([" ", "	", "\n", "|", ";", ">", "<", '"', "'"]);
@@ -395,6 +472,17 @@ window.__ModuleLoader__.load({
       }
       return parts.join("\n");
     }
+    function sandboxNote(block) {
+      const note = block?.meta !== null && typeof block?.meta === "object" ? block.meta.note : void 0;
+      return typeof note === "string" ? note.trim() : "";
+    }
+    var NO_SUBSCRIPTION = function subscribe() {
+      return function unsubscribe() {
+      };
+    };
+    var ALWAYS_SHOWN = function getSnapshot() {
+      return true;
+    };
     function createRunShellRow({ React: React2 }) {
       const h = React2.createElement;
       function CopyCommandButton({ text, label }) {
@@ -490,6 +578,13 @@ window.__ModuleLoader__.load({
         const command = typeof args?.command === "string" ? args.command : "";
         const description = typeof args?.description === "string" ? args.description.trim() : "";
         const output = done ? resultText(block) : "";
+        const note = done ? sandboxNote(block) : "";
+        const noteStore = props.noteStore !== null && typeof props.noteStore === "object" ? props.noteStore : null;
+        const noteShown = React2.useSyncExternalStore(
+          noteStore === null ? NO_SUBSCRIPTION : noteStore.subscribe,
+          noteStore === null ? ALWAYS_SHOWN : noteStore.getSnapshot
+        );
+        const shownNote = note !== "" && noteShown === true ? note : "";
         const interrupted = done && block.error?.code === "interrupted";
         const state = !done ? block?.phase === "preparing" ? "preparing" : "running" : interrupted ? "stopped" : block.isError ? "error" : "ok";
         const disclosure = typeof props.useDisclosure === "function" ? props.useDisclosure() : null;
@@ -575,7 +670,15 @@ window.__ModuleLoader__.load({
               inspect === void 0 ? null : h(InspectButton, { onInspect: inspect, label: t("run.inspect") }),
               h(CopyCommandButton, { text: command, label: t("run.copy") })
             ),
-            output !== "" ? h("pre", { className: "dsh-gb-tool-respond" }, output) : null
+            output !== "" ? h("pre", { className: "dsh-gb-tool-respond" }, output) : null,
+            // THE SANDBOX SENTENCE, ON ITS OWN LINE UNDER THE OUTPUT.
+            //
+            // It used to live inside the result content, which the model paid for on
+            // every request. Now the host sends it as `data.meta.note` and this row
+            // renders it — same words, no context cost — unless the user turned the
+            // line off in settings. Its own class, because it is a note and not
+            // captured output: no code face, no pre-wrap of a command.
+            shownNote === "" ? null : h("div", { className: "dsh-gb-tool-note", "data-sandbox-note": "" }, shownNote)
           ) : null
         );
       }
@@ -684,6 +787,64 @@ window.__ModuleLoader__.load({
     .dsh-git-bash-check {
       display: inline-flex;
       color: var(--dsw-alias-brand-primary);
+    }
+
+    /* The switch on the sandbox-note row: the host's own switch geometry
+       (36x20, 999px, 2px inset, 16px thumb travelling 16px, on-state
+       --dsw-alias-brand-primary), so it sits on the same rhythm as the shipped
+       switches in the same list. Copied rather than imported: the host's own Switch
+       component is not part of the primitives table this plugin relies on, and a
+       missing export would blank the whole settings row.
+
+       NO BORDER OF ITS OWN, same reason as the settings row selector above: the
+       theme draws the separators, and a local rule loses the specificity race. */
+    .dsh-git-bash-toggle {
+      position: relative;
+      flex: none;
+      align-self: flex-start;
+      width: 36px;
+      height: 20px;
+      padding: 2px;
+      box-sizing: border-box;
+      border: 0;
+      border-radius: 999px;
+      background: var(--dsw-alias-border-l3);
+      cursor: pointer;
+      transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dsh-git-bash-toggle[aria-checked="true"] {
+      background: var(--dsw-alias-brand-primary);
+    }
+
+    .dsh-git-bash-toggle:focus-visible {
+      outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary));
+      outline-offset: 2px;
+    }
+
+    .dsh-git-bash-toggle-thumb {
+      display: block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--dsw-alias-label-primary-foreground, #ffffff);
+      box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.2);
+      transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dsh-git-bash-toggle[aria-checked="false"] .dsh-git-bash-toggle-thumb {
+      background: var(--dsw-alias-switch-thumb, #ffffff);
+    }
+
+    .dsh-git-bash-toggle[aria-checked="true"] .dsh-git-bash-toggle-thumb {
+      transform: translate(16px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dsh-git-bash-toggle,
+      .dsh-git-bash-toggle-thumb {
+        transition: none;
+      }
     }
 
     /* ---- the run_shell tool card --------------------------------------
@@ -1077,6 +1238,24 @@ window.__ModuleLoader__.load({
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
+    /* THE SANDBOX SENTENCE: PROSE UNDER THE OUTPUT, NOT CAPTURED OUTPUT.
+       It used to be the tool result's second line, so the model paid for it on every
+       request. The host now sends it as data.meta.note and this rule renders it,
+       which is why it is NOT styled as code: no code face, no pre-wrap of a command,
+       and a tertiary ink because it is an explanation, not a result. Gated by the
+       showSandboxNote preference in the row itself, so there is no display:none here
+       \u2014 an absent preference must render the line, and a CSS hide would be a second,
+       silently reversed source of truth for a disclosure. */
+    [data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-note {
+      margin: 2px 0 0;
+      padding: 0 8px;
+      color: var(--dsw-alias-label-tertiary);
+      font-family: var(--dsw-font-family) !important;
+      font-size: calc(12px + var(--dsh-content-font-delta, 0px));
+      line-height: 18px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
     /* ---- typography measured from the reference's terminal view ----------
        .epitaxy-terminal-view is the only place in that app where the leading is
        hard-coded instead of tokenised:
@@ -1169,6 +1348,7 @@ window.__ModuleLoader__.load({
     var MODE_MARKER_HEADER = "x-dsh-git-bash";
     function createLifecycle({ React: React2, primitives: primitives2 }) {
       const ShellRow = createSettingsRow({ React: React2, primitives: primitives2 });
+      const SandboxNoteRow = createSandboxNoteRow({ React: React2 });
       const RunShellRow = createRunShellRow({ React: React2 });
       return function apply2(ctx) {
         ctx.effect(() => {
@@ -1185,6 +1365,8 @@ window.__ModuleLoader__.load({
         ctx.effect(() => () => shellInfo.dispose(), "dsh-git-bash: shell info store");
         const modeStore = createModeStore(storage);
         ctx.effect(() => () => modeStore.dispose(), "dsh-git-bash: mode store");
+        const sandboxNoteStore = createSandboxNoteStore(storage);
+        ctx.effect(() => () => sandboxNoteStore.dispose(), "dsh-git-bash: sandbox note store");
         const publish = () => {
           const mode = modeStore.getSnapshot();
           ctx.emit(MODE_EVENT, { mode });
@@ -1220,12 +1402,24 @@ window.__ModuleLoader__.load({
             setMode: (value) => modeStore.set(value)
           })
         }, ShellRow));
+        ctx.slots.inject("settings.general.item", () => ctx.slots.register({
+          name: "settings.general.item",
+          id: SANDBOX_NOTE_ROW_ID,
+          // One step below the shell row (43) so the two read as a pair.
+          order: 44,
+          locale: LOCALE_NS,
+          inject: () => ({ noteStore: sandboxNoteStore })
+        }, SandboxNoteRow));
         for (const wireName of ["run_shell", "pwsh", "bash"]) {
           ctx.slots.inject("tool.call.toolview", () => ctx.slots.register({
             name: "tool.call.toolview",
             key: wireName,
             priority: 100,
-            locale: LOCALE_NS
+            locale: LOCALE_NS,
+            // THE PREFERENCE REACHES THE CARD. Without this the note line would be
+            // shown unconditionally and the switch would look broken. Ordinary prop,
+            // not `hooks:` — the row is a plain function component (see store.js).
+            inject: () => ({ noteStore: sandboxNoteStore })
           }, RunShellRow));
         }
       };

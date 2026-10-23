@@ -15,3 +15,11 @@ export const LOCALE_NS = 'dsh-git-bash'
 
 /** The settings row id. */
 export const SETTINGS_ROW_ID = PLUGIN_ID + '-shell'
+
+/**
+ * The second settings row's id: the sandbox-note switch.
+ *
+ * Its own id, not a suffix on {@link SETTINGS_ROW_ID}: the host keys slot entries
+ * by id, and two rows sharing one would collide.
+ */
+export const SANDBOX_NOTE_ROW_ID = PLUGIN_ID + '-sandbox-note'
