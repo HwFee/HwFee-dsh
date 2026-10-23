@@ -10,7 +10,7 @@
 dsh plugin --profile desktop add @hwfee/dsh-predict
 ```
 
-**装完必须彻底退出并重开 DSH。** 客户端 bundle 在页面启动时加载，只刷新页面不够。
+**装完必须彻底退出并重开 DSH。** 客户端 bundle 在页面启动时加载，只刷新页面不够，而且重建产物后再刷新会因 `rev` 不匹配让整页 boot 失败。
 
 卸载：
 
