@@ -15,19 +15,10 @@ export const PANEL_STYLE_ID = 'dsh-usage-stats/panel'
  * fixes; every radius is a host radius token.
  *
  * DESIGN VOCABULARY. The panel borrows the Claude Desktop surface grammar:
- * one bordered shell (the panel itself), a head row of flat switch buttons
- * with no track and no ring, fill-based metric tiles, and an inset band under
- * the heatmap. Inside the shell nothing carries a second closed border — the
- * CDS "1-border rule".
- *
- * EVERY RAISED SURFACE IS A SHARE OF THE LABEL INK, NOT A SECOND GREY TOKEN.
- * `--dsw-alias-bg-module-platform` is `#f7f7f5` in light mode — about two steps
- * from a white card (`docs/theme-defects.md` §3) — so a tile drawn with it
- * nearly disappears on the panel, and a selected switch chip drawn with it
- * reads as unselected. The shares are therefore mixed into the surface the
- * shape sits on: 11% for a metric tile, 10% for the selected head button, 5%
- * for a hovered one, 4% for the compact card's wash. The label ink flips with
- * the theme, so one recipe serves light and dark.
+ * one bordered shell (the panel itself), one pill track (the head row is a
+ * single segmented control, not two button clusters), fill-based metric
+ * tiles, and an inset hairline on the heatmap. Inside the shell nothing
+ * carries a second closed border — the CDS "1-border rule".
  */
 export const PANEL_CSS = [
   // The wrapper owns the width, not the panel. The dock renders its occupants
@@ -40,15 +31,10 @@ export const PANEL_CSS = [
   // with a negative margin so it fuses with the composer; a stats panel fused
   // to the input would read as part of the composer, so this one is held off
   // it by its own margin instead.
-  // THE POSITION. The reference stacks hero title → usage panel → input box in
-  // one centred column, and the panel is held off the box by the stack's own
-  // gap rather than by a margin of its own. An earlier 4px top + 8px bottom
-  // margin doubled that gap, which read as the panel floating between the two
-  // instead of belonging to the box below it.
   '.dus-root { box-sizing: border-box; flex: none;',
   '  width: calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance));',
   '  max-width: var(--dsh-composer-card-max-width);',
-  '  margin: 0 auto; }',
+  '  margin: 4px auto 8px; }',
 
   // The panel is the ONE bordered shell (CDS 1-border rule). It reuses the
   // composer card's OWN elevation recipe verbatim — `--dsw-elevation-soft`
@@ -87,51 +73,26 @@ export const PANEL_CSS = [
   '  pointer-events: none;',
   '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2), var(--dsw-elevation-soft); }',
 
-  // Head: two groups of ghost chips — view tabs left, range pills right, the
-  // free width between them. NO track, NO ring: an earlier pill-track +
-  // raised-thumb recipe wrapped the buttons in a second surface, which read as
-  // an extra layer around every switch.
-  //
-  // ONE CHIP FOR BOTH GROUPS. The reference (`home-panel.css:208-228`) sets its
-  // tabs and its range pills from a single rule — 12/18 type, `1px 8px`, a 5px
-  // radius, tertiary label — and lets the SELECTED one differ only by a fill
-  // step plus primary ink. Ours gave the tabs their own size (12.5/20), their
-  // own padding and their own weight, so the row read as two hierarchies rather
-  // than one control. Both groups now share the chip, which also removes the
-  // half-pixel type size: 12.5px lands between the theme's UI sizes, and any
-  // UI-font-size change moves it off a whole pixel.
-  //
-  // NO WEIGHT CHANGE ON SELECTION either (`home-panel.css:222-228` changes fill
-  // and colour only). A weight jump re-measures the label, so the chip visibly
-  // grows and the neighbours slide when the user clicks — the row should not
-  // move under the pointer.
-  //
-  // 5px IS HALF THE MEDIUM RADIUS, not a new literal: the reference rounds a
-  // 20px-tall control to half its height, and `--dsw-radius-md` is the radius
-  // this panel already uses for every other chip-shaped thing.
-  '.dus-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }',
+  // Head: plain switch buttons — tabs left, ranges right. NO track, NO ring:
+  // the earlier pill-track + raised-thumb recipe wrapped the buttons in a
+  // second surface, which read as an extra layer around every switch. Now the
+  // only state feedback is one soft fill on the selected button.
+  '.dus-head { display: flex; align-items: center; gap: 2px; }',
   '.dus-head-spacer { flex: 1; min-width: 4px; }',
   '.dus-tabs, .dus-ranges { display: inline-flex; align-items: center; gap: 2px; }',
-  '.dus-range, .dus-tab { border: 0; border-radius: calc(var(--dsw-radius-md, 10px) / 2);',
-  '  background: transparent; color: var(--dsw-alias-label-tertiary);',
-  '  cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; padding: 1px 8px;',
-  '  font-variant-numeric: tabular-nums;',
-  '  transition: color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),',
-  '    background-color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)); }',
-  // Hover is a wash, not just a colour change, and never on the chip that is
-  // already selected — that chip already carries the stronger fill.
-  '.dus-range:hover:not([data-active="true"]),',
-  '.dus-tab:hover:not([data-active="true"]) {',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);',
-  '  color: var(--dsw-alias-label-primary); }',
+
+  // Button geometry: flat text buttons, no border in any state so picking one
+  // never shifts the row. The selected button is a single filled chip — no
+  // hairline, no shadow. Tabs are primary text, ranges the quieter variant.
+  '.dus-range, .dus-tab { border: 0; border-radius: var(--dsw-radius-md);',
+  '  background: transparent; cursor: pointer; font: inherit; font-variant-numeric: tabular-nums;',
+  '  transition: color .12s ease, background-color .12s ease; }',
+  '.dus-range { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; padding: 3px 10px; }',
+  '.dus-tab { color: var(--dsw-alias-label-secondary); font-size: 12.5px; line-height: 20px; padding: 3px 12px; }',
+  '.dus-range:hover, .dus-tab:hover { color: var(--dsw-alias-label-primary); }',
   '.dus-range:active, .dus-tab:active { transform: scale(.97); }',
-  // The selected chip sits ONE STEP DEEPER than the surface under it, mixed
-  // from the label ink (`home-panel.css:222-228`). `--dsw-alias-bg-module-platform`
-  // alone is `#f7f7f5` in light mode — about two steps from a white card
-  // (`docs/theme-defects.md` §3) — so a chip drawn with it reads as unselected.
   '.dus-range[data-active="true"], .dus-tab[data-active="true"] {',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, var(--dsw-alias-bg-module-platform));',
-  '  color: var(--dsw-alias-label-primary); }',
+  '  background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font-weight: 500; }',
 
   // Body: ONE fixed height for BOTH tabs, and the only place the setting is
   // consumed. Models fills it and scrolls inside; Overview fills it too and is
@@ -165,42 +126,22 @@ export const PANEL_CSS = [
   '  height: 100%; min-height: 0; overflow-y: hidden; }',
 
   // Six tiles, three across (two across under the 560px breakpoint). They are
-  // fills, never outlined boxes: the tile boundary is the tint step between the
-  // tile and the panel surface behind it — CDS low-contrast surface layering.
-  // The type sizes carry floors: the packed tier stops at 10px/15px
-  // (label/value), never smaller.
-  //
-  // THE FILL IS A SHARE OF THE LABEL INK, MIXED INTO THE PANEL SURFACE. Taking
-  // the reference's 15% over its layer-2 card (`home-overview.css:12-21`) and
-  // running it over `--dsw-alias-bg-module-platform` would double-apply the
-  // step this panel already has from `--dsw-alias-bg-base`. 11% is the share
-  // that lands the tile on the same visible step in light: the ink is #141413
-  // and the panel is #fcfcfb, so the mix is a hair darker than the grey
-  // `bg-module-platform` while staying a step ABOVE the heat band's own surface
-  // — the tile still reads as the front layer, and one recipe serves dark.
+  // fills, never outlined boxes: the tile boundary is the tint step between
+  // `--dsw-alias-bg-module-platform` and the panel surface behind it — CDS
+  // low-contrast surface layering. The type sizes carry floors: the packed tier
+  // stops at 10px/15px (label/value), never smaller.
   '.dus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));',
   '  gap: var(--dus-grid-gap, 6px); }',
   '.dus-card { display: flex; flex-direction: column; gap: var(--dus-card-gap, 2px);',
   '  padding: var(--dus-card-pad, 8px) 10px;',
-  '  border-radius: var(--dsw-radius-md);',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 11%, var(--dsw-alias-bg-base)); }',
-  // The label is the tile's quiet half and the figure its loud one, and the
-  // reference keeps that as its ONLY size pairing (12/16 label over 13/18
-  // figure, `home-overview.css:23-44`). The label truncates in one line for the
-  // same reason the figure does: "Favorite model" and "Total tokens" are longer
-  // than the zh labels, and a wrapped label would make one tile taller than its
-  // neighbours on a two-row grid.
+  '  border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }',
   '.dus-card-label { color: var(--dsw-alias-label-tertiary);',
   '  font-size: var(--dus-card-label-size, 11px); line-height: var(--dus-card-label-lh, 15px);',
-  '  letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }',
+  '  letter-spacing: .02em; }',
   '.dus-card-value { color: var(--dsw-alias-label-primary); font-weight: 600;',
   '  font-size: var(--dus-card-value-size, 17px); line-height: var(--dus-card-value-lh, 22px);',
   '  font-variant-numeric: tabular-nums; overflow: hidden;',
   '  text-overflow: ellipsis; white-space: nowrap; }',
-  // The favourite model is a NAME, not a figure: the reference drops its weight
-  // to the label's own (`home-overview.css:46-50`), which stops a long id from
-  // reading as another count and from competing with the totals beside it.
-  '.dus-card[data-card="model"] .dus-card-value { font-weight: 400; }',
 
   // Heatmap: one column per SEVEN-DAY BLOCK, oldest left, TODAY at the
   // bottom-right corner. The grid is anchored at today and counted backward
@@ -285,11 +226,17 @@ export const PANEL_CSS = [
   '.dus-model-fill { height: 100%; border-radius: inherit;',
   '  background: var(--dsw-alias-state-business-primary); }',
 
-  // No caption and no divider above one. The bottom of this tab is the heat
-  // grid, and the space the comparison line used to take is simply not
-  // reserved: the body keeps its fixed height, so it lands as the quiet strip
-  // the footnote used to occupy. `.dus-note` still paints the empty-state line
-  // (an activity-free window has no grid at all).
+  // The comparison is exactly one line — no byline and no basis. A hairline
+  // divider (CDS one-directional rule) separates it from the tiles above. Its
+  // padding and leading follow the same tier as the cards (`layout.js`), with the
+  // 12px font size untouched — the foot is prose, so it is the LAST thing to give
+  // and it never shrinks past its own line box.
+  '.dus-foot { display: flex; flex-direction: column;',
+  '  padding-top: var(--dus-foot-pad, 8px);',
+  '  border-top: .5px solid var(--dsw-alias-border-l2);',
+  '  color: var(--dsw-alias-label-tertiary); font-size: 12px;',
+  '  line-height: var(--dus-foot-lh, 17px); }',
+  '.dus-foot-line { color: var(--dsw-alias-label-secondary); }',
   '.dus-note { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; padding: 4px 0; }',
 
   // — Settings rows -----------------------------------------------------------
@@ -371,172 +318,6 @@ export const PANEL_CSS = [
   // stack gap is 6px and the row carries a 4px top margin of its own, so 8px
   // keeps the panel-to-chip spacing at the rhythm it had against the composer.
   '.dus-root { margin-bottom: 8px; }',
-
-  // — The input height budget (see `input-budget.js`) -------------------------
-  //
-  // WHY THIS IS A COMBINATION AND NOT A NEW NUMBER. The host caps the editor's
-  // scrollport at `--dsh-composer-text-max-height` (336px, declared on the
-  // composer seat); cds-theme's hero rules lower that same variable. Neither
-  // knows how tall OUR panel is, so on a blank session a long draft plus a
-  // 344/520px panel can exceed the hero scrollport — and the host's centred
-  // stack then splits the overflow above and below the fold, leaving the panel
-  // at a negative offset where scrolling cannot reach it.
-  //
-  // `min()` of the two caps is the fix: whichever is tighter wins, so the input
-  // follows an installed theme without duplicating its numbers, and there is no
-  // second wrapper to keep in sync with the host's own scrolling. The right-hand
-  // operand is OUR property (written in px by `attachInputBudget`), so this is
-  // one fixed declaration: it cannot reference itself, and re-syncing writes the
-  // same custom property instead of nesting `min()` deeper each time.
-  '[data-composer-card] [data-input-scroll] {',
-  '  max-height: min(var(--dsh-composer-text-max-height, 336px), var(--dus-input-budget, 336px)); }',
-  //
-  // The page's own scrollport, marked only while this panel is mounted. `safe
-  // center` centres the stack when it fits and start-aligns it when it does not,
-  // so the top of the stack (this panel) stays reachable from scroll position 0
-  // instead of being pushed above it. `flex-start` is the explicit fallback for
-  // engines without `safe`; both are declared together so the invalid value is
-  // dropped and the valid one wins. `!important` because the host's own hero rule
-  // (`.root[data-phase=hero] .scrollBody`) outranks a single attribute selector
-  // and this plugin owns no stylesheet-order guarantee.
-  '[data-conversation-scroll][data-dus-hero-scroll] {',
-  '  justify-content: flex-start !important;',
-  '  justify-content: safe center !important; }',
-
-  // — Compact style -----------------------------------------------------------
-  //
-  // The second selectable look, from the usage panel of the Claude-style
-  // reference (github.com/Nwflower/dsh-claude-style, MIT for everything this
-  // block uses). WHAT IS NOT TAKEN FROM IT: the Sodium engine (PolyForm Shield),
-  // Anthropic's commercial typefaces and the crab artwork are outside that
-  // licence, and none of them appears here — this block is plain CSS over host
-  // tokens. Nor does it bring the reference's page treatment (hero pinned to the
-  // top, 20px greeting, composer glued to the bottom): that belongs to the whole
-  // new-session screen, and this option only changes the panel.
-  //
-  // EVERY RULE IS SCOPED to the root attribute the panel writes, so the classic
-  // look above is untouched by this block and the option can be removed
-  // by deleting it. What the compact rules now carry is only what genuinely
-  // DIFFERS from classic: the head chip and the tile both already use the
-  // reference's own geometry in the base rules, so this block keeps the surface
-  // (the card's layer-2 wash) and the compact rhythm. The reference is a 480px
-  // plain card: one tone of wash for the panel, tiles one tone deeper, the heat
-  // grid directly on the card with no band of its own.
-  //
-  // THE FIRST RULE MATCHES THE ROOT ITSELF, NOT A DESCENDANT. `data-dus-style`
-  // is written ON `.dus-root` (panel.js), so a `[data-dus-style] .dus-root`
-  // selector would need an ancestor carrying the attribute and would never
-  // match — the width would silently stay classic while every descendant rule
-  // worked. That is why this one is `.dus-root[data-dus-style="compact"]` and
-  // the rest keep the descendant form.
-  '.dus-root[data-dus-style="compact"] { width: 480px;',
-  '  max-width: calc(100% - var(--dsh-composer-side-clearance, 0px) - var(--dsh-composer-side-clearance, 0px));',
-  '  margin: 0 auto; }',
-  // A flat wash, no outline and no elevation: the reference card is a fill, not
-  // a raised surface. 4% of the label ink over the layer-2 tone is the whole
-  // recipe — it flips with the theme on its own, so no dark override is needed.
-  '[data-dus-style="compact"] .dus-panel { gap: 12px; padding: 12px;',
-  '  border-radius: 12px;',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, var(--dsw-alias-bg-layer-2));',
-  '  --dsw-elevation-stroke-color: transparent;',
-  '  box-shadow: none; }',
-  // The head chip IS the reference's chip in both styles now (12/18 type, a
-  // 1px vertical pad, half the medium radius), so only the surface differs: the
-  // compact panel is a layer-2 wash, and its selected chip is mixed over that
-  // rather than over `bg-module-platform`. No weight change on selection in
-  // either style — the reference changes fill and colour only
-  // (`home-panel.css:222-228`), and a weight jump re-measures the label.
-  '[data-dus-style="compact"] .dus-range[data-active="true"],',
-  '[data-dus-style="compact"] .dus-tab[data-active="true"] {',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 10%, var(--dsw-alias-bg-layer-2)); }',
-  '[data-dus-style="compact"] .dus-body { gap: 12px; }',
-  // Overview: the reference's own rhythm — tiles and grid, 12px apart.
-  '[data-dus-style="compact"] .dus-overview { gap: var(--dus-compact-block-gap, 12px); }',
-  // Tiles: three across at EVERY width (the reference's own arrangement). They
-  // hold a short label and a 13px figure, so they stay legible well below the
-  // classic style's 560px breakpoint, which is why that breakpoint is overridden
-  // here rather than inherited.
-  '[data-dus-style="compact"] .dus-grid { grid-template-columns: repeat(3, minmax(0, 1fr));',
-  '  gap: var(--dus-compact-tile-gap, 4px); }',
-  '[data-dus-style="compact"] .dus-card { gap: 2px; padding: 5px 8px; border-radius: 8px;',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 15%, var(--dsw-alias-bg-layer-2)); }',
-  // The figure sits barely above its own label, which is also what keeps a long
-  // model id on one line instead of cutting it. Both truncate rather than wrap.
-  '[data-dus-style="compact"] .dus-card-label { letter-spacing: 0;',
-  '  font-size: 12px; line-height: 16px; white-space: nowrap;',
-  '  overflow: hidden; text-overflow: ellipsis; }',
-  '[data-dus-style="compact"] .dus-card-value { font-size: 13px; line-height: 18px;',
-  '  font-weight: 600; }',
-  // The favourite model is a NAME, not a figure: the reference sets it at the
-  // label weight so it does not read as another count.
-  '[data-dus-style="compact"] .dus-card[data-card="model"] .dus-card-value { font-weight: 400; }',
-  // The grid: no band behind it, no padding, 3px gaps. Columns share whatever
-  // the card's inner width gives them and stop growing at the cap the layout
-  // module derives from the body height, so the panel's height setting still
-  // decides how large a square is. The grid has NO fixed height — every one of
-  // the seven rows is always drawn.
-  '[data-dus-style="compact"] .dus-heat { padding: 0; gap: var(--dus-compact-heat-gap, 3px);',
-  '  background: transparent; border-radius: 0; }',
-  '[data-dus-style="compact"] .dus-heat-week { gap: var(--dus-compact-heat-gap, 3px);',
-  '  flex: 1 0 8px; max-width: var(--dus-compact-cell, 15px); }',
-  // Level 0 is the faintest step of the label ink, on the card itself rather
-  // than on a band. Every lit level mixes the project accent by the reference
-  // ramp shares (20 / 40 / 65 / 100%), so the grid follows the theme's accent
-  // colour instead of pinning the reference's data blue.
-  '[data-dus-style="compact"] .dus-heat-cell { border-radius: 3px;',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-primary) 11%, transparent); }',
-  '[data-dus-style="compact"] .dus-heat-cell[data-level="1"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-bg-layer-2)); }',
-  '[data-dus-style="compact"] .dus-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 40%, var(--dsw-alias-bg-layer-2)); }',
-  '[data-dus-style="compact"] .dus-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 65%, var(--dsw-alias-bg-layer-2)); }',
-  '[data-dus-style="compact"] .dus-heat-cell[data-level="4"] { background: var(--dsw-alias-state-business-primary); }',
-  // NO CAPTION, NO DIVIDER, NO RESERVED LINE. The compact card used to end in
-  // one truncated comparison line, and `compact-layout.js` still reserves its
-  // 16px (`COMPACT_FOOT_HEIGHT`) inside `compactFixedHeight()` — deliberately,
-  // so that deleting the line does NOT enlarge the heat columns: the budget the
-  // cell size is computed from is unchanged, and 252 still draws a 14px grid of
-  // seven uncut rows. The 16px now surfaces as a quiet strip under the grid,
-  // which is the card's bottom inset.
-  //
-  // The models tab keeps the shared body, its silent scroll and its rows; only
-  // the row rhythm gets the compact spacing.
-  '[data-dus-style="compact"] .dus-model { gap: 4px; padding: 6px 0; }',
-  '[data-dus-style="compact"] .dus-model-id { font-size: 13px; line-height: 18px; }',
-  // The hover bubble rides the same card tone so it still reads as part of the
-  // panel when the panel has no border of its own.
-  '[data-dus-style="compact"] .dus-tip { border-radius: 8px;',
-  '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2); }',
-
-  // — The style switcher (settings row 39) ------------------------------------
-  //
-  // Two flat buttons carrying the style names, in the same switch grammar as the
-  // panel's own tabs: no track, no ring, one soft fill on the chosen one. It sits
-  // ABOVE the height row so the page reads "pick a style, then size it", which is
-  // also the order the two settings actually interact in.
-  //
-  // THE TIMING IS THE PROJECT'S, NOT A GENERIC CURVE: the snap curve and the fast
-  // duration both come from the theme's own tokens (`--cds-ease-snap`,
-  // `--ds-transition-duration-fast`) with their values as fallbacks, so the
-  // control moves with the rest of the UI when cds-theme is installed and still
-  // animates sensibly without it. `ease` and `ease-in-out` are banned here for
-  // the same reason they are banned elsewhere in this repo.
-  '.dus-seg { display: inline-flex; align-items: center; gap: 2px; }',
-  '.dus-seg-btn { border: 0; border-radius: var(--dsw-radius-md);',
-  '  background: transparent; color: var(--dsw-alias-label-tertiary);',
-  '  cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; padding: 3px 12px;',
-  '  transition: color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),',
-  '    background-color var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)),',
-  '    transform var(--ds-transition-duration-fast, .12s) var(--cds-ease-snap, cubic-bezier(.32, .72, 0, 1)); }',
-  '.dus-seg-btn:hover { color: var(--dsw-alias-label-primary); }',
-  '.dus-seg-btn:active { transform: scale(.97); }',
-  '.dus-seg-btn[data-active="true"] { background: var(--dsw-alias-bg-module-platform);',
-  '  color: var(--dsw-alias-label-primary); font-weight: 500; }',
-  '.dus-seg-btn:focus-visible { outline: 2px solid var(--dsw-focus-ring-color); outline-offset: 2px; }',
-  // Reduced motion means STILL, not slower: the press feedback is the only thing
-  // this control animates, so it is dropped entirely when the user asked for no
-  // motion. Scoped to this control so the shipped tab/range rules keep exactly
-  // the behaviour they had.
-  '@media (prefers-reduced-motion: reduce) { .dus-seg-btn { transition: none; }',
-  '  .dus-seg-btn:active { transform: none; } }',
 ].join('\n')
 
 /**

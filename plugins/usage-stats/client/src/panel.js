@@ -11,21 +11,18 @@
  * element is `React.createElement`.
  *
  * ARITHMETIC LIVES ELSEWHERE. Everything the user reads as a number — range
- * trimming, token and count formatting, the heatmap grid — comes from
- * `stats.js`, which is pure and unit-tested without a DOM. This file only
- * arranges that output.
+ * trimming, token and count formatting, the heatmap grid, the book comparison —
+ * comes from `stats.js`, which is pure and unit-tested without a DOM. This file
+ * only arranges that output.
  */
 
 import { DEFAULT_STATE, RANGES } from './constants.js'
-import { attachInputBudget } from './input-budget.js'
 import { TIP_INSET, TIP_MAX_WIDTH, tipCentre } from './layout.js'
 import { en as FALLBACK_DICT } from './locales.js'
-import {
-  DEFAULT_UNITS, bodyHeightOf, bodyHeightStyle, createSettingsStore, isCompact,
-} from './settings.js'
+import { DEFAULT_UNITS, bodyHeightStyle, createSettingsStore } from './settings.js'
 import { STALE_RETRY_MS } from './summary-cache.js'
 import {
-  buildHeatmap, favoriteModel, formatHour, formatNumber, resolveUnitScale, summarize,
+  bookComparison, buildHeatmap, favoriteModel, formatHour, formatNumber, resolveUnitScale, summarize,
 } from './stats.js'
 
 /**
@@ -144,8 +141,8 @@ function shareLabel(share) {
 }
 
 /**
- * The Overview tab's body: the cards and the heat band inside ONE
- * `.dus-overview` element.
+ * The Overview tab's body: the cards, the heat band and the foot line inside
+ * ONE `.dus-overview` element.
  *
  * Exported because the equal-height contract is a structure+CSS pair, not a
  * number: `.dus-body` owns the fixed height both tabs share, and this wrapper is
@@ -154,8 +151,8 @@ function shareLabel(share) {
  * tab's outer box is exactly the body height at every setting. The test suite
  * asserts this wrapper and its child order without needing a DOM.
  */
-export function overviewElement(React, cards, heat) {
-  return React.createElement('div', { className: 'dus-overview' }, cards, heat)
+export function overviewElement(React, cards, heat, foot) {
+  return React.createElement('div', { className: 'dus-overview' }, cards, heat, foot)
 }
 
 /**
@@ -208,12 +205,7 @@ export function createPanel({ React, primitives, settings }) {
 
   function renderCards(view, t, unitScale) {
     const cards = metricCards(view, t, unitScale).map(function (card) {
-      // `data-card` names the metric. The compact style reads it to set the
-      // model tile at the label weight (a name is not a figure), and it is also
-      // what makes a metric findable in a test without matching on its text.
-      return React.createElement('div', {
-        className: 'dus-card', key: card.key, 'data-card': card.key,
-      },
+      return React.createElement('div', { className: 'dus-card', key: card.key },
         React.createElement('div', { className: 'dus-card-label' }, card.label),
         React.createElement('div', { className: 'dus-card-value', title: card.value }, card.value))
     })
@@ -231,7 +223,7 @@ export function createPanel({ React, primitives, settings }) {
     // just draws them in order.
     const grid = buildHeatmap(allView.perDay, 0)
     // An activity-free window has no grid at all; a line of text keeps the
-    // panel from ending in an unexplained gap.
+    // panel from ending in an unexplained gap above the footer.
     if (grid.weeks.length === 0) {
       return React.createElement('div', { className: 'dus-note' }, t('note.noActivity'))
     }
@@ -280,6 +272,26 @@ export function createPanel({ React, primitives, settings }) {
     }, weeks)
   }
 
+  /**
+   * The fun comparison.
+   *
+   * `roll` is a single random number captured once per mount and passed back
+   * into `bookComparison` as its `random` source. That keeps the pick stable
+   * while the ratio still tracks whichever range is selected — re-rolling on a
+   * range change would make the number and the book change at the same time.
+   */
+  function renderFoot(view, roll, t, unitScale) {
+    const book = bookComparison(view.totalTokens, function () { return roll })
+    // One line, no byline or basis: the pick's own fields fill the localized
+    // sentence, so zh prints 《红楼梦》 where en prints Dream of the Red Chamber.
+    const title = t('book.lang') === 'zh' ? book.title : book.titleEn
+    const text = book.ratio < 1
+      ? t('book.less', { title: title })
+      : t('book.more', { title: title, ratio: formatNumber(book.ratio, unitScale) })
+    return React.createElement('div', { className: 'dus-foot' },
+      React.createElement('div', { className: 'dus-foot-line' }, text))
+  }
+
   function renderModels(view, t, unitScale) {
     const rows = modelRows(view.perModel, view.totalTokens)
     if (rows.length === 0) {
@@ -319,8 +331,7 @@ export function createPanel({ React, primitives, settings }) {
     // written by the OLD build may still hold `auto`; `resolveUnitScale` maps that
     // to the scale it used to resolve to for this language, so an upgrade does not
     // change what the panel shows. `book.lang` is the dictionary's self-reporting
-    // locale marker — it stays because it is the only language signal `t` exposes,
-    // and it is what makes `auto` pick K/M/B here and 万/亿 there.
+    // locale marker (the same one the book line uses to pick its title).
     const unitMode = settingsState.units === undefined ? DEFAULT_UNITS : settingsState.units
     const unitScale = resolveUnitScale(unitMode, t('book.lang'))
 
@@ -345,6 +356,9 @@ export function createPanel({ React, primitives, settings }) {
     })
     const load = dataState[0]
     const setLoad = dataState[1]
+    // Rolled once per mount, so the comparison keeps its book across range
+    // changes and only re-rolls the next time the hero is opened.
+    const roll = React.useState(function () { return Math.random() })[0]
 
     // The viewport width decides whether the six cards sit in two rows (three
     // across) or three rows (two across, under the stylesheet's 560px
@@ -388,21 +402,10 @@ export function createPanel({ React, primitives, settings }) {
       return function () { window.removeEventListener('resize', onResize) }
     }, [])
 
-    // `layout.js` and `compact-layout.js` compare the width against the same
-    // breakpoint, so they only need a representative width per band; passing the
-    // band's own midpoint keeps the layout modules' contract (a number) unchanged.
+    // `layout.js` compares the width against the same breakpoint, so it only
+    // needs a representative width per band; passing the band's own midpoint
+    // keeps the layout module's contract (a number) unchanged.
     const viewportWidth = viewportBand === 'narrow' ? NARROW_VIEWPORT_PX - 1 : NARROW_VIEWPORT_PX + 1
-
-    // THE PANEL STYLE. `classic` is the shipped look and the default; `compact`
-    // is the reference's 480px card. It rides `data-dus-style` on the root, and
-    // the stylesheet keeps every compact rule inside `[data-dus-style="compact"]`
-    // — so the classic rules are byte-identical to what shipped, and switching is
-    // one attribute flip with no remount and no reload.
-    const styleId = settingsState.style
-    const compact = isCompact(styleId)
-    // The height the style in view actually uses. Each style keeps its own value
-    // (see `sanitizeSettings`), so switching never rewrites the other one.
-    const bodyHeight = bodyHeightOf(settingsState)
 
     // Hover bubble for the heatmap. Positioned inside `.dus-panel` (not
     // `position: fixed`, which a transformed ancestor would re-anchor) and
@@ -521,9 +524,10 @@ export function createPanel({ React, primitives, settings }) {
       return load.summary === null ? null : summarize(load.summary, range.days)
     }, [load.summary, range.days])
 
-    // The heatmap is ALL-TIME on purpose. The grid is a calendar — switching
-    // All/30d/7d must not reflow it — so it reads a second, unfiltered summary.
-    // Only the numbers (cards, model list) respond to the range pills.
+    // The heatmap and the book line are ALL-TIME on purpose. The grid is a
+    // calendar — switching All/30d/7d must not reflow it — so both read a
+    // second, unfiltered summary. Only the numbers (cards, model list) above
+    // and beside the grid respond to the range pills.
     const allView = React.useMemo(function () {
       return load.summary === null ? null : summarize(load.summary, 0)
     }, [load.summary])
@@ -535,17 +539,6 @@ export function createPanel({ React, primitives, settings }) {
       if (!visible) return undefined
       return hoistAboveWorkspaceRow(rootRef.current)
     }, [visible])
-
-    // The input's height budget, on the same condition as the panel itself: it
-    // exists only while the hero panel is on screen, and its disposer removes
-    // every attribute, custom property and observer it added. `bodyHeight` is a
-    // dependency because resizing the panel changes the chrome the budget is
-    // measured against — re-attaching re-measures immediately instead of waiting
-    // for the next resize.
-    React.useEffect(function () {
-      if (!visible) return undefined
-      return attachInputBudget(rootRef.current)
-    }, [visible, bodyHeight])
 
     // ---- the two tab bodies are ELEMENTS, memoised.
     //
@@ -564,10 +557,12 @@ export function createPanel({ React, primitives, settings }) {
     // markup: the derived views, the translator (a language switch), the
     // resolved unit scale (a unit-mode change, or `auto` following a language
     // switch) and the tooltip handlers (stable, `useMemo([])` above).
+    // `roll` is captured once per mount, so it is included only to keep the
+    // foot line honest if that ever changes.
     // THE GRID DOES NOT DEPEND ON THE RANGE, SO IT GETS ITS OWN MEMO.
     //
-    // A single memo for the whole Overview body would key its deps on `view`,
-    // and `view` is keyed on the selected range. So clicking
+    // `overviewBody` used to build cards + heat + foot in one memo whose deps
+    // included `view` — and `view` is keyed on the selected range. So clicking
     // All / 30d / 7d threw away the whole subtree and rebuilt the heat grid, even
     // though the grid reads `allView` (unfiltered) on purpose. The performance
     // review measured it: **1,306 elements rebuilt, 4.1 ms per range click** at a
@@ -584,10 +579,15 @@ export function createPanel({ React, primitives, settings }) {
       return renderHeat(allView, t, tips, unitScale)
     }, [allView, t, tips, unitScale])
 
+    const footBody = React.useMemo(function () {
+      if (allView === null) return null
+      return renderFoot(allView, roll, t, unitScale)
+    }, [allView, roll, t, unitScale])
+
     const overviewBody = React.useMemo(function () {
-      if (cardsBody === null || heatBody === null) return null
-      return overviewElement(React, cardsBody, heatBody)
-    }, [cardsBody, heatBody])
+      if (cardsBody === null || heatBody === null || footBody === null) return null
+      return overviewElement(React, cardsBody, heatBody, footBody)
+    }, [cardsBody, heatBody, footBody])
 
     const modelsBody = React.useMemo(function () {
       if (view === null) return null
@@ -631,24 +631,17 @@ export function createPanel({ React, primitives, settings }) {
       style: { left: tip.left + 'px', top: tip.top + 'px' },
     }, tip.text))
 
-    return React.createElement('div', {
-      className: 'dus-root',
-      ref: rootRef,
-      // The style switch rides ONE attribute. Every compact rule in `styles.js`
-      // is scoped to `[data-dus-style="compact"]`, so the classic look and its
-      // own rules are untouched by the option existing.
-      'data-dus-style': compact ? 'compact' : 'classic',
-    },
+    return React.createElement('div', { className: 'dus-root', ref: rootRef },
       React.createElement('div', {
         className: 'dus-panel',
         ref: panelRef,
         // `--dus-body-height` is what `.dus-body` consumes
         // (`height: var(--dus-body-height, 344px)`); setting it on the panel
         // root means both tabs resolve the live preference, so the panel is one
-        // fixed height no matter which tab is showing. The style's own derived
-        // lengths ride the same inline object (the layout modules), so a shorter
-        // setting draws smaller graphics instead of a scrollbar.
-        style: bodyHeightStyle(bodyHeight, viewportWidth, styleId),
+        // fixed height no matter which tab is showing. The Overview tab's shrink
+        // lengths ride the same inline style (`layout.js`), so a shorter setting
+        // draws smaller graphics instead of a scrollbar.
+        style: bodyHeightStyle(settingsState.bodyHeight, viewportWidth),
       },
         renderHead(t, tab, setTab, range.id, setRangeId),
         sliding,

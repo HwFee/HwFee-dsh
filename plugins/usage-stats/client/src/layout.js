@@ -1,9 +1,9 @@
 /**
  * Overview layout arithmetic: how the tab's graphics shrink to fit the body.
  *
- * THE PROBLEM. `.dus-overview` stacks six cards and the heat band inside
- * `.dus-body`, whose height is exactly `--dus-body-height` (240–520). The cards
- * are fixed; the heat band's height is WIDTH-derived (seven
+ * THE PROBLEM. `.dus-overview` stacks six cards, the heat band and the foot line
+ * inside `.dus-body`, whose height is exactly `--dus-body-height` (240–520). The
+ * cards and the foot are fixed; the heat band's height is WIDTH-derived (seven
  * square cells per column, column width capped at 22px). At a small setting the
  * natural content height exceeded the body and the tab grew a vertical
  * scrollbar — the thing the user rejected ("要等比例缩小 而不是增加滚动条").
@@ -24,16 +24,9 @@
  *      shrink (overview gap 10→6→4, band padding 8→4→2, cell gap 4→3→2);
  *   3. only when even that is not enough do the cards compact — label 11/15 →
  *      10/12 and value 17/22 → 15/18, i.e. down to the stated floors, with the
- *      card padding 8→6 and the bottom strip 25.5→19.5. No font ever goes below
- *      `CARD_LABEL_FLOOR` / `CARD_VALUE_FLOOR`.
- *
- * THE BOTTOM STRIP OUTLIVES THE CAPTION. This tab used to end in a one-line
- * comparison, and `bottomGap` is exactly the room that line took (padding +
- * hairline + leading). The caption is gone, but the number stays in the budget
- * on purpose: the cell cap is derived from what the fixed blocks leave, so
- * deleting the line and the reservation together would enlarge every heat
- * square and pull the calendar's seven rows taller. The strip now simply stands
- * empty below the grid.
+ *      card padding 8→6 and the foot line's leading 17→15. The foot's font
+ *      size stays 12px and no font ever goes below `CARD_LABEL_FLOOR` /
+ *      `CARD_VALUE_FLOOR`.
  *
  * The returned lengths are emitted as custom properties by `overviewVars()`;
  * the stylesheet consumes them with today's values as fallbacks, so a host that
@@ -112,13 +105,8 @@ export function tipCentre(centre, bubbleWidth, panelWidth, inset) {
 
 /**
  * The three shrink tiers, largest first. Every length the Overview view uses is
- * listed here — including the card and bottom-strip metrics the arithmetic
- * depends on — so the stylesheet and this module cannot disagree about a number.
- *
- * `bottomGap` is the strip under the heat grid: the room the caption took
- * (8px padding + .5px hairline + 17px leading = 25.5px) and the compact
- * equivalent. The caption is gone; the number is kept so the cell cap, and
- * therefore the calendar's cell size, is exactly what it was.
+ * listed here — including the card/foot metrics the arithmetic depends on — so
+ * the stylesheet and this module cannot disagree about a number.
  */
 export const LAYOUT_TIERS = [
   {
@@ -126,7 +114,7 @@ export const LAYOUT_TIERS = [
     minCell: 10,
     overviewGap: 10, gridGap: 6,
     cardPad: 8, cardGap: 2, labelSize: 11, labelLh: 15, valueSize: 17, valueLh: 22,
-    bottomGap: 25.5,
+    footPad: 8, footLh: 17,
     heatPad: 8, heatGap: 4,
   },
   {
@@ -134,7 +122,7 @@ export const LAYOUT_TIERS = [
     minCell: 8,
     overviewGap: 6, gridGap: 6,
     cardPad: 8, cardGap: 2, labelSize: 11, labelLh: 15, valueSize: 17, valueLh: 22,
-    bottomGap: 25.5,
+    footPad: 8, footLh: 17,
     heatPad: 4, heatGap: 3,
   },
   {
@@ -143,7 +131,7 @@ export const LAYOUT_TIERS = [
     overviewGap: 4, gridGap: 4,
     cardPad: 6, cardGap: 2, labelSize: CARD_LABEL_FLOOR, labelLh: 12,
     valueSize: CARD_VALUE_FLOOR, valueLh: 18,
-    bottomGap: 19.5,
+    footPad: 4, footLh: 15,
     heatPad: 2, heatGap: 2,
   },
 ]
@@ -167,7 +155,8 @@ export function gridRows(viewportWidth) {
 /** Everything in the tab that does NOT shrink with the heat cells. */
 export function fixedHeight(tier, rows) {
   const grid = cardHeight(tier) * rows + tier.gridGap * (rows - 1)
-  return grid + tier.overviewGap * 2 + tier.bottomGap
+  const foot = tier.footPad + 0.5 + tier.footLh
+  return grid + tier.overviewGap * 2 + foot
 }
 
 /** The cell size a tier would use at this body height (before its min test). */
@@ -220,7 +209,8 @@ export function overviewLayout(bodyHeight, options) {
     labelLh: chosen.labelLh,
     valueSize: chosen.valueSize,
     valueLh: chosen.valueLh,
-    bottomGap: chosen.bottomGap,
+    footPad: chosen.footPad,
+    footLh: chosen.footLh,
     heatPad: chosen.heatPad,
     heatGap: chosen.heatGap,
   }
@@ -232,10 +222,6 @@ export function overviewLayout(bodyHeight, options) {
  * Every value is a concrete px length — no `calc()` ratio games. The stylesheet
  * uses each one with today's value as the fallback, so a host that never calls
  * this module still renders the roomy layout.
- *
- * `bottomGap` is NOT emitted: it is a budget the cell cap is computed against,
- * not a length anything paints, and an unused custom property would invite a
- * future rule to start reading it.
  */
 export function overviewVars(bodyHeight, options) {
   const layout = overviewLayout(bodyHeight, options)
@@ -248,6 +234,8 @@ export function overviewVars(bodyHeight, options) {
     '--dus-card-label-lh': layout.labelLh + 'px',
     '--dus-card-value-size': layout.valueSize + 'px',
     '--dus-card-value-lh': layout.valueLh + 'px',
+    '--dus-foot-pad': layout.footPad + 'px',
+    '--dus-foot-lh': layout.footLh + 'px',
     '--dus-heat-pad': layout.heatPad + 'px',
     '--dus-heat-gap': layout.heatGap + 'px',
     '--dus-heat-cell-max': layout.cell + 'px',

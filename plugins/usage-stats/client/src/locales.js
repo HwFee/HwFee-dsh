@@ -36,15 +36,8 @@ export const en = {
   'note.loading': 'Crunching the numbers…',
   'note.noActivity': 'No activity recorded in this period',
   'note.noModels': 'No model calls recorded in this period',
-  // The settings rows (all three live on the 主题定制 page, General list as
-  // fallback). The height edits the shared tab body `.dus-body` through
-  // `--dus-body-height`, and it sizes whichever style is selected — each style
-  // keeps its own height.
-  'settings.style.title': 'Panel style',
-  'settings.style.desc': 'Compact: a 480px flat card. Classic: full composer width.',
-  'settings.style.classic': 'Classic',
-  'settings.style.compact': 'Compact',
-  'settings.style.aria': 'Panel style',
+  // The settings rows (both live on the 主题定制 page, General list as fallback).
+  // The height edits the shared tab body `.dus-body` through `--dus-body-height`.
   'settings.height.title': 'Stats panel height',
   'settings.height.desc': 'Height of the panel body, 240–520 px; applies immediately',
   // The unit row is a SWITCH now: on = 万/亿, off = K/M/B. The description names
@@ -58,10 +51,13 @@ export const en = {
   'heat.cell': '{date} · {count} messages',
   'heat.cell.one': '{date} · {count} message',
   'heat.cell.zero': '{date} · no activity',
-  // `book.lang` is a self-reporting locale marker, never shown: the panel reads
-  // it to resolve the `auto` unit scale (K/M/B in an English UI, 万/亿 in a
-  // Chinese one). Translators never see it.
+  // Interpolated by the panel from bookComparison's {title, ratio}; the
+  // sentence shape lives here so translators own the word order. `book.lang`
+  // is a self-reporting marker the panel uses to pick `title` vs `titleEn`
+  // from the pick — translators never see it in the UI.
   'book.lang': 'en',
+  'book.less': "You haven't used a full copy of {title} yet.",
+  'book.more': "You've used ~{ratio}× more tokens than {title}.",
 }
 
 export const zh = {
@@ -84,14 +80,8 @@ export const zh = {
   'note.loading': '正在统计…',
   'note.noActivity': '这段时间还没有活跃记录',
   'note.noModels': '这段时间还没有模型调用记录',
-  // 三行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
-  // `--dus-body-height` 改两个标签页共用的 `.dus-body`，并且只改**当前样式**的高度：
-  // 两种样式各存各的高度。
-  'settings.style.title': '面板样式',
-  'settings.style.desc': '参考：480px 紧凑平面卡片。现有：跟随输入框宽度。',
-  'settings.style.classic': '现有',
-  'settings.style.compact': '参考',
-  'settings.style.aria': '面板样式',
+  // 两行设置（都在「主题定制」页，缺失时回退通用列表）。高度行通过
+  // `--dus-body-height` 改两个标签页共用的 `.dus-body`。
   'settings.height.title': '用量面板高度',
   'settings.height.desc': '面板正文高度，240–520 px，拖动即时生效',
   // 单位行现在是开关：开 = 万/亿，关 = K/M/B。描述里两端都给了例子，因为
@@ -105,4 +95,6 @@ export const zh = {
   'heat.cell.one': '{date} · {count} 条消息',
   'heat.cell.zero': '{date} · 没有活跃记录',
   'book.lang': 'zh',
+  'book.less': '你用掉的 token 还没凑满 1 本《{title}》。',
+  'book.more': '你用掉的 token 约是《{title}》的 {ratio} 倍。',
 }

@@ -131,15 +131,37 @@ export function buildHeatmap(perDay: Record<string,number>, range: number, now?:
   max: number,
 }
 
+// 趣味对比：从 BOOKS 里**随机挑一本**折算。只回数据不回句子：
+// 面板把 title/titleEn + ratio 填进自己的 locale 字符串（book.less / book.more），
+// 这样一句本地化文案只存在一份，stats.js 保持纯算术不碰语言。
+export function bookComparison(totalTokens: number, random: () => number = Math.random): {
+  title: string, titleEn: string, chars: number, ratio: number,
+}
 ```
 
 数字格式化口径：
-- **一个格式化器**：`formatNumber(n, scale)` 覆盖面板里**所有**计数——六张卡、模型列表 token、热力图 tooltip 与 `aria-label`——所以不存在一个调用点沿用旧单位。`scale` 是已解析的 `short` | `myriad`；未知值回落 `short`。
+- **一个格式化器**：`formatNumber(n, scale)` 覆盖面板里**所有**计数——六张卡、模型列表 token、热力图 tooltip 与 `aria-label`、书目对比的倍数——所以不存在一个调用点沿用旧单位。`scale` 是已解析的 `short` | `myriad`；未知值回落 `short`。
 - **两种标度**：`short` = 短式 K/M/B/T（10³ 进制）；`myriad` = 万/亿/万亿（10⁴ 进制）。数字小于该标度最小单位时按**带千分位逗号的整数**输出（`999`、`9,999`），这是唯一出现逗号的地方。
 - **舍入规则**：取能容纳该值的最大单位，四舍五入到该档的**有效数字**——K/M/B/万 2 位（`1.2K`、`12K`、`1.2万`），亿/万亿 3 位（`1.23亿`、`12.3亿`；这两档的总额在亿级，2 位会把百万级 token 误差藏掉）；去掉末尾的 `.0`。若舍入后到达下一档（`999,999` short → `1000K`），**向上升档**再格式化，所以结果是 `1M` 而不是 `1000K`；`99,999,999` myriad → `1亿` 而不是 `10000万`。按量级选最小单位保证**非零值永远不会显示成 `0.0万`**。
 - **`auto` 在渲染时解析**：`resolveUnitScale(mode, language)` 里 `auto` → zh 用 `myriad`、en 用 `short`；显式 `short`/`myriad` 与语言无关。面板每次渲染都用 `t('book.lang')` 取当前语言，所以切换 UI 语言会立刻重排数字，而存储值仍是 `auto`。
 - `formatHour`：12 小时制，`12 AM` 表示午夜，`12 PM` 表示正午（时间不是数量，不走单位表）。
+- `bookComparison`：**每页随机挑一本**（`BOOKS` 均匀分布），不排序、不并排。`ratio = totalTokens / chars`，精确值不取整；句子由面板用 `book.less`（ratio < 1）或 `book.more` 拼，`ratio` 本身也过 `formatNumber`。`random` 是可注入的随机源，默认 `Math.random`，测试用固定值。
 
+**随机范围与稳定性**：面板每挂载一次抽一次，抽中后整页固定不变（存进 state）。换范围、重新拉数据**不重抽**，免得数字抖动。下次打开新对话页再换一本。
+
+**面板只渲染一行对比**，没有署名行也没有折算口径行：句子本身是本地化字符串（`book.less` / `book.more`），`book.lang` 字典项告诉面板用 `title`（zh，包《》）还是 `titleEn`（en，裸名）。
+
+书目与字数（`BOOKS` 常量，`constants.js`）：
+
+| 书名 | 英文名 | 约字数 |
+|---|---|---|
+| 红楼梦 | Dream of the Red Chamber | 73 万 |
+| 三国演义 | Romance of the Three Kingdoms | 63 万 |
+| 围城 | Fortress Besieged | 23 万 |
+| 活着 | To Live | 12 万 |
+| 骆驼祥子 | Rickshaw Boy | 10 万 |
+
+字数是通行说法的约数，不要写成精确值；实际 token/字 比例随分词器变化，所以面板只给量级玩笑不给口径注脚。
 
 ---
 
@@ -170,21 +192,22 @@ export function buildHeatmap(perDay: Record<string,number>, range: number, now?:
 - **外观**：`.dus-row` 系列类，按 `docs/host-hooks.md` §5.3 的通用行配方——14/22 标题、12/18 三级色描述、`16px 0` 内边距、`.5px` 底分隔线、控件靠右；单位按钮是扁平分段控件（无边框、选中态一块浅底），**只用本插件自己的类名**，不碰宿主盐化类名。
 - **状态**：`client/src/settings.js` 的 `createSettingsStore(localStorage)`；storage key `dsh-usage-stats/settings`，形状 `{ bodyHeight: number, units: 'auto'|'short'|'myriad' }`。旧负载没有 `units` 字段 → `auto`；`sanitizeSettings` / `clampUnits` 对非法模式同样回落 `auto`，高度照旧夹取并对齐 4px 网格；两个 setter 都只在值真变时持久化并通知。
 - **生效（高度）**：值经 `bodyHeightStyle()` 写成面板根节点上的 `--dus-body-height`；两个标签页共用的 `.dus-body` 消费 `height: var(--dus-body-height, 344px)`（全表唯一的数字来源）。`.dus-models` 用 `height:100%` 填充它并在内部滚动；`.dus-overview` 同样 100% 填充、顶部对齐。面板与设置行共用同一个 store（`useSyncExternalStore`），拖动即时改变两个标签页的高度，**无需刷新**；值存 localStorage，重挂载/重启后仍在。
-- **生效（缩小而非滚动）**：调小面板时总览的图形**等比例缩小**，绝不出现竖向滚动条。缩小顺序：① 热力格子的列宽上限（`--dus-heat-cell-max`，格子始终 `aspect-ratio:1` 保持正方）；② 间距与内边距（overview gap 10→6→4、热力条 padding 8→4→2、格子 gap 4→3→2）；③ 最后才动卡片文字（label 11/15→**10/12**、value 17/22→**15/18**，即下限）。算术在 `client/src/layout.js`（纯函数、可单测），由 `bodyHeightStyle()` 把一串具体 px 长度写进内联样式：CSS 无法用一个长度除另一个长度，`container-type: size` + `cqh` 又表达不了分级顺序、也无法脱离浏览器断言。`.dus-overview` 因此是 `overflow-y: hidden`（仅作算术之外的一像素保险），不再是 `auto`。三档（roomy / tight / packed）的每个长度都列在 `LAYOUT_TIERS` 里，样式表只消费变量、变量默认值就是 roomy 档。
-- **生效（单位）**：store 里的 `units` 是**模式**不是标度；`Panel` 每次渲染用 `resolveUnitScale(units, t('book.lang'))` 解析成 `short|myriad`，再传给 `formatNumber`，所以切换 UI 语言会立即重排数字而 `auto` 存储值不变。所有计数（六卡、模型行、热力 cell 的 tooltip 与 `aria-label` 的最大值）共用这一个格式化器；卡片的 `title` 与可见文本是同一个字符串，屏幕阅读器读到的数字与屏幕一致。
+- **生效（缩小而非滚动）**：调小面板时总览的图形**等比例缩小**，绝不出现竖向滚动条。缩小顺序：① 热力格子的列宽上限（`--dus-heat-cell-max`，格子始终 `aspect-ratio:1` 保持正方）；② 间距与内边距（overview gap 10→6→4、热力条 padding 8→4→2、格子 gap 4→3→2）；③ 最后才动卡片文字（label 11/15→**10/12**、value 17/22→**15/18**，即下限；foot 字号恒为 12px，只收行高）。算术在 `client/src/layout.js`（纯函数、可单测），由 `bodyHeightStyle()` 把一串具体 px 长度写进内联样式：CSS 无法用一个长度除另一个长度，`container-type: size` + `cqh` 又表达不了分级顺序、也无法脱离浏览器断言。`.dus-overview` 因此是 `overflow-y: hidden`（仅作算术之外的一像素保险），不再是 `auto`。三档（roomy / tight / packed）的每个长度都列在 `LAYOUT_TIERS` 里，样式表只消费变量、变量默认值就是 roomy 档。
+- **生效（单位）**：store 里的 `units` 是**模式**不是标度；`Panel` 每次渲染用 `resolveUnitScale(units, t('book.lang'))` 解析成 `short|myriad`，再传给 `formatNumber`，所以切换 UI 语言会立即重排数字而 `auto` 存储值不变。所有计数（六卡、模型行、热力 cell 的 tooltip 与 `aria-label` 的最大值、书目对比倍数）共用这一个格式化器；卡片的 `title` 与可见文本是同一个字符串，屏幕阅读器读到的数字与屏幕一致。
 
 ### `panel.js`
 
 导出 `createPanel({ React, primitives, settings })` → `{ Panel }`。`Panel` 收 `{ session, fetchSummary, peekSummary, t }`：`fetchSummary` 是共享缓存（`summary-cache.js`）的 `load(options)`，`peekSummary` 是它的 `peek()`（首帧渲染上一份摘要，避免重新打开时闪 loading）。`settings` 是面板高度 + 单位模式 store（见上节）：面板用 `useSyncExternalStore` 订阅它，把高度写成根节点 `.dus-panel` 上的 `--dus-body-height` 内联自定义属性（两个标签页共用的 `.dus-body` 消费该变量，总高度不变时下方输入框不会跳动），并把 `units` 解析成当前标度后传给每个格式化调用。
 
 布局（自上而下）：
-1. **标签页**：`tab.overview` / `tab.models`，左对齐。两个 pill 与右侧范围拨片**共用同一套 chip 样式**（12/18 字号、`1px 8px` 内边距、`--dsw-radius-md / 2` 圆角、三级色文字），选中态只换填充与字色、**不改字重**（改字重会让 chip 变宽、邻居跳动）
-2. **范围选择**：`range.all` / `range.30d` / `range.7d`，右对齐，同一套 chip。选中填充是 `label-primary 10%` 混入 `bg-module-platform`：单独用 `bg-module-platform` 在亮色下与白卡只差两阶（`docs/theme-defects.md` §3），选中态会看起来没选中。tooltip 仍用 `range.*.hint`
+1. **标签页**：`tab.overview` / `tab.models`（两个 pill，选中态用 `--dsw-alias-state-business-primary`）
+2. **范围选择**：`range.all` / `range.30d` / `range.7d`（右上角，小 pill，选中用 `--dsw-alias-bg-module-platform` + 边框；tooltip 用 `range.*.hint`）
 3. **六张指标卡**（3 列 × 2 行；视口 ≤560px 时 2 列 × 3 行）：`card.sessions` / `card.messages` / `card.tokens` / `card.days` / `card.peak` / `card.model`
-   - 卡片：`background: color-mix(in srgb, var(--dsw-alias-label-primary) 11%, var(--dsw-alias-bg-base))`，`border-radius: var(--dsw-radius-md)`，无边框（CDS 单笔触纪律）。填充改用标签墨色按比例混入面板底色，而不是第二个灰色令牌——`bg-module-platform` 在亮色下距白卡只有两阶，格子会几乎看不见
-   - 标题用 `--dsw-alias-label-tertiary` 且单行省略号截断（`Total tokens` / `Favorite model` 比中文长，换行会让两行网格里某一格变高）；数值用 `--dsw-alias-label-primary` 半粗，`tabular-nums` 保持列对齐；常用模型那张是名字不是数量，数值降到 `font-weight: 400`；字号来自 `--dus-card-label-size` / `--dus-card-value-size`（默认 11/17，最紧凑档 10/15 即下限）
+   - 卡片：`background: var(--dsw-alias-bg-module-platform)`，`border-radius: var(--dsw-radius-md)`，无边框（CDS 单笔触纪律）
+   - 标题用 `--dsw-alias-label-tertiary`，数值用 `--dsw-alias-label-primary` 半粗，`tabular-nums` 保持列对齐；字号来自 `--dus-card-label-size` / `--dus-card-value-size`（默认 11/17，最紧凑档 10/15 即下限）
    - 前四个计数走 `formatNumber(value, unitScale)`；`card.peak` 是时刻（`formatHour`），`card.model` 是模型 id，二者不是数量、不参与单位表。卡片的 `title` 直接复用同一个格式化字符串
-4. **热力图**：`perDay` 的方块矩阵，格子 `aspect-ratio:1`、圆角 2px、间距来自 `--dus-heat-gap`；每周列 `flex:1 0 9px`，列宽上限是 `--dus-heat-cell-max`（JS 按面板高度算出的预算，默认 22px），`space-between` 把富余宽度摊进列间隙——整张图是一条紧贴面板左右缘的致密色带，只在历史很宽时横向滚动。**滚动布局、锚定今天**：总格数 = 列数 × 7，从今天向前回溯，第 i 格 = 今天 − (N−1−i) 天、列 = floor(i/7)、行 = i mod 7，因此**右下角永远是今天**（与今天是周几无关），同列内自上而下为旧→新；每列固定 7 格、全部填满，不需要「最后一列更短」的特殊渲染。**窗口右端是今天**（`end = max(最后活跃日, 今天)`）：绝不出现未来日期（日志比时钟新时以日志为准，不裁真实数据）；最后活跃日到今天之间的天是正常的安静日格（带日期、count 0），日历保持连续。`pad` 只用于**第一个活跃日之前**的格子：`All` 范围至少 26 列（182 格）向左补足，因此今天的格子永远落在最右下；7d/30d 不补、只画自己的窗口（仍以今天收尾）。安静格用 `label-tertiary 18% + bg-module-platform` 的可见灰格（不是留白），level 1..4 用 `--dsw-alias-state-business-primary` 对 `bg-base` 的 30/55/80/100% 阶梯。**热力图恒为全时段**，不随 All/30d/7d 切换而重排——范围拨片只改统计数字（六卡、模型列表）；每格悬停显示日期。tooltip 的计数与整条色带的 `aria-label` 最大值都过 `formatNumber`，屏幕阅读器与可见文本使用同一个单位
+4. **热力图**：`perDay` 的方块矩阵，格子 `aspect-ratio:1`、圆角 2px、间距来自 `--dus-heat-gap`；每周列 `flex:1 0 9px`，列宽上限是 `--dus-heat-cell-max`（JS 按面板高度算出的预算，默认 22px），`space-between` 把富余宽度摊进列间隙——整张图是一条紧贴面板左右缘的致密色带，只在历史很宽时横向滚动。**滚动布局、锚定今天**：总格数 = 列数 × 7，从今天向前回溯，第 i 格 = 今天 − (N−1−i) 天、列 = floor(i/7)、行 = i mod 7，因此**右下角永远是今天**（与今天是周几无关），同列内自上而下为旧→新；每列固定 7 格、全部填满，不需要「最后一列更短」的特殊渲染。**窗口右端是今天**（`end = max(最后活跃日, 今天)`）：绝不出现未来日期（日志比时钟新时以日志为准，不裁真实数据）；最后活跃日到今天之间的天是正常的安静日格（带日期、count 0），日历保持连续。`pad` 只用于**第一个活跃日之前**的格子：`All` 范围至少 26 列（182 格）向左补足，因此今天的格子永远落在最右下；7d/30d 不补、只画自己的窗口（仍以今天收尾）。安静格用 `label-tertiary 18% + bg-module-platform` 的可见灰格（不是留白），level 1..4 用 `--dsw-alias-state-business-primary` 对 `bg-base` 的 30/55/80/100% 阶梯。**热力图与书目对比恒为全时段**，不随 All/30d/7d 切换而重排——范围拨片只改统计数字（六卡、模型列表）；每格悬停显示日期。tooltip 的计数与整条色带的 `aria-label` 最大值都过 `formatNumber`，屏幕阅读器与可见文本使用同一个单位
+5. **书目对比**：`bookComparison(totalTokens, random)` 返回**随机一本**的 `{title, titleEn, chars, ratio}`，面板用 `t('book.more'|'book.less', {title, ratio})` 渲染**单行**，无署名、无折算口径；`ratio` 也走 `formatNumber`（倍数可以是万/亿级）。**抽一次就固定**：挂载时用 `React.useState(() => Math.random())` 存 roll，换范围不重抽。
 6. 「模型」标签页：按 tokens 降序的模型列表，每行模型 id + token 数 + 占比细条；token 数走 `formatNumber`，占比百分比不参与单位表
 
 **样式一律走宿主令牌**（`--dsw-alias-*`、`--dsw-radius-*`），不要硬编码颜色，这样 CDS 主题插件装上就自动跟随。面板宽度 `max-width: var(--dsh-composer-card-max-width)`，与输入框同宽，居中。
@@ -213,10 +236,11 @@ export { apply }
 
 ## 4. 测试
 
-- `test/stats.test.mjs`：`stats.js` 的全部纯函数。必须覆盖 `formatNumber` 的**两套标度输出表**（0、1、999、1e3、1234、9999、1e4、12345、99999、999999、1e6、1234567、99,999,999、1e8、123456789、1e9，`short` 与 `myriad` 逐项断言）、舍入规则（999,999 short → `1M`、myriad → `100万`；99,999,999 myriad → `1亿`；非零值不出现 `0.0万`；小数与负数；非法输入 → `0`；未知 scale → short）、`resolveUnitScale`（auto 按 zh/en，显式模式压过语言，非法模式按 auto）、`formatHour` 的 0/11/12/13/23、`buildHeatmap` 的滚动几何（第三参数注入固定 `now`）、**右下角 = 今天**（最后一格 key === 今天、其行号 === 6、列号 === 最后一列、任何格 key 都不晚于今天、每列恰好 7 格）、`pad` 只出现在首个活跃日之前、`summarize` 的 30 天裁剪。
+- `test/stats.test.mjs`：`stats.js` 的全部纯函数。必须覆盖 `formatNumber` 的**两套标度输出表**（0、1、999、1e3、1234、9999、1e4、12345、99999、999999、1e6、1234567、99,999,999、1e8、123456789、1e9，`short` 与 `myriad` 逐项断言）、舍入规则（999,999 short → `1M`、myriad → `100万`；99,999,999 myriad → `1亿`；非零值不出现 `0.0万`；小数与负数；非法输入 → `0`；未知 scale → short）、`resolveUnitScale`（auto 按 zh/en，显式模式压过语言，非法模式按 auto）、`formatHour` 的 0/11/12/13/23、`bookComparison` 的 ratio<1 与 ≥1、`buildHeatmap` 的滚动几何（第三参数注入固定 `now`）、**右下角 = 今天**（最后一格 key === 今天、其行号 === 6、列号 === 最后一列、任何格 key 都不晚于今天、每列恰好 7 格）、`pad` 只出现在首个活跃日之前、`summarize` 的 30 天裁剪。
+  - `bookComparison` 用**注入的 `random`** 测：`() => 0` 应选中 `BOOKS[0]`，`() => 0.999` 应选中最后一本，`() => 0.5` 选中中间那本。另测每个 `BOOKS` 条目都出现在某个固定 `random` 值的结果里（保证随机源接得对），并断言返回值**不**含 `text`/`author`/`basis`/`charsText`（句子、署名、口径都已移到面板 locale）。
 - `test/usage-store.test.mjs`：用临时目录构造几条合成 `session.v4.jsonl.zstd`（zstd 帧，用 `zlib.zstdCompressSync` 逐条拼接），断言聚合结果与缓存契约：进程内命中不重读（注入计数的 `readFile`）；`force` 全量重读；**磁盘缓存跨 store/重启复用**（0 次读）、损坏/版本不符/被投毒的条目被忽略、**删除的会话从解析缓存剪掉但账本保留**；**累计账本**（session id 含旧 `session-` 前缀归一、删掉的会话跨重启仍在摘要里、会话长大是替换不是相加、`force` 不清账本、损坏/投毒/旧版本账本被忽略）；**热尾**（小增量复用 + `stale: true`、超过 256 KB 必重读、沉降后精确重读一次）；**目录 memo** 的 1500 ms 窗口；**后台预热**的协作解析（按帧 yield、结果与同步解析一致）以及 `aggregate()` **single-flight**（请求加入 in-flight 预热；`force` 等它结束后再全量重读）。
-- `test/layout.test.mjs`：`layout.js` 的缩小算术（纯函数）。断言档位常量与滑块范围一致（240–520、4px 步进；`HEAT_CELL_MAX = 22`；断点 560）；roomy 档复现此前实测的固定高度 `161.5px`（卡片 55 × 2 + 6、gap 2×10、底部留白 25.5——原说明行占位，说明行已删除但预算保留，格子因此不放大）；**所有 71 个设置 × 三档网格行数（2/3 行）都满足 `fixed + band ≤ H`**（内容永不超出面板）；格子大小在同一档内随高度单调不减、最高设置到达 22px 上限、最紧凑角落不低于 6px；档位切换时的回落幅度不超过一个档位的预算差；缩小顺序（图形 → 间距 → 字号）与 `CARD_LABEL_FLOOR = 10` / `CARD_VALUE_FLOOR = 15` 下限；`overviewVars()` 输出的是完整、纯 px、不含 `calc()`/`var()` 的具体长度；非法高度回落而不是抛错。
-- `test/settings.test.mjs`：两个偏好 + 面板接线。覆盖默认高度 `344`、`clampBodyHeight`（越界夹取、非数值/布尔/数组回落默认、手改值对齐 4px 网格）、`sanitizeSettings` 丢弃未知字段、`loadSettings` 对空/坏 JSON/旧 payload 回落默认（**旧 payload 无 `units` → `auto`**）、`saveSettings` 在坏 storage 下不抛、store 只在值真变时通知且写盘、换一个 store 重挂载仍读到同一值；`clampUnits` 的三态与非法回落、`setUnits` 持久化且与高度共用 storage key；两行的 id 与 `order: 40/41`（不并列）；以及 **CSS 契约**：`.dus-body` 是唯一消费 `height: var(--dus-body-height, 344px)` 的规则（`.dus-models` / `.dus-overview` 只做 `height:100%` 填充）、`.dus-overview` 是 `overflow-y: hidden`（**不再是 `auto`**）、热力列宽上限是 `var(--dus-heat-cell-max, 22px)`、卡片字号走带下限的变量、`bodyHeightStyle()` 同时输出夹取后的高度和 `layout.js` 派生的一整套 px 长度。**单位接线**：同一份 summary 在 short / myriad / auto+zh / auto+en 下渲染出的六张卡、模型行、热力 `aria-label` 最大值逐项断言；卡片 `title` 与可见文本一致；`panel.js` 源码里不再有 `formatTokens`/`formatCount`；单位行渲出三个互斥 radio 并点击写入 store；生命周期把两行一起注册到主题页（id/order 断言）。另外锁定 zh/en 字典键集一致、设置行文案纯语言无 `中文 · English` 拼接。
+- `test/layout.test.mjs`：`layout.js` 的缩小算术（纯函数）。断言档位常量与滑块范围一致（240–520、4px 步进；`HEAT_CELL_MAX = 22`；断点 560）；roomy 档复现此前实测的固定高度 `161.5px`（卡片 55 × 2 + 6、gap 2×10、foot 8+0.5+17）；**所有 71 个设置 × 三档网格行数（2/3 行）都满足 `fixed + band ≤ H`**（内容永不超出面板）；格子大小在同一档内随高度单调不减、最高设置到达 22px 上限、最紧凑角落不低于 6px；档位切换时的回落幅度不超过一个档位的预算差；缩小顺序（图形 → 间距 → 字号）与 `CARD_LABEL_FLOOR = 10` / `CARD_VALUE_FLOOR = 15` 下限；`overviewVars()` 输出的是完整、纯 px、不含 `calc()`/`var()` 的具体长度；非法高度回落而不是抛错。
+- `test/settings.test.mjs`：两个偏好 + 面板接线。覆盖默认高度 `344`、`clampBodyHeight`（越界夹取、非数值/布尔/数组回落默认、手改值对齐 4px 网格）、`sanitizeSettings` 丢弃未知字段、`loadSettings` 对空/坏 JSON/旧 payload 回落默认（**旧 payload 无 `units` → `auto`**）、`saveSettings` 在坏 storage 下不抛、store 只在值真变时通知且写盘、换一个 store 重挂载仍读到同一值；`clampUnits` 的三态与非法回落、`setUnits` 持久化且与高度共用 storage key；两行的 id 与 `order: 40/41`（不并列）；以及 **CSS 契约**：`.dus-body` 是唯一消费 `height: var(--dus-body-height, 344px)` 的规则（`.dus-models` / `.dus-overview` 只做 `height:100%` 填充）、`.dus-overview` 是 `overflow-y: hidden`（**不再是 `auto`**）、热力列宽上限是 `var(--dus-heat-cell-max, 22px)`、卡片字号走带下限的变量、`bodyHeightStyle()` 同时输出夹取后的高度和 `layout.js` 派生的一整套 px 长度。**单位接线**：同一份 summary 在 short / myriad / auto+zh / auto+en 下渲染出的六张卡、模型行、热力 `aria-label` 最大值、书目对比倍数逐项断言；卡片 `title` 与可见文本一致；`panel.js` 源码里不再有 `formatTokens`/`formatCount`；单位行渲出三个互斥 radio 并点击写入 store；生命周期把两行一起注册到主题页（id/order 断言）。另外锁定 zh/en 字典键集一致、设置行文案纯语言无 `中文 · English` 拼接。
 - `test/settings-slot.test.mjs`：设置行的落位策略（纯函数 + 注入的 slots/timers）：主题页声明后**两行一起**落在 `settings.appearance.item` 且取消回退计时器；3000 ms 内未声明 → 两行一起回退 `settings.general.item` 且只警告一次；`waitMs<=0` 立即决定；回退后迟到的主题页声明不产生双行；主题页注册被拒时先回滚已注册行再整体回退；主题页消失时两行一起移回通用列表；`dispose()` 取消计时器并移除两行。
 - `test/summary-cache.test.mjs`：客户端摘要缓存 + 面板接线：TTL 内不请求、过期后重取、并发挂载共享一个 in-flight、`refresh` 只绕过 TTL（不附带 `force`）、`force` 才真正全量重读、失败不污染缓存、面板首帧用 `peek()` 渲染（无 loading 闪烁）、普通挂载不传 force、`stale` 响应触发一次增量补请求（不是 `?refresh=1`）、卸载取消待触发的补请求。
 - `test/tooltip.test.mjs`：热力图悬停气泡的落位，**走真实 `panel.js`**（一个约 90 行的 hooks 运行器驱动组件，不重写一份定位逻辑）。断言的是止损的那条不变量 —— **气泡的 BOX（不是中心点）始终留在面板内** —— 以及让它结构性成立的兜底（`.dus-tip-layer`）。用例：1104px 面板 + 实测 163.66px 宽的气泡，右缘不得越过 `panelWidth - 8`（旧的中心夹取会给出 1157.83，即截图里那次 50px 级越界）；已经居中放得下的气泡不被无谓挪动；首列从左边拉起；宽度尚未测量时的首帧落位也必须合法；284px 窄面板仍然在内；层恒定挂载（无悬停时为空）、悬停不新增第二个层、气泡排在面板最后；样式表里 `overflow: hidden` / `inset: 0` / `max-width: min(240px, calc(100% - 16px))` 与 `TIP_INSET` 对齐。这个文件**用变异测试反证过**：把夹取改回中心点，三条用例立即失败。

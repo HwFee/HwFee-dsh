@@ -18,8 +18,10 @@ import {
   formatHour,
   favoriteModel,
   buildHeatmap,
+  bookComparison,
   resolveUnitScale,
 } from '../client/src/stats.js'
+import { BOOKS } from '../client/src/constants.js'
 
 // ------------------------------------------------------------ formatNumber
 
@@ -496,4 +498,67 @@ test('summarize survives an empty log and an empty range', function () {
   })
 })
 
+// ------------------------------------------------------------ bookComparison
 
+// The pick is injected, so these assert the arithmetic and the wording, not
+// "whatever Math.random happened to return".
+const first = function () { return 0 }
+const last = function () { return 0.999 }
+
+test('bookComparison returns ratio data, not a sentence', function () {
+  const small = bookComparison(BOOKS[0].chars / 2, first)
+  assert.equal(small.ratio, 0.5)
+  assert.equal(small.title, BOOKS[0].title)
+  // The printed sentence lives in the panel's locale dictionary; this module
+  // deliberately hands back the pick and the ratio so either language can
+  // phrase it. Anything sentence-shaped, byline-shaped or basis-shaped must
+  // stay absent.
+  assert.ok(!('text' in small), 'sentence must not be computed here')
+  assert.ok(!('author' in small), 'byline must not be computed here')
+  assert.ok(!('basis' in small), 'basis caveat must not be computed here')
+  assert.ok(!('charsText' in small), 'localized char count must not be computed here')
+})
+
+test('bookComparison reports exact ratios the panel interpolates', function () {
+  const one = BOOKS[0].chars
+  assert.equal(bookComparison(one, first).ratio, 1)
+  assert.equal(bookComparison(one * 733, first).ratio, 733)
+  // The panel rounds the ratio for display; the value itself stays exact.
+  assert.equal(bookComparison(one * 2.6, first).ratio, 2.6)
+})
+
+test('bookComparison picks a book from the injected random source', function () {
+  const flat = function () { return 0 }
+  assert.equal(bookComparison(0, flat).title, BOOKS[0].title)
+  assert.equal(bookComparison(0, last).title, BOOKS[BOOKS.length - 1].title)
+
+  // 0.5 lands in the middle bucket of an even-length list.
+  const mid = bookComparison(0, function () { return 0.5 })
+  const expected = BOOKS[Math.floor(0.5 * BOOKS.length)]
+  assert.equal(mid.title, expected.title)
+})
+
+test('every book in BOOKS is reachable in both languages', function () {
+  BOOKS.forEach(function (entry, i) {
+    const pick = bookComparison(0, function () { return (i + 0.5) / BOOKS.length })
+    assert.equal(pick.title, entry.title, 'index ' + i)
+    assert.equal(pick.titleEn, entry.titleEn, 'index ' + i)
+    assert.equal(pick.chars, entry.chars, 'index ' + i)
+  })
+})
+
+test('bookComparison clamps an out-of-range random instead of crashing', function () {
+  assert.equal(bookComparison(0, function () { return 1 }).title, BOOKS[BOOKS.length - 1].title)
+  assert.equal(bookComparison(0, function () { return -5 }).title, BOOKS[0].title)
+  // A random source that returns garbage falls back to the first book rather
+  // than rendering `《undefined》`.
+  assert.equal(bookComparison(0, function () { return Number.NaN }).title, BOOKS[0].title)
+})
+
+test('the default random source always yields a real book', function () {
+  for (let i = 0; i < 200; i += 1) {
+    const pick = bookComparison(1e6)
+    assert.ok(BOOKS.some(function (entry) { return entry.title === pick.title }),
+      'unknown book: ' + pick.title)
+  }
+})

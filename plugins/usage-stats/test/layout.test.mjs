@@ -51,12 +51,9 @@ test('the module agrees with the slider range it mirrors', function () {
 })
 
 test('the roomy tier reproduces the measured fixed height (161.5px, two rows)', function () {
-  // cards 2×55 + 6 = 116, gaps 2×10 = 20, bottom strip 25.5 → 161.5. The strip
-  // is the room the removed caption took; it stays in the budget so the cell cap
-  // does not grow when the caption goes.
+  // cards 2×55 + 6 = 116, gaps 2×10 = 20, foot 8 + 0.5 + 17 = 25.5 → 161.5.
   assert.equal(cardHeight(ROOMY), 55, 'card = 8+8 padding + 15 label + 2 gap + 22 value')
   assert.equal(fixedHeight(ROOMY, 2), 161.5)
-  assert.equal(ROOMY.bottomGap, 25.5, '8px padding + .5px hairline + 17px leading')
   assert.equal(gridRows(1200), 2, 'three cards across → two rows')
   assert.equal(gridRows(NARROW_VIEWPORT_PX), 3, 'two cards across → three rows')
   assert.equal(gridRows(NARROW_VIEWPORT_PX + 1), 2)
@@ -172,6 +169,7 @@ test('overviewVars emits a complete px-only set, with the type floors', function
     '--dus-overview-gap', '--dus-grid-gap', '--dus-card-pad', '--dus-card-gap',
     '--dus-card-label-size', '--dus-card-label-lh',
     '--dus-card-value-size', '--dus-card-value-lh',
+    '--dus-foot-pad', '--dus-foot-lh',
     '--dus-heat-pad', '--dus-heat-gap', '--dus-heat-cell-max',
   ]
   assert.deepEqual(Object.keys(vars).sort(), expected.slice().sort())

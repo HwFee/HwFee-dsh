@@ -10,10 +10,12 @@
 
 import { installPanelCss, removePanelCss } from './styles.js'
 import { LOCALE_NS, en, zh } from './locales.js'
-import { unitsForSwitch, unitsIsOn } from './settings.js'
+import {
+  BODY_HEIGHT_STEP, MAX_BODY_HEIGHT, MIN_BODY_HEIGHT, unitsForSwitch, unitsIsOn,
+} from './settings.js'
 import { registerSettingsRows } from './settings-slot.js'
 import {
-  STYLE_ROW_ID, STYLE_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
+  SETTINGS_ROW_ID, SETTINGS_ROW_ORDER, UNITS_ROW_ID, UNITS_ROW_ORDER,
 } from './constants.js'
 
 /**
@@ -76,47 +78,40 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
   }
 
   /**
-   * The style row: two flat buttons, `classic` and `compact`.
+   * The settings row that edits the panel body height.
    *
-   * A segmented pair rather than a switch, because the two looks are peer
-   * choices a reader compares — "on/off" would name neither. The chosen one
-   * carries `data-active` and `aria-pressed`, and the store write re-renders the
-   * hero panel in the same frame: switching is immediate, persists in
-   * localStorage, and never reloads anything.
-   *
-   * The style row is registered FIRST (order 39) so the page reads "pick a
-   * style, then size it" — the height row below it sizes whichever style is
-   * selected.
+   * ONE control, because the value is one number: a range input over
+   * 240–520 px in steps of 4, with the live readout beside it. `t` comes from
+   * the registration's `locale:` field (re-rendered on a language switch), and
+   * the store subscription is what makes the value shared: dragging here
+   * re-renders the hero panel too, which rewrites `--dus-body-height`.
    */
-  function StyleRow(props) {
+  function PanelHeightRow(props) {
     const t = typeof props.t === 'function' ? props.t : fallbackTranslate
     const state = React.useSyncExternalStore(settings.subscribe, settings.getState)
-    const current = state.style
-    const options = [
-      { id: 'classic', label: t('settings.style.classic') },
-      { id: 'compact', label: t('settings.style.compact') },
-    ]
+    const height = state.bodyHeight
+    const span = MAX_BODY_HEIGHT - MIN_BODY_HEIGHT
+    const fill = span > 0 ? Math.round(((height - MIN_BODY_HEIGHT) / span) * 100) : 0
     return React.createElement('div', { className: 'dus-row' },
       React.createElement('div', { className: 'dus-row-text' },
-        React.createElement('div', { className: 'dus-row-title' }, t('settings.style.title')),
-        React.createElement('div', { className: 'dus-row-desc' }, t('settings.style.desc'))),
+        React.createElement('div', { className: 'dus-row-title' }, t('settings.height.title')),
+        React.createElement('div', { className: 'dus-row-desc' }, t('settings.height.desc'))),
       React.createElement('div', { className: 'dus-row-control' },
-        React.createElement('div', {
-          className: 'dus-seg',
-          role: 'group',
-          'aria-label': t('settings.style.aria'),
-        }, options.map(function (option) {
-          const active = option.id === current
-          return React.createElement('button', {
-            key: option.id,
-            type: 'button',
-            className: 'dus-seg-btn',
-            'data-active': active ? 'true' : 'false',
-            'data-style': option.id,
-            'aria-pressed': active,
-            onClick: function () { settings.setStyle(option.id) },
-          }, option.label)
-        }))))
+        React.createElement('input', {
+          type: 'range',
+          className: 'dus-row-slider',
+          min: MIN_BODY_HEIGHT,
+          max: MAX_BODY_HEIGHT,
+          step: BODY_HEIGHT_STEP,
+          value: height,
+          'aria-label': t('settings.height.title'),
+          'aria-valuetext': height + ' px',
+          style: { '--dus-fill': fill + '%' },
+          onChange: function (event) {
+            settings.setBodyHeight(parseInt(event.target.value, 10))
+          },
+        }),
+        React.createElement('span', { className: 'dus-row-value' }, height + ' px')))
   }
 
   /**
@@ -211,26 +206,20 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
       }, UsagePanel)
     })
 
-    // All three settings rows prefer the 主题定制 / Theme page (`cds-theme` hosts
-    // it as the `appearance` settings section with the `settings.appearance.item`
+    // Both settings rows prefer the 主题定制 / Theme page (`cds-theme` hosts it as
+    // the `appearance` settings section with the `settings.appearance.item`
     // ledger) and fall back to the host's General list with a bounded wait when
     // that page is absent — see `settings-slot.js` for the full policy. They are
-    // registered as ONE list, so they always land on the same page (never split
-    // across both), with ids/orders 39 (style), 40 (height) and 41 (units). The
-    // stylesheet installed above supplies the `.dus-row` geometry (the host's row
-    // recipe: 14/22 title, 12/18 description, 16px padding, .5px hairline,
-    // control on the right) and the `.dus-seg` control of the style row.
+    // registered as ONE list, so they always land on the same page (never one on
+    // each), with ids/orders 40 (height) and 41 (units). The stylesheet installed
+    // above supplies the `.dus-row` geometry (the host's row recipe: 14/22 title,
+    // 12/18 description, 16px padding, .5px hairline, control on the right).
     if (settings) {
       ctx.effect(function () {
         const placement = registerSettingsRows({
           slots: slots,
-          // The height row is deliberately absent: both styles are FIXED at
-          // their designed heights (classic 344px, compact 252px). A slider let
-          // the reader shrink the card until the heat band lost rows or the
-          // caption clipped, and those failures were silent; the number is now
-          // the style's own contract, not a preference.
           rows: [
-            { id: STYLE_ROW_ID, order: STYLE_ROW_ORDER, component: StyleRow },
+            { id: SETTINGS_ROW_ID, order: SETTINGS_ROW_ORDER, component: PanelHeightRow },
             { id: UNITS_ROW_ID, order: UNITS_ROW_ORDER, component: UnitRow },
           ],
           warn: warnOnce,

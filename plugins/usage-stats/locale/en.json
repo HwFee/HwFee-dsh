@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Usage statistics",
-    "description": "A usage panel under the blank-session headline: sessions, messages, total tokens, active days, peak hour, favourite model and an activity heatmap, aggregated locally from the session logs."
+    "description": "A usage panel under the blank-session headline: sessions, messages, total tokens, active days, peak hour, favourite model, an activity heatmap, and a token comparison against a Chinese novel."
   }
 }
