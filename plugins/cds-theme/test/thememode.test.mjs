@@ -477,8 +477,11 @@ test('the hide rule is present by default and targets the row, never the outlet'
   // whole 通用 page. Only rules that use `:has()` are checked; the sheet's other
   // slot-scoped rules (row hairlines, selection tints) legitimately target the
   // outlet as a descendant prefix.
-  for (const selector of rules.keys()) {
-    if (!selector.includes(':has(')) continue
+  // Only relational HIDE rules need this discipline. Session-preview rules
+  // use an exact portal/slot structure to recolour a visible card; treating
+  // those as General hiders would ban an unrelated component refinement.
+  for (const [selector, declarations] of rules) {
+    if (!selector.includes(':has(') || !/\bdisplay\s*:\s*none\b/.test(declarations)) continue
     assert.ok(selector.includes('data-slot="settings.general.item"'),
       'a :has() rule must be scoped to the General slot: ' + selector)
     assert.ok(/> \*:has\(/.test(selector),
@@ -703,10 +706,16 @@ test('our own accent row and theme-mode row cannot match (different slot)', func
   }
 
   // And the shipped sheet contains no un-scoped variant that could match them.
-  const isHideRule = function (selector) {
-    return selector.startsWith('body ') && selector.includes(':has(')
+  // A HIDE rule actually removes a row. `:has()` alone is not evidence of one:
+  // the session preview uses `:has()` to recolour a specific portal, and counting
+  // it here would make this guard reject an unrelated component refinement.
+  const isHideRule = function (selector, declarations) {
+    return selector.startsWith('body ') && selector.includes(':has(') &&
+      /\bdisplay\s*:\s*none\b/.test(declarations)
   }
-  const hideRules = [...sheetMap(hideSheet()).keys()].filter(isHideRule)
+  const hideRules = [...sheetMap(hideSheet())].filter(function (entry) {
+    return isHideRule(entry[0], entry[1])
+  }).map(function (entry) { return entry[0] })
   assert.equal(hideRules.length, 1, 'exactly one hide rule exists')
   for (const selector of hideRules) {
     assert.ok(selector.includes('data-slot="settings.general.item"'),

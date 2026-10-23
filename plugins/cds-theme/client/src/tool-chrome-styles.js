@@ -21,13 +21,51 @@ export function toolChromeRules() {
 }
 [data-conversation-content] [data-cds-diffrow] > [data-cds-tool-inspect] { top: 3px !important; right: 26px !important; }
 [data-cds-diffrow][data-inspect] > [data-cds-diffrow-head] { padding-right: 52px; }
+/* Read keeps its React-owned controls inside the payload tree. Only their
+   positioning ancestors become static, so the row root owns their visual seat.
+   The code scroller and its overflow remain unchanged. */
+[data-conversation-content] [data-cds-tool-row-actions] { position: relative; }
+[data-conversation-content] [data-cds-tool-row-path] { position: static !important; }
+[data-conversation-content] [data-cds-tool-row-banner] {
+  width: 0 !important; height: 0 !important; min-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; border: 0 !important;
+}
+[data-conversation-content] [data-cds-tool-row-head] { padding-right: 52px !important; }
+[data-conversation-content] [data-cds-tool-row-action] {
+  position: absolute !important; top: 3px !important; right: 0 !important;
+  width: var(--cds-copy-size, 18px); height: var(--cds-copy-size, 18px);
+  opacity: 0 !important; pointer-events: none !important; z-index: 3;
+}
+[data-conversation-content] [data-cds-tool-row-action="inspect"] { right: 26px !important; }
+[data-conversation-content] [data-cds-tool-row-actions]:hover [data-cds-tool-row-banner],
+[data-conversation-content] [data-cds-tool-row-actions]:hover [data-cds-tool-row-action] {
+  opacity: 1 !important; pointer-events: auto !important;
+}
 [data-cds-tool-inspect] > svg { display: none; }
 [data-cds-tool-inspect]::before {
   content: ''; width: var(--cds-copy-icon, 12px); height: var(--cds-copy-icon, 12px);
   background: currentColor; mask: url('${TRACE_ICON}') center / contain no-repeat;
 }
+[data-conversation-content] [data-cds-tool-inspect],
+[data-conversation-content] [data-cds-tool-copy],
+[data-conversation-content] [data-cds-diff-copy] {
+  transition: opacity var(--cds-copy-reveal, 100ms) ${EASING.swift}, color var(--cds-copy-reveal, 100ms) ${EASING.swift};
+}
+/* Banner opacity must not multiply Copy's animation or reveal it on the outer
+   slot while Inspect still waits for the panel. Only the buttons fade. */
+[data-conversation-content] [data-cds-tool-body] [data-code-block-banner] {
+  opacity: 1 !important; pointer-events: none !important; transition: none !important;
+}
+[data-conversation-content] [data-cds-tool-copy] { opacity: 0 !important; pointer-events: none !important; }
+[data-conversation-content] [data-cds-tool-body]:hover [data-cds-tool-copy] { opacity: 1 !important; pointer-events: auto !important; }
 [data-cds-tool-body]:hover > [data-cds-tool-inspect],
 [data-cds-diffrow]:hover > [data-cds-tool-inspect],
+/* The legacy surfaces own Copy directly. Inspect must ride the SAME owner, or
+   the pair splits: hovering the card shows one control and not the other. */
+[data-search]:hover [data-cds-tool-inspect],
+[data-read]:hover [data-cds-tool-inspect],
+[data-diff]:hover [data-cds-tool-inspect],
+[data-terminal]:hover [data-cds-tool-inspect],
 .dsh-gb-tool-request:hover > [data-cds-tool-inspect] {
   opacity: 1 !important; pointer-events: auto;
 }
@@ -48,6 +86,10 @@ export function toolChromeRules() {
   font: var(--dsw-font-xxs-11, 11px/16px var(--dsw-font-family));
   color: var(--dsw-alias-label-tertiary); white-space: pre-wrap; overflow-wrap: anywhere;
 }
-@media (prefers-reduced-motion: reduce) { [data-cds-tool-inspect] { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-conversation-content] [data-cds-tool-inspect],
+  [data-conversation-content] [data-cds-tool-copy],
+  [data-conversation-content] [data-cds-diff-copy] { transition: none; }
+}
 `
 }

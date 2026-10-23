@@ -1,6 +1,7 @@
 import { installPanelCss, removePanelCss } from './panel.js'
 import { LOCALE_NS, en, zh, makeT } from './locales.js'
 import { createGreetingMarker } from './hero.js'
+import { createHeroComposerVisibility } from './hero-composer.js'
 import { createTableMarker } from './markdown.js'
 import { createAppearanceIconMarker } from './navicon.js'
 import { createPasteConverter } from './paste.js'
@@ -168,6 +169,18 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
       converter.start()
       return function () { converter.stop() }
     }, 'dsh-cds-theme: long-paste attachment')
+
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const visibility = createHeroComposerVisibility(document)
+      const sync = function () {
+        if (settings.getState().enabled !== false) visibility.start()
+        else visibility.stop()
+      }
+      sync()
+      const unsubscribe = settings.subscribe(sync)
+      return function () { unsubscribe(); visibility.stop() }
+    }, 'dsh-cds-theme: hero composer visibility')
 
     // The markdown body's table hook: `markdown.js` marks the scroll wrapper of
     // every table inside the chat flow, and the stylesheet paints

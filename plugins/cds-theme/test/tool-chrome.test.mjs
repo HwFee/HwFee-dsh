@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createToolChromeMarker, searchRecoveryNotice, TRACE_ATTR, BODY_ATTR, RECOVERY_ATTR } from '../client/src/tool-chrome.js'
+import { createToolChromeMarker, searchRecoveryNotice, TRACE_ATTR, BODY_ATTR, RECOVERY_ATTR, ROW_ATTR, ROW_ACTION_ATTR, ROW_PATH_ATTR, ROW_BANNER_ATTR, ROW_HEAD_ATTR, COPY_ATTR } from '../client/src/tool-chrome.js'
 import { buildCssFor } from '../client/src/styles.js'
 import { sanitize } from '../client/src/constants.js'
 
@@ -97,6 +97,37 @@ test('a resize drops the stale seat and measures it again in one frame',()=>{
   assert.equal(pendingSeat,undefined,'the stale seat must be cleared before re-measuring')
   marker.stop()
 })
+test('the read card moves its pair to the row only while the card is open',()=>{
+  const s=setup()
+  // Reuse the fixture's own slot so the sweep's `[data-slot="tool.call.toolview"]`
+  // scope still matches; a second slot would need a sibling outlet the fake DOM
+  // does not model. Swap the glob card out for the read card instead.
+  const slot=s.root.parentElement
+  const read=el('div',{'data-tool':'read'})
+  const head=el('button',{'data-disclosure-row':'','aria-expanded':'false'})
+  const banner=el('div',{'data-code-block-banner':''})
+  const copy=el('button',{'aria-label':'Copy'},'Copy');banner.append(copy)
+  const inspect=el('button',{},'查看').append(el('svg'))
+  const wrap=el().append(banner,inspect)
+  read.append(head,wrap)
+  slot.children.length=0;slot.append(read)
+  const marker=createToolChromeMarker(s.doc);marker.start()
+  // Collapsed: the card draws no internal body, so nothing may be repositioned
+  // into a header that is the only thing on screen.
+  assert.equal(read.hasAttribute(ROW_ATTR),false,'a closed read card keeps its normal row')
+  assert.equal(copy.hasAttribute(ROW_ACTION_ATTR),false)
+  head.setAttribute('aria-expanded','true')
+  marker.sweep()
+  assert.equal(read.getAttribute(ROW_ATTR),'')
+  assert.equal(head.getAttribute(ROW_HEAD_ATTR),'')
+  assert.equal(copy.getAttribute(ROW_ACTION_ATTR),'copy')
+  assert.equal(inspect.getAttribute(ROW_ACTION_ATTR),'inspect')
+  for(const node of [banner,wrap])assert.equal(node.getAttribute(ROW_PATH_ATTR),'','path ancestors make the seat resolvable')
+  // The React-owned handler and label survive untouched.
+  assert.equal(copy.textContent,'Copy');assert.equal(inspect.textContent,'查看')
+  marker.stop()
+  for(const node of [read,head,copy,inspect,banner,wrap])assert.equal(node.getAttribute(ROW_ACTION_ATTR)??node.hasAttribute(ROW_PATH_ATTR),false)
+})
 test('trace/recovery rules remove footer flow and spare controls from broad card framing',()=>{
   const css=buildCssFor(sanitize({}))
   assert.match(css,/\[data-conversation-content\] \[data-cds-tool-inspect\] \{[^}]*position: absolute !important/)
@@ -105,4 +136,35 @@ test('trace/recovery rules remove footer flow and spare controls from broad card
   assert.match(css,/\[data-cds-tool-body\]:hover > \[data-cds-tool-inspect\]/)
   assert.match(css,/:not\(\[data-cds-tool-inspect\]\):not\(\[data-cds-search-recovery\]\)/)
   for(const state of [{refine:false},{enabled:false}])assert.ok(!buildCssFor(sanitize(state)).includes('mask: url(\'data:image/svg+xml'))
+})
+test('copy and inspect are revealed by the SAME hover owner, never one alone',()=>{
+  const css=buildCssFor(sanitize({}))
+  const rules=[...css.replace(/\/\*[\s\S]*?\*\//g,'').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([,selector,body])=>({selectors:selector.split(',').map(s=>s.trim()),body}))
+  // Every rule that turns a copy control visible without being itself hovered
+  // must do it through a container hover, and that same container must also be
+  // the one that reveals the inspect glyph. Otherwise the pair drifts apart.
+  const reveals=[['data-cds-tool-copy','data-cds-tool-inspect'],['data-cds-native-copy','data-cds-tool-inspect'],['data-cds-diff-copy','data-cds-tool-inspect']]
+  for(const [copyHook,inspectHook] of reveals){
+    const shown=rules.filter(r=>r.selectors.some(s=>s.includes('['+copyHook+']'))&&/opacity:\s*1/.test(r.body)&&r.selectors.some(s=>s.includes(':hover')))
+    assert.ok(shown.length,'a hover reveal must exist for '+copyHook)
+    for(const rule of shown){
+      for(const selector of rule.selectors){
+        if(!selector.includes(':hover'))continue
+        const owner=selector.slice(0,selector.indexOf(':hover'))
+        assert.ok(owner.length>0,'the reveal must name a hover owner: '+selector)
+        // One owner may be written with or without a longer scope prefix, so
+        // compare the LAST simple selector before :hover — that is the element
+        // whose hover state actually drives the reveal.
+        const last = owner.split(/\s+/).filter(Boolean).pop()
+        const paired=rules.some(r=>r.selectors.some(s=>{
+          const at=s.indexOf(':hover'); if(at<0)return false
+          const before=s.slice(0,at).split(/\s+/).filter(Boolean).pop()
+          return before===last&&s.includes('['+inspectHook+']')&&/opacity:\s*1/.test(r.body)
+        }))
+        assert.ok(paired,'copy reveals on '+owner+' but inspect does not: the pair must move together')
+        assert.ok(!selector.endsWith('['+copyHook+']:hover'),'the control alone must not own the reveal: '+selector)
+      }
+    }
+  }
 })

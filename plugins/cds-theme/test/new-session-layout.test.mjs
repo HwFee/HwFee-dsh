@@ -9,7 +9,10 @@
  * loop. The runtime, the `compactHero` setting, the settings row and its copy
  * are gone; a leftover `localStorage` key is inert and dropped by `sanitize()`.
  *
- * WHAT REPLACED IT — nothing that measures, observes or retries:
+ * WHAT REPLACED IT — CSS retains natural heights and reachable overflow.
+ * Focused drafts also use hero-composer.js to reveal the bottom action row by
+ * scrolling the existing page after card/viewport resize. That observer never
+ * changes the measured sizes or hides content; its behavior has its own suite.
  *
  *   1. On the host's own `[data-content-phase="hero"]` (a NEW session; the host
  *      sets `hero = shellPhase === 'blank'`, `dsh-client-ui-conversation.js`

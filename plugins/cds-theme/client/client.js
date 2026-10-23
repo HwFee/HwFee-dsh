@@ -2573,13 +2573,51 @@ window.__ModuleLoader__.load({
     }
     [data-conversation-content] [data-cds-diffrow] > [data-cds-tool-inspect] { top: 3px !important; right: 26px !important; }
     [data-cds-diffrow][data-inspect] > [data-cds-diffrow-head] { padding-right: 52px; }
+    /* Read keeps its React-owned controls inside the payload tree. Only their
+       positioning ancestors become static, so the row root owns their visual seat.
+       The code scroller and its overflow remain unchanged. */
+    [data-conversation-content] [data-cds-tool-row-actions] { position: relative; }
+    [data-conversation-content] [data-cds-tool-row-path] { position: static !important; }
+    [data-conversation-content] [data-cds-tool-row-banner] {
+      width: 0 !important; height: 0 !important; min-height: 0 !important;
+      padding: 0 !important; margin: 0 !important; border: 0 !important;
+    }
+    [data-conversation-content] [data-cds-tool-row-head] { padding-right: 52px !important; }
+    [data-conversation-content] [data-cds-tool-row-action] {
+      position: absolute !important; top: 3px !important; right: 0 !important;
+      width: var(--cds-copy-size, 18px); height: var(--cds-copy-size, 18px);
+      opacity: 0 !important; pointer-events: none !important; z-index: 3;
+    }
+    [data-conversation-content] [data-cds-tool-row-action="inspect"] { right: 26px !important; }
+    [data-conversation-content] [data-cds-tool-row-actions]:hover [data-cds-tool-row-banner],
+    [data-conversation-content] [data-cds-tool-row-actions]:hover [data-cds-tool-row-action] {
+      opacity: 1 !important; pointer-events: auto !important;
+    }
     [data-cds-tool-inspect] > svg { display: none; }
     [data-cds-tool-inspect]::before {
       content: ''; width: var(--cds-copy-icon, 12px); height: var(--cds-copy-icon, 12px);
       background: currentColor; mask: url('${TRACE_ICON}') center / contain no-repeat;
     }
+    [data-conversation-content] [data-cds-tool-inspect],
+    [data-conversation-content] [data-cds-tool-copy],
+    [data-conversation-content] [data-cds-diff-copy] {
+      transition: opacity var(--cds-copy-reveal, 100ms) ${EASING.swift}, color var(--cds-copy-reveal, 100ms) ${EASING.swift};
+    }
+    /* Banner opacity must not multiply Copy's animation or reveal it on the outer
+       slot while Inspect still waits for the panel. Only the buttons fade. */
+    [data-conversation-content] [data-cds-tool-body] [data-code-block-banner] {
+      opacity: 1 !important; pointer-events: none !important; transition: none !important;
+    }
+    [data-conversation-content] [data-cds-tool-copy] { opacity: 0 !important; pointer-events: none !important; }
+    [data-conversation-content] [data-cds-tool-body]:hover [data-cds-tool-copy] { opacity: 1 !important; pointer-events: auto !important; }
     [data-cds-tool-body]:hover > [data-cds-tool-inspect],
     [data-cds-diffrow]:hover > [data-cds-tool-inspect],
+    /* The legacy surfaces own Copy directly. Inspect must ride the SAME owner, or
+       the pair splits: hovering the card shows one control and not the other. */
+    [data-search]:hover [data-cds-tool-inspect],
+    [data-read]:hover [data-cds-tool-inspect],
+    [data-diff]:hover [data-cds-tool-inspect],
+    [data-terminal]:hover [data-cds-tool-inspect],
     .dsh-gb-tool-request:hover > [data-cds-tool-inspect] {
       opacity: 1 !important; pointer-events: auto;
     }
@@ -2600,7 +2638,36 @@ window.__ModuleLoader__.load({
       font: var(--dsw-font-xxs-11, 11px/16px var(--dsw-font-family));
       color: var(--dsw-alias-label-tertiary); white-space: pre-wrap; overflow-wrap: anywhere;
     }
-    @media (prefers-reduced-motion: reduce) { [data-cds-tool-inspect] { transition: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      [data-conversation-content] [data-cds-tool-inspect],
+      [data-conversation-content] [data-cds-tool-copy],
+      [data-conversation-content] [data-cds-diff-copy] { transition: none; }
+    }
+    `;
+    }
+
+    // client/src/session-preview-styles.js
+    var SESSION_PREVIEW_ROOT = 'body [style*="--dsh-hover-preview-fade"]:has(> div > [data-slot="sidebar.session.row.hover"])';
+    function sessionPreviewRules() {
+      const root = SESSION_PREVIEW_ROOT;
+      return `
+    /* ---- sidebar session preview: current CDS surface and text roles ---- */
+    ${root} {
+      background: var(--dsw-alias-bg-overlay) !important;
+      color: var(--dsw-alias-label-primary) !important;
+      border: 0 !important;
+      border-radius: var(--dsw-radius-lg) !important;
+      box-shadow: var(--dsw-elevation-prominent) !important;
+    }
+    ${root} > div > div:not([data-slot]) {
+      color: var(--dsw-alias-label-secondary) !important;
+    }
+    ${root} > div > div:first-child {
+      color: var(--dsw-alias-label-primary) !important;
+    }
+    ${root} > div > div:nth-child(2):not([data-slot]) {
+      color: var(--dsw-alias-label-tertiary) !important;
+    }
     `;
     }
 
@@ -4574,6 +4641,7 @@ window.__ModuleLoader__.load({
         buttonSpringRules(),
         statTypographyRules()
       );
+      if (state.refine !== false) parts.push(sessionPreviewRules());
       if (state.refine !== false) parts.push(toolChromeRules());
       parts.push(diffStatFamilyRules());
       return parts.join("\n\n");
@@ -5569,6 +5637,76 @@ window.__ModuleLoader__.load({
         sweep,
         get started() {
           return started;
+        }
+      };
+    }
+
+    // client/src/hero-composer.js
+    function createHeroComposerVisibility(doc) {
+      const view = doc.defaultView;
+      let started = false, mutations = null, resize = null, frame = null;
+      let root = null, page = null, card = null;
+      function reveal() {
+        if (!started || !root?.isConnected || root.getAttribute("data-content-phase") !== "hero") return;
+        const input = card?.querySelector("[data-composer-input]");
+        if (!input || !(input === doc.activeElement || input.contains(doc.activeElement))) return;
+        const edge = Math.min(page.getBoundingClientRect().bottom, view.innerHeight);
+        const bottom = card.getBoundingClientRect().bottom;
+        const overflow = bottom + 16 - edge;
+        if (overflow > 1) page.scrollTop += overflow;
+      }
+      function bind() {
+        const next = doc.querySelector('[data-conversation-content][data-content-phase="hero"]');
+        const nextPage = next?.querySelector("[data-conversation-scroll]") || null;
+        const nextCard = next?.querySelector("[data-composer-input]")?.closest("[data-composer-card]") || null;
+        if (next === root && nextPage === page && nextCard === card) return;
+        resize?.disconnect();
+        root = next;
+        page = nextPage;
+        card = nextCard;
+        if (page && card) {
+          resize.observe(page);
+          resize.observe(card);
+          reveal();
+        }
+      }
+      function scheduleBind(records) {
+        if (!started || frame !== null) return;
+        const relevant = !records || card !== null && !card.isConnected || records.some((record) => {
+          if (record.type === "attributes") return true;
+          return [...record.addedNodes || []].some((node) => node.nodeType === 1 && (node.hasAttribute("data-composer-card") || node.querySelector("[data-composer-card]")));
+        });
+        if (relevant) frame = view.requestAnimationFrame(() => {
+          frame = null;
+          if (started) bind();
+        });
+      }
+      function focused(event) {
+        if (card?.contains(event.target)) reveal();
+      }
+      return {
+        start() {
+          if (started || !view?.ResizeObserver || !view?.MutationObserver || !doc.body) return;
+          started = true;
+          resize = new view.ResizeObserver(reveal);
+          mutations = new view.MutationObserver(scheduleBind);
+          mutations.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-content-phase"] });
+          doc.addEventListener("focusin", focused, { passive: true });
+          bind();
+        },
+        stop() {
+          if (!started) return;
+          started = false;
+          mutations.disconnect();
+          resize.disconnect();
+          doc.removeEventListener("focusin", focused);
+          if (frame !== null) view.cancelAnimationFrame(frame);
+          frame = null;
+          mutations = null;
+          resize = null;
+          root = null;
+          page = null;
+          card = null;
         }
       };
     }
@@ -6604,6 +6742,22 @@ window.__ModuleLoader__.load({
     var TRACE_ATTR = "data-cds-tool-inspect";
     var BODY_ATTR = "data-cds-tool-body";
     var RECOVERY_ATTR = "data-cds-search-recovery";
+    var ROW_ATTR = "data-cds-tool-row-actions";
+    var ROW_ACTION_ATTR = "data-cds-tool-row-action";
+    var ROW_PATH_ATTR = "data-cds-tool-row-path";
+    var ROW_BANNER_ATTR = "data-cds-tool-row-banner";
+    var ROW_HEAD_ATTR = "data-cds-tool-row-head";
+    var COPY_ATTR = "data-cds-tool-copy";
+    var COPY_LABEL = /^(?:copy(?: code| results| output)?|copied!?|复制|复制成功|已复制)$/i;
+    function copyButtons(root) {
+      const found = new Set(root.querySelectorAll("[data-cds-native-copy]"));
+      for (const banner of root.querySelectorAll("[data-code-block-banner]")) {
+        for (const button of banner.querySelectorAll("button")) {
+          if (!button.hasAttribute("aria-pressed") && COPY_LABEL.test((button.getAttribute("aria-label") || button.textContent).trim())) found.add(button);
+        }
+      }
+      return [...found];
+    }
     var INSPECT_LABEL = /^(?:在轨迹中查看|在轨迹中检查|查看轨迹|查看|View in trajectory|Inspect in trajectory|Inspect)$/i;
     function searchRecoveryNotice(text) {
       const value = text.trim();
@@ -6615,12 +6769,51 @@ window.__ModuleLoader__.load({
       const view = doc.defaultView;
       let observer = null, frame = null, started = false;
       let marked = /* @__PURE__ */ new Map();
+      const seats = /* @__PURE__ */ new Map();
+      function clearSeat(button) {
+        const previous = seats.get(button);
+        if (!previous) return;
+        for (const [name2, value, priority] of previous) {
+          if (value === "") button.style.removeProperty(name2);
+          else button.style.setProperty(name2, value, priority);
+        }
+        delete button.dataset.cdsTraceSeated;
+        seats.delete(button);
+      }
+      function readRow(root, put) {
+        if (root.getAttribute("data-tool") !== "read") return;
+        const head = root.querySelector("[data-disclosure-row]");
+        if (!head || head.getAttribute("aria-expanded") !== "true") return;
+        const controls = [];
+        for (const banner of root.querySelectorAll("[data-code-block-banner]")) {
+          const copy = Array.from(banner.querySelectorAll("button")).find((button) => !button.hasAttribute("aria-pressed") && COPY_LABEL.test((button.getAttribute("aria-label") || button.textContent).trim()));
+          if (copy) {
+            controls.push([copy, "copy"]);
+            put(banner, ROW_BANNER_ATTR);
+          }
+        }
+        if (!controls.length) {
+          const copy = root.querySelector("[data-cds-native-copy]");
+          if (copy) controls.push([copy, "copy"]);
+        }
+        const inspect = Array.from(root.querySelectorAll("button")).find((button) => INSPECT_LABEL.test(button.textContent.trim()) && button.querySelector("svg"));
+        if (inspect) controls.push([inspect, "inspect"]);
+        if (!controls.length) return;
+        put(root, ROW_ATTR);
+        put(head, ROW_HEAD_ATTR);
+        for (const [button, action] of controls) {
+          clearSeat(button);
+          put(button, ROW_ACTION_ATTR, action);
+          for (let node = button.parentElement; node && node !== root; node = node.parentElement) put(node, ROW_PATH_ATTR);
+        }
+      }
       function seat(button, body) {
         if (button.dataset.cdsTraceSeated === "1") return;
-        const copy = body.querySelector("[data-cds-native-copy]") || body.querySelector("[data-search] > *:first-child button") || body.querySelector("[data-code-block-banner] button");
-        if (copy === null || typeof copy.getBoundingClientRect !== "function" || typeof body.getBoundingClientRect !== "function") return;
+        const copy = copyButtons(body)[0] || body.querySelector("[data-search] > *:first-child button");
+        if (!copy || typeof copy.getBoundingClientRect !== "function" || typeof body.getBoundingClientRect !== "function") return;
         const a = copy.getBoundingClientRect(), b = body.getBoundingClientRect();
         if (a.width === 0 && a.height === 0) return;
+        seats.set(button, ["--cds-trace-top", "--cds-trace-right"].map((name2) => [name2, button.style.getPropertyValue?.(name2) || "", button.style.getPropertyPriority?.(name2) || ""]));
         button.style.setProperty("--cds-trace-top", Math.round(a.top - b.top) + "px");
         button.style.setProperty("--cds-trace-right", Math.round(b.right - a.left + 8) + "px");
         button.dataset.cdsTraceSeated = "1";
@@ -6634,14 +6827,16 @@ window.__ModuleLoader__.load({
         };
         for (const root of doc.querySelectorAll("[data-tool]")) {
           if (!root.closest('[data-slot="tool.call.toolview"]') || !root.closest("[data-conversation-content]")) continue;
+          for (const copy of copyButtons(root)) put(copy, COPY_ATTR);
           for (const button of root.querySelectorAll("button")) {
             if (button.hasAttribute(TRACE_ATTR) && !marked.get(button)?.has(TRACE_ATTR)) continue;
             if (!INSPECT_LABEL.test(button.textContent.trim()) || !button.querySelector("svg")) continue;
             put(button, TRACE_ATTR);
             put(button.parentElement, BODY_ATTR);
             if (!button.hasAttribute("title") || marked.get(button)?.has("title")) put(button, "title", button.textContent.trim());
-            seat(button, button.parentElement);
+            if (root.getAttribute("data-tool") !== "read") seat(button, button.parentElement);
           }
+          readRow(root, put);
           for (const surface of root.querySelectorAll("[data-search]")) {
             const recovery = surface.nextElementSibling;
             if (!recovery || recovery.tagName !== "DIV") continue;
@@ -6650,6 +6845,7 @@ window.__ModuleLoader__.load({
           }
         }
         for (const [node, attrs] of marked) {
+          if (attrs.has(TRACE_ATTR) && !next.get(node)?.has(TRACE_ATTR)) clearSeat(node);
           for (const name2 of attrs.keys()) if (!next.get(node)?.has(name2)) node.removeAttribute(name2);
         }
         for (const [node, attrs] of next) {
@@ -6665,12 +6861,7 @@ window.__ModuleLoader__.load({
         });
       }
       function reseat() {
-        for (const node of marked.keys()) {
-          if (node.dataset?.cdsTraceSeated !== "1") continue;
-          node.style?.removeProperty("--cds-trace-top");
-          node.style?.removeProperty("--cds-trace-right");
-          delete node.dataset.cdsTraceSeated;
-        }
+        for (const node of [...seats.keys()]) clearSeat(node);
         if (frame !== null) view.cancelAnimationFrame(frame);
         frame = view.requestAnimationFrame(() => {
           frame = null;
@@ -6710,12 +6901,8 @@ window.__ModuleLoader__.load({
           frame = null;
           for (const [node, attrs] of marked) {
             for (const name2 of attrs.keys()) node.removeAttribute(name2);
-            if (node.dataset?.cdsTraceSeated === "1") {
-              node.style?.removeProperty("--cds-trace-top");
-              node.style?.removeProperty("--cds-trace-right");
-              delete node.dataset.cdsTraceSeated;
-            }
           }
+          for (const node of [...seats.keys()]) clearSeat(node);
           marked.clear();
         },
         sweep
@@ -7821,6 +8008,21 @@ window.__ModuleLoader__.load({
             converter.stop();
           };
         }, "dsh-cds-theme: long-paste attachment");
+        ctx.effect(function() {
+          if (typeof document === "undefined") return function() {
+          };
+          const visibility = createHeroComposerVisibility(document);
+          const sync = function() {
+            if (settings2.getState().enabled !== false) visibility.start();
+            else visibility.stop();
+          };
+          sync();
+          const unsubscribe = settings2.subscribe(sync);
+          return function() {
+            unsubscribe();
+            visibility.stop();
+          };
+        }, "dsh-cds-theme: hero composer visibility");
         ctx.effect(function() {
           if (typeof document === "undefined") return function() {
           };

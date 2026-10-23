@@ -921,9 +921,9 @@ window.__ModuleLoader__.load({
         color var(--cds-copy-reveal, 100ms) cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* HOVER-ONLY, exactly like the read and write cards: the rail is invisible
-       until the pointer is on the tool row. Retained focus must not reveal it. */
-    .dsh-gb-tool:hover .dsh-gb-copy {
+    /* Both actions reveal from the command box. Retained focus or a successful
+       copy changes the glyph, never the pair's visibility. */
+    .dsh-gb-tool-request:hover .dsh-gb-copy {
       opacity: 1;
       pointer-events: auto;
     }
@@ -987,8 +987,8 @@ window.__ModuleLoader__.load({
       /* Invisible AND unclickable until revealed \u2014 the copy control's rule, for the
          same reason: a painted-out button still answers the pointer on blank space. */
       pointer-events: none;
-      transition: opacity 100ms cubic-bezier(0.16, 1, 0.3, 1),
-        color 100ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: opacity var(--cds-copy-reveal, 100ms) cubic-bezier(0.16, 1, 0.3, 1),
+        color var(--cds-copy-reveal, 100ms) cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     /* HOVER THE COMMAND BOX, NOT THE WHOLE CARD. The card's header is clickable

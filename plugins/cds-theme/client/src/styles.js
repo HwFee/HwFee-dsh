@@ -9,6 +9,7 @@ import { GREETING_DISPLAY, WEIGHTS } from './typography.js'
 import { RIPPLE_ATTR } from './ripple.js'
 import { markdownScopeRules } from './markdown-scope.js'
 import { toolChromeRules } from './tool-chrome-styles.js'
+import { sessionPreviewRules } from './session-preview-styles.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -2869,6 +2870,7 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
   // APPENDED AT THE END on purpose: `motionTokenRules()` and the A/B-tier
   // baselines (`test/rule-baseline.mjs`) are byte-pinned slices of the sheet,
   // and inserting this block anywhere before them would break those slices.
+  if (state.refine !== false) parts.push(sessionPreviewRules())
   if (state.refine !== false) parts.push(toolChromeRules())
   parts.push(diffStatFamilyRules())
 

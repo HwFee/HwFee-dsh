@@ -1,5 +1,17 @@
 # 工具面板复制按钮复核
 
+## 2026-10-23（二）：成对显隐、read 行内定位、长输入与新会话悬停卡
+
+用户提出三条：read/write 的复制与 inspect 应与编辑卡片一样位于工具行；所有工具的这两个按钮必须同时出现、同时消失；新会话页输入大段文字后输入框被挤出屏幕。
+
+- **成对显隐**。[tool-chrome-styles.js](../plugins/cds-theme/client/src/tool-chrome-styles.js) 让 `[data-search] / [data-read] / [data-diff] / [data-terminal]` 与 `[data-cds-tool-body]`、`[data-cds-diffrow]`、`.dsh-gb-tool-request` 共用同一个 hover 归属：复制与 inspect 的 opacity/pointer-events 由同一个容器驱动，过渡时长统一走 `--cds-copy-reveal`。此前 `[data-read]` 只显示复制、不显示 inspect，是真实的不同步缺陷，由新增守卫先抓红再修复。复制成功、键盘焦点都只改图标，不再延长或单独保留其中一个。
+- **read 的按钮回到工具行**。[tool-chrome.js](../plugins/cds-theme/client/src/tool-chrome.js) 的 `readRow()` 只在卡片展开（`aria-expanded="true"`）时，把 banner 与其定位祖先标为 static、把 banner 自身归零，让宿主原有的 Copy / Inspect 节点以行根为参照落在 `3px / 0` 与 `3px / 26px`；React 节点、文案、点击回调和剪贴板内容一律不动，折叠态完全不受影响。搜索与 Shell 仍留在面板内。
+- **write/edit** 本就复用 [diffview.js](../plugins/cds-theme/client/src/diffview.js) 的工具行，未另造组件。
+- **新会话长输入**。根因不是文本区没限高（它已限到 192px），而是整张 composer 卡在 789px 窗口里长到 842px：页面虽可滚动，却没有任何东西保证底部操作行可见。[hero-composer.js](../plugins/cds-theme/client/src/hero-composer.js) 用 ResizeObserver 只观察 hero 卡片与页面滚动容器，在编辑器聚焦且卡片底边越界时，按差值滚动现有滚动容器——不新增滚动层、不 sticky、不改尺寸、不隐藏内容。实测 45 行时卡片底边 841.59→772.93（<789），760×460 窗口发送按钮 436.26（<460），清空后回到 scrollTop 0 且文本区 52px。手动向上滚动不会被抢回。
+- **侧栏会话悬停卡**。[session-preview-styles.js](../plugins/cds-theme/client/src/session-preview-styles.js) 用宿主自己的 `--dsh-hover-preview-fade` 中间变量 + `[data-slot="sidebar.session.row.hover"]` 结构定位到那张卡，替换宿主写死的 `#2C2C2E` 深色底与 `#fff/#cfd3d6/#adb2b8` 三档冷灰，改为 `bg-overlay` / `label-primary / secondary / tertiary` / `radius-lg` / `elevation-prominent`。只改颜色与圆角，不碰 display、position、pointer-events，普通短 tooltip 不匹配。
+- **测试**：主题 547、Shell 157、usage 114 全过；主题 verify、仓库 audit、`git diff --check` 通过。新增 4 条反向证明（旧的不同步 owner、折叠态也搬按钮、滚动可见性缺失、沿用写死深色）都先让测试变红再恢复绿。`hero-composer.test.mjs` 与 `session-preview.test.mjs` 已接入 `npm test`。
+- **限制**：这台机器上宿主的会话悬停预览卡当前不渲染（hover 2.5s 后 `[data-slot="sidebar.session.row.hover"]` 仍不存在），所以该项只有静态与单测覆盖，没有对比截图；其余三类均为已安装包的真实界面验证。
+
 ## 2026-10-23：轨迹入口与复制相邻，收紧用量面板
 
 原生工具、Shell 和编辑/新建文件卡片的轨迹入口现为 18×18 控件内的 12×12 SVG，统一放在复制左侧、间隔约 8px，同一面板悬停时显示，移开即隐藏。编辑卡片的入口移到复制所在的标题行；正文里不再留第二个入口或按钮行。

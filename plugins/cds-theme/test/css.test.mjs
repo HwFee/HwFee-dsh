@@ -441,8 +441,14 @@ test('every copy surface reveals only on hover, including an opened diff with re
     const reveal = rules.filter(r => r.selector.includes('[' + hook + ']') && /opacity:\s*1(?:\s*!important)?\s*;/.test(r.body))
     assert.ok(reveal.length, 'expected hover reveal for ' + hook)
     for (const rule of reveal) {
+      // A rule with no `:hover` is allowed ONLY as wrapper neutralisation: it
+      // holds an outer band at full opacity so the BUTTONS own the fade, and it
+      // must also take itself out of hit-testing. Anything else would be a
+      // control that stays visible without a pointer.
+      const neutralised = /pointer-events:\s*none(?:\s*!important)?\s*;/.test(rule.body)
       for (const selector of rule.selector.split(',')) {
-        assert.ok(selector.includes(':hover'), 'copy control stays visible without hover: ' + selector)
+        assert.ok(selector.includes(':hover') || neutralised,
+          'copy control stays visible without hover: ' + selector)
         assert.ok(!selector.includes(':focus'), 'retained focus must not reveal a copy control: ' + selector)
       }
     }
