@@ -104,6 +104,9 @@ export function createCard({ React, toolName, readSpec }) {
       setPending(null)
 
       const theme = readThemeSnapshot(view)
+      // Match the embedded document's scheme, keeping its transparent canvas
+      // transparent in Chromium when the host changes between light and dark.
+      element.style.colorScheme = theme.dark === true ? 'dark' : 'light'
 
       /**
        * THE FRAME MAY TRY TO NAVIGATE ITSELF, and the CSP is what stops it.
@@ -166,6 +169,7 @@ export function createCard({ React, toolName, readSpec }) {
 
       view.addEventListener('message', onMessage)
       const stopTheme = observeTheme(view, (snapshot) => {
+        element.style.colorScheme = snapshot.dark === true ? 'dark' : 'light'
         const target = element.contentWindow
         if (target === null) return
         target.postMessage({ type: 'theme', token: tokenRef.current, theme: snapshot }, '*')

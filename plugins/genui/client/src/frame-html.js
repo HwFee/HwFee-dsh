@@ -34,6 +34,7 @@ import { encodeCssForStyle, encodeJsonForScript } from './frame-bridge.js'
 import { RUNTIME_JS } from './frame/runtime.generated.js'
 import { VENDOR_CSS } from './vendor/visualize.css.js'
 import { CARD_CSS } from './styles.js'
+import { UI_KIT_CSS } from './frame/ui-kit-css.js'
 
 /** Nonce length in bytes; 16 bytes of base36 is ~25 characters. */
 const NONCE_BYTES = 16
@@ -183,7 +184,7 @@ export function frameCsp(nonce) {
 export function buildFrameDocument({ code, token, theme, nonce }) {
   const actualNonce = typeof nonce === 'string' && nonce !== '' ? nonce : createNonce()
   const payload = encodeJsonForScript({ code, token, theme: theme ?? { vars: {}, base: {}, dark: false } })
-  const css = encodeCssForStyle(FRAME_CSS + '\n' + CARD_CSS + '\n' + VENDOR_CSS)
+  const css = encodeCssForStyle(FRAME_CSS + '\n' + CARD_CSS + '\n' + VENDOR_CSS + '\n' + UI_KIT_CSS)
 
   return [
     '<!doctype html>',
@@ -196,7 +197,7 @@ export function buildFrameDocument({ code, token, theme, nonce }) {
     `<style nonce="${actualNonce}">${css}</style>`,
     '</head>',
     '<body>',
-    '<div id="root"></div>',
+    '<div id="root" class="dsh-genui-card"></div>',
     `<script type="application/json" id="dsh-genui-payload">${payload}</script>`,
     `<script nonce="${actualNonce}">${RUNTIME_JS}</script>`,
     '</body>',

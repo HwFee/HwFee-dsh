@@ -32,6 +32,8 @@
 
 import * as React from 'react'
 import { createRoot } from 'react-dom/client'
+import { createFrameThemeApplier } from './theme.js'
+import { createUIKit } from './ui-kit.js'
 import { observeInvisibleText } from '../legibility.js'
 
 /** Payload element id. The parent writes this JSON; the frame reads it once. */
@@ -132,7 +134,7 @@ function compile(code, { interact, timers }) {
   let body
   try {
     // eslint-disable-next-line no-new-func -- the plugin's feature is "the model writes React"
-    body = new Function('React', 'h', 'interact', 'timers', `'use strict';\n${code}`)
+    body = new Function('React', 'h', 'interact', 'timers', 'ui', `'use strict';\n${code}`)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     throw new Error(
@@ -141,8 +143,9 @@ function compile(code, { interact, timers }) {
     )
   }
 
+  const ui = createUIKit(React)
   function Card() {
-    const result = body(React, React.createElement, interact, timers.api)
+    const result = body(React, React.createElement, interact, timers.api, ui)
     if (typeof result === 'function') {
       try {
         if (/^[A-Z]/.test(result.name ?? '') || result.prototype?.isReactComponent !== undefined) {
@@ -192,26 +195,7 @@ class CardBoundary extends React.Component {
  *
  * @param {{ vars?: object, dark?: boolean, base?: object }} snapshot the theme
  */
-function applyTheme(snapshot) {
-  const root = document.documentElement
-  const vars = snapshot?.vars ?? {}
-  for (const [name, value] of Object.entries(vars)) {
-    // Only custom properties from the host's own `--dsw-*` / `--dsh-*` surface.
-    if (typeof name !== 'string' || !/^--(dsw|dsh)-[a-z0-9-]+$/.test(name)) continue
-    if (typeof value !== 'string' || value.length > 200) continue
-    root.style.setProperty(name, value)
-  }
-  const base = snapshot?.base ?? {}
-  const body = document.body
-  for (const [prop, value] of Object.entries(base)) {
-    if (typeof value !== 'string' || value.length > 200) continue
-    if (prop !== 'font-family' && prop !== 'font-size' && prop !== 'line-height' && prop !== 'letter-spacing') continue
-    body.style.setProperty(prop, value)
-  }
-  if (snapshot?.dark === true) root.setAttribute('data-ds-dark-theme', '')
-  else root.removeAttribute('data-ds-dark-theme')
-  root.style.colorScheme = snapshot?.dark === true ? 'dark' : 'light'
-}
+const applyTheme = createFrameThemeApplier(document)
 
 /**
  * The frame's entry point.

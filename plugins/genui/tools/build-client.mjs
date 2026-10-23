@@ -29,7 +29,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { buildSync } from 'esbuild'
+import { build, buildSync } from 'esbuild'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const ENTRY = join(root, 'client', 'src', 'index.js')
@@ -79,14 +79,25 @@ export function frameRuntimeArtifact() {
   return JSON.stringify({ js: buildFrameRuntime() }) + '\n'
 }
 
-export function buildArtifact() {
-  const result = buildSync({
+export async function buildArtifact(frameRuntime = frameRuntimeArtifact()) {
+  const result = await build({
     absWorkingDir: root,
     entryPoints: ['client/src/index.js'],
     bundle: true,
     format: 'cjs',
     platform: 'neutral',
     external: ['react'],
+    // The outer artifact must embed THIS build's frame, not yesterday's JSON.
+    // Inject it in memory so --check is read-only and a single build suffices.
+    plugins: [{
+      name: 'genui-current-frame',
+      setup(build) {
+        build.onLoad({ filter: /runtime\.bundle\.json$/ }, args => {
+          if (args.path !== FRAME_OUT) return undefined
+          return { contents: frameRuntime, loader: 'json' }
+        })
+      },
+    }],
     legalComments: 'inline',
     write: false,
     logLevel: 'warning',
@@ -109,8 +120,8 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === join(proces
 
 if (isMain) {
   const check = process.argv.includes('--check')
-  const artifact = buildArtifact()
   const frameRuntime = frameRuntimeArtifact()
+  const artifact = await buildArtifact(frameRuntime)
 
   if (check) {
     let stale = false

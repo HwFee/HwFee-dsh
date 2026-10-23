@@ -66,6 +66,9 @@ function profile({ bundles, deps, patch = '- id: x\n  name: "@deepseek-ai/dsh-ba
       env: { ...process.env, DSH_HOME: dir, APPDATA: join(dir, 'no-appdata') },
       encoding: 'utf8',
     }),
+    runJson: () => JSON.parse(spawnSync(process.execPath, [PREFLIGHT, '--profile', 'test', '--json'], {
+      env: { ...process.env, DSH_HOME: dir, APPDATA: join(dir, 'no-appdata') }, encoding: 'utf8',
+    }).stdout),
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   }
 }
@@ -87,7 +90,10 @@ test('a healthy profile passes', function () {
   try {
     const result = p.run()
     assert.equal(result.status, 0, result.stdout + result.stderr)
-    assert.match(result.stdout, /All checks passed/)
+    const report = p.runJson()
+    assert.equal(report.findings.filter(item => item.level === 'fail').length, 0)
+    assert.ok(report.findings.filter(item => item.level === 'warn').every(item => item.check === 'freshness'),
+      'only independent checkout freshness hints may accompany a healthy profile')
   } finally {
     p.cleanup()
   }

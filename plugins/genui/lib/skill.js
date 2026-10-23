@@ -62,7 +62,8 @@ Draw a card only when BOTH are true:
 - **A static structure that labeled nodes and edges explain.** A diagram whose
   nodes and arrows carry all the meaning is a bulleted list with arrows — write
   it as a list, or use the host's Mermaid fenced block if it really is a graph.
-- **Explanation, steps, code, greetings, apologies, summaries.** Those are prose.
+- **Plain explanation, steps, code, greetings, apologies, summaries.** Those are prose.
+  An explanation with useful adjustable parameters can use a simulator or chart.
   A card that restates your own paragraph is the most common failure.
 - **One number, or two numbers to compare in a sentence.** Write the sentence.
 
@@ -98,6 +99,42 @@ cannot show. Do **not**:
 If the card has tabs, the tabs already organise the content — do not narrate
 what each tab contains. The reply text is the frame around the card, not a
 transcript of it.
+
+## Start with the built-in ui kit
+
+The frame provides six tested React components in \`ui\`. They inherit theme,
+resize to the conversation width, and work without imports or network requests.
+Prefer them to rebuilding a chart or control from DOM nodes. Keep ordinary \`h\`
+code for layouts and interfaces these components do not cover.
+
+| Component | Props |
+|---|---|
+| \`ui.BarChart\` | \`data: [{label: string, value: number}]\`, \`label\`, optional \`unit\`, \`onSelect(item, index)\`, \`emptyText\`. Click a bar to select it; negative values use a shared zero axis. |
+| \`ui.LineChart\` | Same props; hover, focus or click a point to read its value. |
+| \`ui.Metric\` | \`label\`, \`value\`, optional \`detail\`. Use inside a larger answer, not a card for one number alone. |
+| \`ui.Tabs\` | \`items: ['Monthly','Yearly']\` or \`[{label,value}]\`, \`value\`, \`onChange(value)\`, optional \`label\`. A selectable button group; caller renders the chosen content. |
+| \`ui.Select\` | \`label\`, \`options\` (strings or \`{label,value}\`), \`value\`, \`onChange(value)\`. Values are strings. |
+| \`ui.Range\` | \`label\`, numeric \`value\`, \`onChange(number)\`, optional \`min\`, \`max\`, \`step\`, \`unit\`. |
+
+Example: an adjustable scenario with a real chart, not a static drawing:
+
+\`\`\`js
+const [growth, setGrowth] = React.useState(6)
+const [view, setView] = React.useState('Trend')
+const data = Array.from({length: 6}, (_, i) => ({
+  label: 'Year ' + (i + 1), value: 100 * Math.pow(1 + growth / 100, i + 1)
+}))
+return h('div', {style: {display: 'grid', gap: 20}},
+  h(ui.Range, {label: 'Annual growth', value: growth, min: -20, max: 30, unit: '%', onChange: setGrowth}),
+  h(ui.Tabs, {items: ['Trend', 'Compare'], value: view, onChange: setView, label: 'Chart view'}),
+  h(view === 'Trend' ? ui.LineChart : ui.BarChart, {label: 'Illustrative growth scenario', data}))
+\`\`\`
+
+This example is illustrative data. For actual user data, fetch/read it with host
+tools first, then embed that data in the code. Never present a scenario as a fact.
+Local chart/view/range changes stay local; do not call \`interact\` for each hover,
+slider movement or tab switch. Use \`interact\` only for an explicit action that
+should continue the conversation, such as 'Use this configuration'.
 
 ## What the code is
 
@@ -363,8 +400,8 @@ rule — the answer should look like it was always there.
 - **Fixed pixel height** — clips in a narrow column. Let content size it.
 - **Repeating the card as prose** — say what to notice, not what is already on screen.
 - **A card for a one-line answer** — write the line.
-- **A button that only changes state** — the user clicked it to tell you
-  something. Add \`interact\`, or drop the button.
+- **A dead control** — a control must change what the user sees or offer an
+  explicit follow-up action. Local exploration needs no \`interact\` request.
 - **A wall of nested divs** — a card is a summary surface. If it needs scrolling
   inside the card, the detail belongs in your reply.
 `

@@ -23,6 +23,7 @@
 
 import { buildUiSpec, MAX_CODE_BYTES, TOOL_NAME } from './spec.js'
 import { GENUI_SKILL, SKILL_NAME } from './skill.js'
+import { uiPromptSection } from './guidance.js'
 
 export const name = 'dsh-genui'
 
@@ -45,10 +46,14 @@ export const inject = ['tools']
  * @param ctx host context carrying the tool registry
  */
 export function apply(ctx) {
-  const disposeTool = ctx.tools.register(createRenderUiTool())
-  ctx.effect(() => () => {
-    disposeTool()
-  }, 'dsh-genui: render_ui tool')
+  ctx.effect(() => ctx.tools.register(createRenderUiTool()), 'dsh-genui: render_ui tool')
+
+  // Tools itself depends on systemPrompt in DSH, so it is ready when tools is.
+  // Optional lookup preserves tool-only compositions and avoids a new dependency.
+  const prompt = typeof ctx.get === 'function' ? ctx.get('systemPrompt') : undefined
+  if (typeof prompt?.section === 'function') {
+    ctx.effect(() => prompt.section(uiPromptSection()), 'dsh-genui: proactive UI guidance')
+  }
 
   // The skill registry is optional. A profile that ships no skill service (a
   // minimal agent preset, a headless run) still gets the tool; the model then
@@ -71,7 +76,7 @@ export function apply(ctx) {
  * the whole point of this plugin is that the model may compose arbitrary React,
  * not that it picks from a fixed catalog. That freedom is why the client half
  * evaluates the snippet inside a restricted scope and wraps it in an error
- * boundary — see `client/src/sandbox.js`.
+ * boundary — see `client/src/frame/runtime.js`.
  *
  * @returns the `render_ui` tool definition
  */
@@ -96,7 +101,9 @@ function createRenderUiTool() {
       + '(createElement), `interact(text)` to send a choice back as a user message, and scoped '
       + '`timers`. It runs in a sandboxed frame inside the card: no network, no host storage, and '
       + '`interact` asks the user to confirm before anything is sent. '
-      + 'Load the `generative-ui` skill before your first call: it carries the whole judgment '
+      + 'The built-in `ui` kit provides BarChart, LineChart, Metric, Tabs, Select and Range. '
+      + 'Prefer these themed components over rebuilding controls. '
+      + 'Load the `generative-ui` skill before your first call when available: it carries the whole judgment '
       + 'ladder, the styling rules, and the failure modes that produce a blank card.',
     // RAW JSON SCHEMA, NOT THE `defineTool` PARAMETER SPEC.
     //
@@ -131,6 +138,7 @@ function createRenderUiTool() {
           description:
             'JavaScript body of a function that returns React elements. Build elements with '
             + '`React.createElement` or the provided `h` alias — JSX is NOT available. '
+            + 'Prefer built-in ui.BarChart, ui.LineChart, ui.Metric, ui.Tabs, ui.Select and ui.Range. '
             + 'Style with the host theme tokens listed in the skill; do not hardcode colors.',
         },
         rationale: {

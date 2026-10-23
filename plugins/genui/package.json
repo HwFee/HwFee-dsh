@@ -61,7 +61,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/render-tool.test.mjs && node test/frame.test.mjs && node test/theme-snapshot.test.mjs && node test/answer-node.test.mjs && node test/skill.test.mjs && node test/vendor-css.test.mjs && node test/typography.test.mjs && node test/title-placement.test.mjs && node test/legibility.test.mjs && node test/tools-preflight.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/render-tool.test.mjs && node test/frame.test.mjs && node test/theme-snapshot.test.mjs && node test/answer-node.test.mjs && node test/skill.test.mjs && node test/vendor-css.test.mjs && node test/typography.test.mjs && node test/title-placement.test.mjs && node test/legibility.test.mjs && node test/tools-preflight.test.mjs && node test/guidance.test.mjs && node test/ui-kit.test.mjs && node test/frame-theme.test.mjs && node test/build-frame.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10",

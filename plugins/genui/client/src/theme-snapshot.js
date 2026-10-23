@@ -30,6 +30,7 @@
 
 import { VENDOR_CSS } from './vendor/visualize.css.js'
 import { CARD_CSS } from './styles.js'
+import { UI_KIT_CSS } from './frame/ui-kit-css.js'
 
 /**
  * Tokens the skill documents for inline styles.
@@ -91,6 +92,7 @@ function varNamesIn(css) {
 export function themeTokenNames() {
   const names = new Set(SKILL_TOKENS)
   for (const name of varNamesIn(CARD_CSS)) names.add(name)
+  for (const name of varNamesIn(UI_KIT_CSS)) names.add(name)
   for (const name of varNamesIn(VENDOR_CSS)) names.add(name)
   return [...names].filter((name) => /^--(dsw|dsh|ds|viz)-[a-z0-9-]+$/.test(name)).sort()
 }
