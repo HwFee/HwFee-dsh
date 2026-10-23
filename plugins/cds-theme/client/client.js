@@ -171,7 +171,8 @@ window.__ModuleLoader__.load({
       thinkingLabelBlue: false,
       pasteAsFile: true,
       preferThemeCjk: true,
-      heroRipple: true
+      heroRipple: true,
+      diffPreview: true
     };
     var ACCENT_IDS = ["clay", "ochre", "sand", "graphite"];
     function clampWarmth(value) {
@@ -209,7 +210,11 @@ window.__ModuleLoader__.load({
         // Existing profiles adopt the corrected default; only boolean false opts out.
         preferThemeCjk: input.preferThemeCjk === void 0 ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
         // The blank-session backdrop defaults on; a stored false turns it off.
-        heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false
+        heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
+        // The turn-changes hover preview defaults on. A stored false hides the
+        // preview and leaves the edit card itself alone: the card is the record of
+        // what changed, the preview is the convenience.
+        diffPreview: input.diffPreview === void 0 ? DEFAULT_STATE.diffPreview : input.diffPreview !== false
         // Markdown is fixed component styling now; its former setting is ignored.
         // Any other key in an old payload is ignored. Every retired switch field is
         // dropped here: `compactHero` (its runtime is gone — the new-session layout
@@ -2671,6 +2676,319 @@ window.__ModuleLoader__.load({
     `;
     }
 
+    // client/src/workspace-preview-styles.js
+    var WORKSPACE_PREVIEW_ROOT = 'body [style*="--dsh-hover-preview-fade"]:has(> div > :nth-child(3):last-child):not(:has([data-slot]))';
+    function workspacePreviewRules() {
+      const root = WORKSPACE_PREVIEW_ROOT;
+      return `
+    /* ---- sidebar workspace preview: current CDS surface and text roles ---- */
+    ${root} {
+      background: var(--dsw-alias-bg-overlay) !important;
+      color: var(--dsw-alias-label-primary) !important;
+      border: 0 !important;
+      border-radius: var(--dsw-radius-lg) !important;
+      box-shadow: var(--dsw-elevation-prominent) !important;
+    }
+    ${root} > div > div:not(:first-child) {
+      color: var(--dsw-alias-label-tertiary) !important;
+    }
+    ${root} > div > div:first-child {
+      color: var(--dsw-alias-label-primary) !important;
+    }
+    `;
+    }
+
+    // client/src/changes-preview-styles.js
+    var CHANGES_PREVIEW_ROOT = "body [data-changes-hover-preview]";
+    function changesPreviewRules(state) {
+      if (state !== void 0 && state !== null && state.diffPreview === false) {
+        return `
+    /* ---- turn-changes hover preview: off --------------------------------- */
+    ${CHANGES_PREVIEW_ROOT} { display: none !important; }
+    `;
+      }
+      const root = CHANGES_PREVIEW_ROOT;
+      return `
+    /* ---- turn-changes hover preview: the edit card's own frame and rhythm ---- */
+    ${root} {
+      box-sizing: border-box;
+      border: 0.5px solid var(--dsw-alias-border-l2) !important;
+      border-radius: var(--dsw-radius-lg) !important;
+      /* THE SURFACE TOKEN HAS TO CARRY ITS OWN FALLBACK HERE. --cds-card-surface
+         and the two git washes are declared on [data-conversation-content], and
+         this panel is a child of body \u2014 measured: the variable reads back EMPTY
+         inside the portal. The fallbacks are the host's own file-diff tokens, which
+         is what the panel already paints with, so with refinement off nothing moves.
+         --dsw-alias-bg-layer-1 is the same value the theme assigns
+         --cds-card-surface (#ffffff light / #1a1a19 dark), so the two modes stay
+         in step instead of pinning a light literal. */
+      background: var(--cds-card-surface, var(--dsw-alias-bg-layer-1)) !important;
+      color: var(--dsw-alias-label-primary) !important;
+      /* THE SAME SHORTHAND THE EDIT CARD USES, not a hand-written 12px/1.6. The
+         token resolves to 12px/17px (measured in the running app), i.e. the host's
+         own code-block small size \u2014 12 x 1.6 would be 19.2px and every row would sit
+         2.2px taller than the card it is being compared against. The literal is the
+         fallback for a host that does not publish the token.
+         The shorthand resets the family, so the explicit family follows it, exactly
+         as diffCardRules() writes those two lines. */
+      font: var(--dsw-font-markdown-code-block-small, 12px/1.6 var(--ds-font-family-code)) !important;
+      font-family: var(--ds-font-family-code) !important;
+      /* REDECLARED ON THE CARD, the pattern diffCardRules() already uses. These
+         two washes are declared on [data-conversation-content]; this panel is
+         portaled to body, so it never inherits them and a bare var() is dropped.
+         Measured before this: the add row still carried the HOST's 10% mix while the
+         edit card's row carried the theme's 12%. Declaring them here is what makes
+         the two rows the same colour instead of merely both-green. */
+      --cds-bg-git-added: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+      --cds-bg-git-removed: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+      overflow: hidden !important;
+      max-height: 280px;
+    }
+    /* The path band: a caption on the code surface, not a toolbar over it. */
+    ${root} > div:first-child {
+      height: auto !important;
+      min-height: 0 !important;
+      padding: 6px 10px !important;
+      gap: 6px !important;
+      border-bottom: 0.5px solid var(--dsw-alias-border-l1) !important;
+      background: transparent !important;
+    }
+    ${root} [data-changes-preview-path] {
+      color: var(--dsw-alias-label-caption) !important;
+      font-family: var(--ds-font-family-code) !important;
+      font-size: 11px !important;
+      line-height: 18px !important;
+    }
+    /* The scroll body: the card's own 8px block padding, no side padding, so a
+       row's wash reaches the frame exactly as it does in the edit card. */
+    ${root} > div:last-child,
+    ${root} [class*="_body"] {
+      padding: 8px 0 !important;
+      font: inherit !important;
+      overflow: auto !important;
+    }
+    ${root} [class*="_line"],
+    ${root} [class*="_sideLine"],
+    ${root} [class*="_splitLine"] {
+      min-height: 1lh !important;
+      line-height: 1lh !important;
+      font: inherit !important;
+    }
+    ${root} [class*="_hunk"] { margin-bottom: 8px !important; }
+    ${root} [class*="_hunkHeader"] {
+      padding: 2px 10px !important;
+      color: var(--dsw-alias-label-tertiary) !important;
+      font: inherit !important;
+    }
+    /* The gutter: numbers on the card surface, in the state colour \u2014 the cell wash
+       and the 3px inset marker are the host's own idiom and read as a second
+       surface here. */
+    ${root} [class*="_number"] {
+      padding: 0 8px 0 2px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      color: var(--dsw-alias-label-caption) !important;
+      font-size: 11px !important;
+      font-variant-numeric: tabular-nums;
+    }
+    ${root} [class*="_add"] [class*="_number"] { color: var(--dsw-alias-state-success-primary) !important; }
+    ${root} [class*="_del"] [class*="_number"] { color: var(--dsw-alias-state-error-primary) !important; }
+    /* The glyph column is punctuation, so it takes the muted caption ink \u2014 the edit
+       card paints it from the shiki punctuation token, but this panel has no token
+       spans to declare that palette for, and the guard forbids a third site. */
+    ${root} [class*="_sign"] { color: var(--dsw-alias-label-caption) !important; }
+    /* The wash: the same 12% mix the edit card uses, on the row and not the cell.
+       The fallbacks are load-bearing for the same reason as the surface above: the
+       --cds-bg-git-* pair lives on [data-conversation-content], so inside this
+       portal the bare var() resolved to nothing and the declaration was dropped \u2014
+       the measured add-row fill was still the HOST's own 10% mix, i.e. this rule
+       was silently inert. Falling back to the host's file-diff tokens keeps the
+       two surfaces identical when refinement is off, and lets the theme's 12% mix
+       take over when it is on. */
+    ${root} [class*="_add"] { background: var(--cds-bg-git-added, var(--dsw-alias-file-diff-added-bg)) !important; }
+    ${root} [class*="_del"] { background: var(--cds-bg-git-removed, var(--dsw-alias-file-diff-deleted-bg)) !important; }
+    ${root} [class*="_context"] [class*="_text"] { color: var(--dsw-alias-label-secondary) !important; }
+    ${root} [class*="_text"] { padding-right: 10px !important; font: inherit !important; }
+    ${root} [class*="_note"] {
+      padding: 4px 10px 8px !important;
+      color: var(--dsw-alias-label-tertiary) !important;
+      font-family: var(--ds-font-family-code) !important;
+      font-size: 11px !important;
+      line-height: 18px !important;
+    }
+    `;
+    }
+
+    // client/src/tobottom-styles.js
+    var TOBOTTOM_SCOPE = "[data-conversation-content]";
+    var TOBOTTOM_VIEW = TOBOTTOM_SCOPE + ' [data-slot="conversation.view"]';
+    var PATH_SLOT = ' [data-slot="conversation.view"] > * > *:has(> button:only-child)';
+    var PATH_BUTTON = PATH_SLOT + " > button:only-child";
+    var TOBOTTOM_SLOT = TOBOTTOM_SCOPE + PATH_SLOT;
+    var TOBOTTOM_BUTTON = TOBOTTOM_SCOPE + PATH_BUTTON;
+    var RUNNING_MARKER = "data-chat-running";
+    var STREAMING_MARKER = "data-streaming";
+    var IS_ANSWERING = ":is(:has([" + RUNNING_MARKER + "]), :has([" + STREAMING_MARKER + "]))";
+    var IS_IDLE = ":not(:has([" + RUNNING_MARKER + "])):not(:has([" + STREAMING_MARKER + "]))";
+    var ANSWERING_GUARD = TOBOTTOM_SCOPE + IS_ANSWERING;
+    var IDLE_GUARD = TOBOTTOM_SCOPE + IS_IDLE;
+    var DOT_ANIMATION = "cds-tobottom-dot";
+    var DOT_SIZE = "4px";
+    var DOT_GAP = "6px";
+    var DOT_CYCLE_MS = 1200;
+    var DOT_DELAYS = ["0ms", "160ms", "320ms"];
+    var DOT_RISE = "-3px";
+    var PULSE = "var(--cds-ease-pulse, " + EASING.pulse + ")";
+    var SNAP = "var(--ds-ease-snap, " + EASING.snap + ")";
+    function answeringButton() {
+      return ANSWERING_GUARD + PATH_BUTTON;
+    }
+    function idleButton() {
+      return IDLE_GUARD + PATH_BUTTON;
+    }
+    function dotKeyframes() {
+      return [
+        "@keyframes " + DOT_ANIMATION + " {",
+        "  0% {",
+        "    transform: translateY(0);",
+        "    animation-timing-function: " + SNAP + ";",
+        "  }",
+        "  36% {",
+        "    transform: translateY(" + DOT_RISE + ");",
+        "    animation-timing-function: " + PULSE + ";",
+        "  }",
+        "  72%, 100% {",
+        "    transform: translateY(0);",
+        "  }",
+        "}"
+      ].join("\n");
+    }
+    function toBottomRules() {
+      const answering = answeringButton();
+      const idle = idleButton();
+      const dotBox = [
+        '  content: "";',
+        "  flex: none;",
+        "  width: " + DOT_SIZE + ";",
+        "  height: " + DOT_SIZE + ";",
+        "  border-radius: 50%;",
+        "  background: currentColor;",
+        "  animation: " + DOT_ANIMATION + " " + DOT_CYCLE_MS + "ms " + PULSE + " infinite;"
+      ].join("\n");
+      return [
+        "/* ---- back to bottom: centred seat, streaming dots, down affordance --- */",
+        // 1. Centre the seat on the chat column. The host right-aligns it with a
+        //    flex-end seat plus an inline padding-right derived from the composer
+        //    clearance; both go, and the full-width seat centres instead. Vertical
+        //    geometry is the host's and is not touched: the button already floats in
+        //    the gap above the composer, and moving it down would cover the composer.
+        TOBOTTOM_SLOT + " {",
+        "  justify-content: center !important;",
+        "  padding-left: 0 !important;",
+        "  padding-right: 0 !important;",
+        "}",
+        // 2. THE CONTROL IS LIGHTER THAN THE HOST'S DEFAULT. The host draws a filled
+        //    white plate with a 1px hard ring (0 0 0 1px) plus two drop shadows; at
+        //    34px that reads as a solid chip floating over the transcript. The theme's
+        //    own floating controls use the raised surface with the soft elevation and
+        //    NO hard ring, so this matches them: one surface token, one shadow tier,
+        //    a hairline instead of an outline ring. Nothing here changes the box size
+        //    or position — only weight.
+        TOBOTTOM_BUTTON + " {",
+        "  cursor: pointer !important;",
+        "  background: var(--dsw-alias-bg-layer-1) !important;",
+        "  box-shadow: var(--dsw-elevation-soft) !important;",
+        "  border: 0.5px solid var(--dsw-alias-border-l1) !important;",
+        "  color: var(--dsw-alias-label-secondary) !important;",
+        "  transition: background-color 120ms " + SNAP + ", color 120ms " + SNAP + ",",
+        "    box-shadow 120ms " + SNAP + ";",
+        "}",
+        // Hover lifts it a step instead of deepening the shadow: the tier change is
+        // what the rest of the theme does on hover.
+        TOBOTTOM_BUTTON + ":hover {",
+        "  background: var(--dsw-alias-bg-layer-2) !important;",
+        "  color: var(--dsw-alias-label-primary) !important;",
+        "}",
+        // 3. Idle: the chevron dips on hover. Guarded by IDLE so it can never fight
+        //    the dots' own transform while the assistant is answering.
+        idle + " > svg {",
+        "  transition: transform 140ms " + SNAP + ";",
+        "}",
+        idle + ":hover > svg {",
+        "  transform: translateY(2px);",
+        "}",
+        // 4. Answering: the chevron becomes the middle dot and two pseudos appear
+        //    around it. `gap` keeps the group centred inside the fixed-size button;
+        //    nothing here can change the button's outside geometry.
+        answering + " {",
+        "  gap: " + DOT_GAP + ";",
+        "}",
+        // HOVERING WHILE BUSY MUST SHOW THE AFFORDANCE AGAIN. The dots say "working",
+        // but the pointer says "I am about to click this", so the control has to
+        // answer with what the click will do. Hover therefore drops the dots and
+        // restores the downward chevron the button has when idle; the wave resumes
+        // when the pointer leaves.
+        answering + ":hover {",
+        "  gap: 0;",
+        "}",
+        answering + " > svg {",
+        "  flex: none;",
+        "  width: " + DOT_SIZE + ";",
+        "  height: " + DOT_SIZE + ";",
+        "  background: currentColor;",
+        "  border-radius: 50%;",
+        "  transform: translateY(0);",
+        "  animation: " + DOT_ANIMATION + " " + DOT_CYCLE_MS + "ms " + PULSE + " infinite;",
+        "  animation-delay: " + DOT_DELAYS[1] + ";",
+        "  transition: none;",
+        "}",
+        answering + " > svg > path {",
+        "  stroke: none;",
+        "}",
+        answering + "::before {",
+        dotBox,
+        "  animation-delay: " + DOT_DELAYS[0] + ";",
+        "}",
+        answering + "::after {",
+        dotBox,
+        "  animation-delay: " + DOT_DELAYS[2] + ";",
+        "}",
+        // The hovered-while-busy shape: no dots, the real chevron back, same box.
+        answering + ":hover::before,",
+        answering + ":hover::after {",
+        "  content: none;",
+        "  animation: none;",
+        "}",
+        answering + ":hover > svg {",
+        "  width: 16px;",
+        "  height: 16px;",
+        "  background: none;",
+        "  border-radius: 0;",
+        "  animation: none;",
+        "  transform: translateY(2px);",
+        "}",
+        answering + ":hover > svg > path {",
+        "  stroke: currentColor;",
+        "}",
+        dotKeyframes(),
+        // 5. Reduced motion means NOT MOVING, not moving slower: the three dots stay
+        //    as a static ellipsis (the state is still legible) and every transition
+        //    on this control is dropped.
+        "@media (prefers-reduced-motion: reduce) {",
+        "  " + TOBOTTOM_BUTTON + ",",
+        "  " + idle + " > svg,",
+        "  " + answering + " > svg,",
+        "  " + answering + ":hover > svg,",
+        "  " + answering + "::before,",
+        "  " + answering + "::after {",
+        "    animation: none !important;",
+        "    transition: none !important;",
+        "    transform: none !important;",
+        "  }",
+        "}"
+      ].join("\n");
+    }
+
     // client/src/styles.js
     function elevationRules(state) {
       const lines = [];
@@ -4395,15 +4713,39 @@ window.__ModuleLoader__.load({
     }
     function stockNeutralCardRules() {
       return [
-        "/* ---- dark cards that paint a stock neutral ------------------------- */",
-        "body[data-ds-dark-theme] {",
+        "/* ---- cards that paint a stock neutral ------------------------------- */",
+        "body {",
         "  /* plan cards */",
+        "  --plan-card-fill: var(--dsw-alias-bg-layer-2);",
+        "  --plan-card-hover: var(--dsw-alias-bg-layer-1);",
+        "  /* schedule cards */",
+        "  --card-fill: var(--dsw-alias-bg-layer-2);",
+        "  --card-hover: var(--dsw-alias-bg-layer-1);",
+        "  /* deliverables / changes cards: the header band needs a step against the",
+        "     body it sits on, or the card loses its own shape. */",
+        "  --changes-fill: var(--dsw-alias-bg-layer-2);",
+        "  --changes-hover: var(--dsw-alias-bg-layer-1);",
+        "}",
+        // Dark keeps the same two roles, but from the dark ladder.
+        "body[data-ds-dark-theme] {",
         "  --plan-card-fill: var(--dsw-alias-bg-layer-1);",
         "  --plan-card-hover: var(--dsw-alias-bg-layer-2);",
-        "  /* schedule cards */",
         "  --card-fill: var(--dsw-alias-bg-layer-1);",
         "  --card-hover: var(--dsw-alias-bg-layer-2);",
-        "  /* deliverables / changes cards */",
+        "  --changes-fill: var(--dsw-alias-bg-layer-1);",
+        "  --changes-hover: var(--dsw-alias-bg-layer-2);",
+        "}",
+        // THE CARD REDECLARES THE VARIABLE ON ITSELF, so a body-level rebinding loses
+        // on specificity: `.kuvljq_card { --changes-fill: … }` (0,1,0) beats
+        // `body { … }` (0,0,1) whatever the sheet order. Measured in the installed
+        // app, the header stayed #fcfcfb over a #ffffff body until the rebinding
+        // moved onto the card. `[data-changed-files]` is the host's own stable hook,
+        // so no salted class is involved.
+        "[data-changed-files] {",
+        "  --changes-fill: var(--dsw-alias-bg-layer-2);",
+        "  --changes-hover: var(--dsw-alias-bg-layer-1);",
+        "}",
+        "body[data-ds-dark-theme] [data-changed-files] {",
         "  --changes-fill: var(--dsw-alias-bg-layer-1);",
         "  --changes-hover: var(--dsw-alias-bg-layer-2);",
         "}"
@@ -4642,8 +4984,11 @@ window.__ModuleLoader__.load({
         statTypographyRules()
       );
       if (state.refine !== false) parts.push(sessionPreviewRules());
+      if (state.refine !== false) parts.push(workspacePreviewRules());
+      if (state.refine !== false) parts.push(changesPreviewRules(state));
       if (state.refine !== false) parts.push(toolChromeRules());
       parts.push(diffStatFamilyRules());
+      if (state.refine !== false) parts.push(toBottomRules());
       return parts.join("\n\n");
     }
     function createStyles({ getState, isThemeModeAvailable }) {
@@ -4736,6 +5081,8 @@ window.__ModuleLoader__.load({
       "preferThemeCjk.desc": "Use the embedded Noto Sans SC before system fallbacks in body text and code; the home greeting keeps Noto Serif SC. Off restores the previous order. Explicit font choices take priority.",
       "heroRipple.title": "Home backdrop with click ripples",
       "heroRipple.desc": "On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.",
+      "diffPreview.title": "Diff preview on hover",
+      "diffPreview.desc": 'Hovering a file row in the end-of-turn "Edited N files" card opens a comparison. Off hides that hover panel; the card and its per-file counts stay, and the edit card still shows the full diff.',
       "enabled.title": "Enable CDS theme",
       "enabled.desc": "Off releases every token override and restores the host skin.",
       // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -4790,6 +5137,8 @@ window.__ModuleLoader__.load({
       "preferThemeCjk.desc": "\u6B63\u6587\u4E0E\u4EE3\u7801\u4E2D\u7684\u4E2D\u6587\u4F18\u5148\u4F7F\u7528\u5185\u5D4C\u3001\u6821\u51C6\u5B57\u91CD\u7684\u601D\u6E90\u9ED1\u4F53\uFF0C\u9996\u9875\u95EE\u5019\u8BED\u4ECD\u7528\u601D\u6E90\u5B8B\u4F53\uFF1B\u5173\u95ED\u6062\u590D\u539F\u56DE\u9000\u987A\u5E8F\u3002\u624B\u52A8\u9009\u62E9\u7684\u5B57\u4F53\u59CB\u7EC8\u4F18\u5148\u3002",
       "heroRipple.title": "\u9996\u9875\u80CC\u666F\u70B9\u51FB\u6CE2\u7EB9",
       "heroRipple.desc": "\u65B0\u4F1A\u8BDD\u65F6\uFF0C\u95EE\u5019\u8BED\u4E0E\u8F93\u5165\u6846\u80CC\u540E\u6D6E\u51FA\u4E00\u5C42\u6DE1\u7684\u4EE3\u7801\u5B57\u5F62\uFF0C\u6BCF\u6B21\u70B9\u51FB\u4ECE\u5149\u6807\u5904\u8361\u5F00\u6C34\u6CE2\u3002\u8F93\u5165\u6846\u4F1A\u7565\u900F\uFF0C\u8BA9\u6CE2\u7EB9\u4ECE\u5E95\u4E0B\u900F\u51FA\u6765\u3002\u5173\u95ED\u5373\u6574\u5C42\u79FB\u9664\u3002",
+      "diffPreview.title": "\u60AC\u505C\u663E\u793A\u5DEE\u5F02\u9884\u89C8",
+      "diffPreview.desc": "\u9F20\u6807\u505C\u5728\u56DE\u5408\u7ED3\u675F\u300C\u6539\u52A8 N \u4E2A\u6587\u4EF6\u300D\u5361\u7247\u91CC\u7684\u6587\u4EF6\u884C\u4E0A\u65F6\uFF0C\u4F1A\u5F39\u51FA\u8BE5\u6587\u4EF6\u7684\u5DEE\u5F02\u5BF9\u6BD4\u3002\u5173\u95ED\u53EA\u662F\u4E0D\u518D\u5F39\u8FD9\u4E2A\u9884\u89C8\uFF1A\u5361\u7247\u4E0E\u6BCF\u884C\u589E\u5220\u6570\u7167\u5E38\u663E\u793A\uFF0C\u7F16\u8F91\u5361\u7247\u91CC\u7684\u5B8C\u6574\u5DEE\u5F02\u4E5F\u4ECD\u5728\u3002",
       "enabled.title": "\u542F\u7528 CDS \u4E3B\u9898",
       "enabled.desc": "\u5173\u95ED\u5373\u91CA\u653E\u5168\u90E8\u4EE4\u724C\u8986\u76D6\uFF0C\u754C\u9762\u56DE\u5230\u5BBF\u4E3B\u539F\u6837\u5F0F\u3002",
       // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------
@@ -5365,6 +5714,34 @@ window.__ModuleLoader__.load({
                 key: "heroRipple",
                 titleKey: "heroRipple.title",
                 descKey: "heroRipple.desc"
+              },
+              t: props.t
+            });
+          }
+        },
+        {
+          // The turn-changes hover preview is a CONVENIENCE, not a replication
+          // item: it exists to show a comparison without opening the sidebar. Its
+          // switch therefore only removes the preview, never the "Edited N files"
+          // card — that card is the turn's record of what changed, and a setting
+          // named after a preview must not take it away.
+          //
+          // ORDER 48: the next number after the last live row (44) that no retired
+          // row ever held. 45 is vacated with the markdown switch, 46/47 with the
+          // removed reference-derived looks, and 40/41 belong to usage-stats on this
+          // same page — reusing any of them would make a vacancy assertion read as a
+          // reordering of the settings page.
+          id: "dsh-cds-theme-diff-preview",
+          order: 48,
+          key: "diffPreview",
+          titleKey: "diffPreview.title",
+          descKey: "diffPreview.desc",
+          component: function BoundToggle(props) {
+            return React2.createElement(ToggleRow, {
+              slot: {
+                key: "diffPreview",
+                titleKey: "diffPreview.title",
+                descKey: "diffPreview.desc"
               },
               t: props.t
             });

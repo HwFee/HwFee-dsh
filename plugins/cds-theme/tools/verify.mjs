@@ -815,10 +815,11 @@ const checks = [
     buildCssFor(sanitize({ refine: false }), { themeModeAvailable: true }).includes(CUBE_HIDER)],
   ['without the theme service the hide rules disappear',
     !buildCssFor(sanitize({}), { themeModeAvailable: false }).includes('settings.general.item"] > *:has(')],
-  ['the theme-mode row and the nine knobs live on the appearance page, only enabled in General',
+  ['the theme-mode row and the ten knobs live on the appearance page, only enabled in General',
     // The view-tabs pill (46) and the split composer (47) were removed outright,
-    // rows and rules together; Markdown styling stays without its row (45).
-    verifyPanel.appearanceSlots.length === 10
+    // rows and rules together; Markdown styling stays without its row (45). The
+    // diff-preview switch (48) joined the appearance page later.
+    verifyPanel.appearanceSlots.length === 11
     && verifyPanel.generalSlots.length === 1
     && verifyPanel.generalSlots[0].id === 'dsh-cds-theme-enabled'],
   ['the removed reference-derived looks leave no row, key or rule behind',
