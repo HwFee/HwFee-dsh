@@ -79,6 +79,7 @@ export const DEFAULT_STATE = {
   pasteAsFile: true,
   preferThemeCjk: true,
   heroRipple: true,
+  diffPreview: true,
 }
 
 export const ACCENT_IDS = ['clay', 'ochre', 'sand', 'graphite']
@@ -131,6 +132,10 @@ export function sanitize(raw) {
     preferThemeCjk: input.preferThemeCjk === undefined ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
     // The blank-session backdrop defaults on; a stored false turns it off.
     heroRipple: input.heroRipple === undefined ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
+    // The turn-changes hover preview defaults on. A stored false hides the
+    // preview and leaves the edit card itself alone: the card is the record of
+    // what changed, the preview is the convenience.
+    diffPreview: input.diffPreview === undefined ? DEFAULT_STATE.diffPreview : input.diffPreview !== false,
     // Markdown is fixed component styling now; its former setting is ignored.
     // Any other key in an old payload is ignored. Every retired switch field is
     // dropped here: `compactHero` (its runtime is gone — the new-session layout

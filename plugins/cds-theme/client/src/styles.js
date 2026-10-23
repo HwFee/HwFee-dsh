@@ -10,6 +10,9 @@ import { RIPPLE_ATTR } from './ripple.js'
 import { markdownScopeRules } from './markdown-scope.js'
 import { toolChromeRules } from './tool-chrome-styles.js'
 import { sessionPreviewRules } from './session-preview-styles.js'
+import { workspacePreviewRules } from './workspace-preview-styles.js'
+import { changesPreviewRules } from './changes-preview-styles.js'
+import { toBottomRules } from './tobottom-styles.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -2239,7 +2242,7 @@ function stockBlueRules() {
 }
 
 /**
- * Dark-mode cards that paint a stock neutral instead of a themed surface.
+ * Cards that paint a stock neutral instead of a themed surface.
  *
  * Plan, Schedule and Deliverables cards each declare their own fill variable
  * and, in dark mode, point it at `--dsw-static-neutral-850` (#212123). That
@@ -2248,23 +2251,56 @@ function stockBlueRules() {
  * as slightly cold, which is exactly the "cold patch in a warm UI" this whole
  * pass is about.
  *
- * The light halves (`--dsw-static-neutral-50`, #fafafa) are left alone: against
- * the themed canvas #fcfcfb they differ by 1.017:1, i.e. not at all.
+ * THE LIGHT HALF IS NO LONGER LEFT ALONE. It used to be, on the argument that
+ * `--dsw-static-neutral-50` (#fafafa) against the themed canvas (#fcfcfb) is
+ * 1.017:1 — "not at all" a difference, therefore harmless. Measured on the real
+ * turn-changes card, that is exactly the problem: its HEADER is the only thing
+ * painted with the fill, and the card body under it is `bg-layer-1` (#ffffff).
+ * A 1.01:1 header over a white body is not a subtle tint, it is an invisible
+ * band — the card reads as one flat slab with a stray 60px of padding on top.
+ * Rebounding light mode to the nested surface (#f7f7f5) gives the header a
+ * 1.06:1 step against the body, which is what the host's own `#fafafa` over
+ * `#ffffff` was doing before the theme flattened it.
  *
- * Each of the three exposes a local variable, so rebinding it in dark mode is
- * contained to that card — no static token is touched.
+ * Each card exposes a local variable, so rebinding is contained to that card —
+ * no static token is touched, and nothing else that consumes the neutral ramp
+ * moves.
  */
 function stockNeutralCardRules() {
   return [
-    '/* ---- dark cards that paint a stock neutral ------------------------- */',
-    'body[data-ds-dark-theme] {',
+    '/* ---- cards that paint a stock neutral ------------------------------- */',
+    'body {',
     '  /* plan cards */',
+    '  --plan-card-fill: var(--dsw-alias-bg-layer-2);',
+    '  --plan-card-hover: var(--dsw-alias-bg-layer-1);',
+    '  /* schedule cards */',
+    '  --card-fill: var(--dsw-alias-bg-layer-2);',
+    '  --card-hover: var(--dsw-alias-bg-layer-1);',
+    '  /* deliverables / changes cards: the header band needs a step against the',
+    '     body it sits on, or the card loses its own shape. */',
+    '  --changes-fill: var(--dsw-alias-bg-layer-2);',
+    '  --changes-hover: var(--dsw-alias-bg-layer-1);',
+    '}',
+    // Dark keeps the same two roles, but from the dark ladder.
+    'body[data-ds-dark-theme] {',
     '  --plan-card-fill: var(--dsw-alias-bg-layer-1);',
     '  --plan-card-hover: var(--dsw-alias-bg-layer-2);',
-    '  /* schedule cards */',
     '  --card-fill: var(--dsw-alias-bg-layer-1);',
     '  --card-hover: var(--dsw-alias-bg-layer-2);',
-    '  /* deliverables / changes cards */',
+    '  --changes-fill: var(--dsw-alias-bg-layer-1);',
+    '  --changes-hover: var(--dsw-alias-bg-layer-2);',
+    '}',
+    // THE CARD REDECLARES THE VARIABLE ON ITSELF, so a body-level rebinding loses
+    // on specificity: `.kuvljq_card { --changes-fill: … }` (0,1,0) beats
+    // `body { … }` (0,0,1) whatever the sheet order. Measured in the installed
+    // app, the header stayed #fcfcfb over a #ffffff body until the rebinding
+    // moved onto the card. `[data-changed-files]` is the host's own stable hook,
+    // so no salted class is involved.
+    '[data-changed-files] {',
+    '  --changes-fill: var(--dsw-alias-bg-layer-2);',
+    '  --changes-hover: var(--dsw-alias-bg-layer-1);',
+    '}',
+    'body[data-ds-dark-theme] [data-changed-files] {',
     '  --changes-fill: var(--dsw-alias-bg-layer-1);',
     '  --changes-hover: var(--dsw-alias-bg-layer-2);',
     '}',
@@ -2871,8 +2907,19 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
   // baselines (`test/rule-baseline.mjs`) are byte-pinned slices of the sheet,
   // and inserting this block anywhere before them would break those slices.
   if (state.refine !== false) parts.push(sessionPreviewRules())
+  if (state.refine !== false) parts.push(workspacePreviewRules())
+  // Gated on the switch INSIDE the builder: the function returns '' when
+  // `diffPreview` is false, so the rule text and the toggle can never disagree.
+  if (state.refine !== false) parts.push(changesPreviewRules(state))
   if (state.refine !== false) parts.push(toolChromeRules())
   parts.push(diffStatFamilyRules())
+
+  // The floating "back to bottom" button: centred seat, streaming dots and the
+  // down affordance. APPENDED LAST for the same reason as the two blocks above —
+  // the byte-pinned slices in `test/rule-baseline.mjs` and the block lookups in
+  // `test/css.test.mjs` are anchored on marker comments, and inserting ahead of
+  // them would move what those slices contain.
+  if (state.refine !== false) parts.push(toBottomRules())
 
   return parts.join('\n\n')
 }

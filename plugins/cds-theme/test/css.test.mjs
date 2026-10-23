@@ -559,6 +559,31 @@ test('dark plan/schedule/deliverables cards follow the themed ladder', function 
   assert.ok(!rule.body.includes('--dsw-static-'), 'cards must not lean on a static token')
 })
 
+test('the light changes-card header keeps a visible step against its own body', function () {
+  // The turn-changes card paints ONLY its header with `--changes-fill`; the body
+  // under it is `bg-layer-1`. Hosting the header on `bg-layer-1` as well makes a
+  // 1.01:1 band — measured in the installed app as #fcfcfb over #ffffff, i.e. an
+  // invisible 60px strip that turns the card into one flat slab.
+  const css = buildCssFor(sanitize({}))
+  // The card redeclares the variable on ITSELF, so the rebinding has to land
+  // there: a body-level rule loses on specificity and changes nothing.
+  const rule = parseRules(css).find(function (r) {
+    return r.selector === '[data-changed-files]'
+  })
+  assert.ok(rule, 'the rebinding must target the card, not only the body')
+  assert.match(rule.body, /--changes-fill:\s*var\(--dsw-alias-bg-layer-2\)/,
+    'the header fill must be the nested surface, not the one the body uses')
+  assert.doesNotMatch(rule.body, /--changes-fill:\s*var\(--dsw-alias-bg-layer-1\)/,
+    'a header the same colour as its body is not a header')
+  assert.ok(!rule.body.includes('--dsw-static-'), 'no static neutral may drive the fill')
+  // Dark mode keeps the card-level seat too, from the dark ladder.
+  const dark = parseRules(css).find(function (r) {
+    return r.selector === 'body[data-ds-dark-theme] [data-changed-files]'
+  })
+  assert.ok(dark, 'the card needs a dark rebinding as well')
+  assert.match(dark.body, /--changes-fill:\s*var\(--dsw-alias-bg-layer-1\)/)
+})
+
 test('no rule uses a linear or generic-ease transition', function () {
   // CDS forbids `transition: all .3s linear` and friends.
   const state = sanitize({})

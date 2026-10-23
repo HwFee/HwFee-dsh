@@ -504,6 +504,34 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       },
     },
     {
+      // The turn-changes hover preview is a CONVENIENCE, not a replication
+      // item: it exists to show a comparison without opening the sidebar. Its
+      // switch therefore only removes the preview, never the "Edited N files"
+      // card — that card is the turn's record of what changed, and a setting
+      // named after a preview must not take it away.
+      //
+      // ORDER 48: the next number after the last live row (44) that no retired
+      // row ever held. 45 is vacated with the markdown switch, 46/47 with the
+      // removed reference-derived looks, and 40/41 belong to usage-stats on this
+      // same page — reusing any of them would make a vacancy assertion read as a
+      // reordering of the settings page.
+      id: 'dsh-cds-theme-diff-preview',
+      order: 48,
+      key: 'diffPreview',
+      titleKey: 'diffPreview.title',
+      descKey: 'diffPreview.desc',
+      component: function BoundToggle(props) {
+        return React.createElement(ToggleRow, {
+          slot: {
+            key: 'diffPreview',
+            titleKey: 'diffPreview.title',
+            descKey: 'diffPreview.desc',
+          },
+          t: props.t,
+        })
+      },
+    },
+    {
       id: 'dsh-cds-theme-enabled',
       order: 30,
       key: 'enabled',

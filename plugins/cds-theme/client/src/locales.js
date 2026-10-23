@@ -51,6 +51,8 @@ export const en = {
   'preferThemeCjk.desc': 'Use the embedded Noto Sans SC before system fallbacks in body text and code; the home greeting keeps Noto Serif SC. Off restores the previous order. Explicit font choices take priority.',
   'heroRipple.title': 'Home backdrop with click ripples',
   'heroRipple.desc': 'On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.',
+  'diffPreview.title': 'Diff preview on hover',
+  'diffPreview.desc': 'Hovering a file row in the end-of-turn "Edited N files" card opens a comparison. Off hides that hover panel; the card and its per-file counts stay, and the edit card still shows the full diff.',
   'enabled.title': 'Enable CDS theme',
   'enabled.desc': 'Off releases every token override and restores the host skin.',
   // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -106,6 +108,8 @@ export const zh = {
   'preferThemeCjk.desc': '正文与代码中的中文优先使用内嵌、校准字重的思源黑体，首页问候语仍用思源宋体；关闭恢复原回退顺序。手动选择的字体始终优先。',
   'heroRipple.title': '首页背景点击波纹',
   'heroRipple.desc': '新会话时，问候语与输入框背后浮出一层淡的代码字形，每次点击从光标处荡开水波。输入框会略透，让波纹从底下透出来。关闭即整层移除。',
+  'diffPreview.title': '悬停显示差异预览',
+  'diffPreview.desc': '鼠标停在回合结束「改动 N 个文件」卡片里的文件行上时，会弹出该文件的差异对比。关闭只是不再弹这个预览：卡片与每行增删数照常显示，编辑卡片里的完整差异也仍在。',
   'enabled.title': '启用 CDS 主题',
   'enabled.desc': '关闭即释放全部令牌覆盖，界面回到宿主原样式。',
   // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------
