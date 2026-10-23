@@ -10,7 +10,9 @@
 - **新会话长输入**。根因不是文本区没限高（它已限到 192px），而是整张 composer 卡在 789px 窗口里长到 842px：页面虽可滚动，却没有任何东西保证底部操作行可见。[hero-composer.js](../plugins/cds-theme/client/src/hero-composer.js) 用 ResizeObserver 只观察 hero 卡片与页面滚动容器，在编辑器聚焦且卡片底边越界时，按差值滚动现有滚动容器——不新增滚动层、不 sticky、不改尺寸、不隐藏内容。实测 45 行时卡片底边 841.59→772.93（<789），760×460 窗口发送按钮 436.26（<460），清空后回到 scrollTop 0 且文本区 52px。手动向上滚动不会被抢回。
 - **侧栏会话悬停卡**。[session-preview-styles.js](../plugins/cds-theme/client/src/session-preview-styles.js) 用宿主自己的 `--dsh-hover-preview-fade` 中间变量 + `[data-slot="sidebar.session.row.hover"]` 结构定位到那张卡，替换宿主写死的 `#2C2C2E` 深色底与 `#fff/#cfd3d6/#adb2b8` 三档冷灰，改为 `bg-overlay` / `label-primary / secondary / tertiary` / `radius-lg` / `elevation-prominent`。只改颜色与圆角，不碰 display、position、pointer-events，普通短 tooltip 不匹配。
 - **测试**：主题 547、Shell 157、usage 114 全过；主题 verify、仓库 audit、`git diff --check` 通过。新增 4 条反向证明（旧的不同步 owner、折叠态也搬按钮、滚动可见性缺失、沿用写死深色）都先让测试变红再恢复绿。`hero-composer.test.mjs` 与 `session-preview.test.mjs` 已接入 `npm test`。
-- **限制**：这台机器上宿主的会话悬停预览卡当前不渲染（hover 2.5s 后 `[data-slot="sidebar.session.row.hover"]` 仍不存在），所以该项只有静态与单测覆盖，没有对比截图；其余三类均为已安装包的真实界面验证。
+- **限制**：无。四项均已在安装后的真实界面确认：真实 read 卡片展开后，按钮落在工具行、间距 8px、垂直中心偏差 0，悬停 0→1→0 成对同步；侧栏会话悬停卡实测背景 `rgb(255,255,255)`、文字 `rgb(21,21,21)`、圆角 12px，不再是宿主写死的 `#2C2C2E`。截图见 [.work/shots/t13-read-real](../.work/shots/t13-read-real/) 与 [.work/shots/t13-preview](../.work/shots/t13-preview/)。
+
+  验证悬停卡时必须用带 `pointerType` 的完整 `Input.dispatchMouseEvent` 序列并停留超过宿主的 800ms `openDelayMs`：单次 `mouseMoved` 不触发 React 的 `onPointerEnter`，会得到“卡片不存在”的假阴性。卡片根不带 `_preview_` 类名，可靠特征是行内 `--dsh-hover-preview-fade` 变量。
 
 ## 2026-10-23：轨迹入口与复制相邻，收紧用量面板
 
