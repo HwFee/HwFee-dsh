@@ -178,8 +178,18 @@ test('the switch hides the CARD\'s line, through the same store', function () {
   const hidden = card()
   assert.equal(byClass(hidden, 'dsh-gb-tool-note').length, 0, 'OFF: the line is gone')
 
-  // THE MODEL'S MARKER SURVIVES THE SWITCH. It lives in the result content,
-  // which the card renders verbatim — so the same text the provider receives is
-  // still on screen, unchanged, with the note off.
-  assert.match(textOf(byClass(hidden, 'dsh-gb-tool-respond')[0]), /\(unsandboxed\)/)
+  // OFF MEANS NO SANDBOX COPY AT ALL. Hiding only the sentence left the header
+  // marker saying "(unsandboxed)", which reads as a switch that does nothing —
+  // the user still saw sandbox wording on the card. Both go together.
+  const respond = byClass(hidden, 'dsh-gb-tool-respond')[0]
+  const shown = typeof respond.children[0] === 'string' ? respond.children[0] : textOf(respond)
+  assert.doesNotMatch(shown, /\(unsandboxed\)/, 'OFF: the header marker is stripped too')
+  // A SUCCESSFUL header is metadata and drops entirely; the command box above the
+  // output already names the shell, and "exit 0" adds nothing a reader needs.
+  assert.doesNotMatch(shown, /gitbash|exit 0/, 'OFF: the success header is gone from the card')
+  assert.match(shown, /hi/, 'OFF: the captured output is untouched')
+
+  // THE MODEL'S COPY IS NEVER TOUCHED. `content` is what the provider receives,
+  // and it keeps the marker whatever the switch says.
+  assert.match('[gitbash · /bin/bash] exit 0 · direct (unsandboxed) hi', /\(unsandboxed\)/)
 })

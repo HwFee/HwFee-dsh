@@ -17,7 +17,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { tokenizeShell, readArguments, resultText, sandboxNote, createRunShellRow } from '../client/src/tool-view.js'
+import { tokenizeShell, readArguments, resultText, displayText, sandboxNote, createRunShellRow } from '../client/src/tool-view.js'
 import { en, zh } from '../client/src/locales.js'
 
 test('the command name, its flags and its arguments get different colours', function () {
@@ -293,21 +293,41 @@ test('no meta means no note line at all', function () {
   assert.deepEqual(byClass(tree, 'dsh-gb-tool-note'), [])
 })
 
-test('THE PREFERENCE HIDES THE LINE AND NEVER THE MARKER', function () {
-  // THE MOST IMPORTANT ASSERTION IN THIS FILE. Turning the switch off hides a
-  // line of COPY from the user. The security disclosure the model receives —
-  // `· direct (unsandboxed)` in the tool result — is produced by the host and
-  // is not connected to this store, so a user who silences the note cannot make
-  // a command look sandboxed to the model.
+test('THE PREFERENCE HIDES ALL SANDBOX COPY ON THE CARD, NEVER THE MODEL MARKER', function () {
+  // THE MOST IMPORTANT ASSERTION IN THIS FILE. Turning the switch off removes
+  // every sandbox word the user can see: the note line AND the `(unsandboxed)`
+  // marker in the header. Hiding only the note left the header saying
+  // "unsandboxed", which reads as a switch that does nothing.
+  //
+  // The model is unaffected: its disclosure lives in `content`, which is what the
+  // provider receives, and no store is consulted there.
   const shown = renderCard({ meta: { note: NOTE }, noteStore: fixedStore(true) }).tree
   assert.equal(byClass(shown, 'dsh-gb-tool-note').length, 1, 'default ON shows the line')
 
   const hidden = renderCard({ meta: { note: NOTE }, noteStore: fixedStore(false) }).tree
   assert.deepEqual(byClass(hidden, 'dsh-gb-tool-note'), [], 'OFF hides the line')
-  // …and the result content is untouched by the preference: the marker the model
-  // reads lives in `content`, which this row renders verbatim.
-  assert.match(resultText({ content: [{ type: 'text', text: '[gitbash · /bin/bash] exit 0 · direct (unsandboxed)\nok' }] }),
-    /\(unsandboxed\)/)
+
+  // THE HEADER LINE IS METADATA AND IS GONE FROM THE CARD. `[gitbash · …] exit 0`
+  // tells the MODEL which shell ran the command and whether it succeeded; the
+  // reader sees the shell in the command box and a failure in the error state plus
+  // stderr. So a successful header is dropped for everyone, whatever the switch.
+  const header = '[gitbash · /bin/bash] exit 0 · direct (unsandboxed)\nok'
+  for (const shownSwitch of [true, false]) {
+    const card = displayText({ content: [{ type: 'text', text: header }] }, shownSwitch)
+    assert.equal(card, 'ok', 'the success header must not reach the card')
+    assert.doesNotMatch(card, /unsandboxed/i)
+  }
+
+  // A NON-ZERO EXIT STAYS. Hiding "exit 1" would make a failed command look like it
+  // produced exactly what is on screen — the one thing a result card must not do.
+  const failed = '[gitbash · /bin/bash] exit 1 · direct (unsandboxed)\nboom'
+  assert.match(displayText({ content: [{ type: 'text', text: failed }] }, true),
+    /^\[gitbash · \/bin\/bash\] exit 1/, 'a failure keeps its exit status')
+  assert.doesNotMatch(displayText({ content: [{ type: 'text', text: failed }] }, false), /unsandboxed/i,
+    'the switch still governs the sandbox words on a failure line')
+
+  // The model's copy is byte-identical in every case.
+  assert.match(resultText({ content: [{ type: 'text', text: header }] }), /exit 0 · direct \(unsandboxed\)/)
 })
 
 test('an absent preference store shows the line', function () {

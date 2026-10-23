@@ -472,6 +472,18 @@ window.__ModuleLoader__.load({
       }
       return parts.join("\n");
     }
+    function displayText(block, sandboxShown) {
+      const text = resultText(block);
+      const HEADER = /^\[[^\]\n]*?\] exit (\d+)(?: · (?:host|direct)(?: \(unsandboxed\))?)?(?:\n|$)/;
+      const match = HEADER.exec(text);
+      if (match === null) return text;
+      const success = match[1] === "0";
+      const drop = success;
+      if (!drop) {
+        return sandboxShown === false ? text.replace(" \xB7 direct (unsandboxed)", "") : text;
+      }
+      return text.slice(match[0].length);
+    }
     function sandboxNote(block) {
       const note = block?.meta !== null && typeof block?.meta === "object" ? block.meta.note : void 0;
       return typeof note === "string" ? note.trim() : "";
@@ -577,14 +589,13 @@ window.__ModuleLoader__.load({
         const args = readArguments(done ? call?.argsRaw : block?.argsRaw);
         const command = typeof args?.command === "string" ? args.command : "";
         const description = typeof args?.description === "string" ? args.description.trim() : "";
-        const output = done ? resultText(block) : "";
-        const note = done ? sandboxNote(block) : "";
         const noteStore = props.noteStore !== null && typeof props.noteStore === "object" ? props.noteStore : null;
-        const noteShown = React2.useSyncExternalStore(
+        const sandboxShown = React2.useSyncExternalStore(
           noteStore === null ? NO_SUBSCRIPTION : noteStore.subscribe,
           noteStore === null ? ALWAYS_SHOWN : noteStore.getSnapshot
-        );
-        const shownNote = note !== "" && noteShown === true ? note : "";
+        ) === true;
+        const output = done ? displayText(block, sandboxShown) : "";
+        const note = done && sandboxShown ? sandboxNote(block) : "";
         const interrupted = done && block.error?.code === "interrupted";
         const state = !done ? block?.phase === "preparing" ? "preparing" : "running" : interrupted ? "stopped" : block.isError ? "error" : "ok";
         const disclosure = typeof props.useDisclosure === "function" ? props.useDisclosure() : null;
@@ -674,11 +685,12 @@ window.__ModuleLoader__.load({
             // THE SANDBOX SENTENCE, ON ITS OWN LINE UNDER THE OUTPUT.
             //
             // It used to live inside the result content, which the model paid for on
-            // every request. Now the host sends it as `data.meta.note` and this row
-            // renders it — same words, no context cost — unless the user turned the
-            // line off in settings. Its own class, because it is a note and not
+            // every request. The host now sends it as `data.meta.note` and this row
+            // renders it — same words, no context cost. The same switch that hides it
+            // also strips the header marker (see `displayText`), so "off" really means
+            // no sandbox copy on the card. Its own class, because it is a note and not
             // captured output: no code face, no pre-wrap of a command.
-            shownNote === "" ? null : h("div", { className: "dsh-gb-tool-note", "data-sandbox-note": "" }, shownNote)
+            note === "" ? null : h("div", { className: "dsh-gb-tool-note", "data-sandbox-note": "" }, note)
           ) : null
         );
       }

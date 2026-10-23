@@ -126,6 +126,42 @@ export function resultText(block) {
 }
 
 /**
+ * The result text as the CARD shows it.
+ *
+ * THE HEADER LINE IS METADATA, NOT OUTPUT. `[gitbash · C:/…/bash.exe] exit 0` is
+ * the interpreter and exit status the MODEL needs — it tells the model which
+ * shell parsed the command and whether it succeeded. The reader already sees both
+ * without it: the command box above the output names the shell, and a failure
+ * shows up as the error state plus the stderr the command printed. So the card
+ * drops that whole first line and shows only what the command produced.
+ *
+ * A NON-ZERO EXIT IS KEPT. Silently hiding "exit 1" would make a failed command
+ * look like it produced exactly what is on screen, which is the one thing a
+ * result card must never do. Only the success header disappears.
+ *
+ * THE MODEL'S COPY IS UNTOUCHED. `content` keeps the full header including the
+ * `· direct (unsandboxed)` marker; `resultText` is what the provider receives.
+ *
+ * @param {object} block the settled Tool result block
+ * @param {boolean} sandboxShown the disclosure switch
+ * @returns {string} the display text
+ */
+export function displayText(block, sandboxShown) {
+  const text = resultText(block)
+  const HEADER = /^\[[^\]\n]*?\] exit (\d+)(?: · (?:host|direct)(?: \(unsandboxed\))?)?(?:\n|$)/
+  const match = HEADER.exec(text)
+  if (match === null) return text
+  const success = match[1] === '0'
+  // The switch only ever governed the sandbox words. A successful header is now
+  // dropped for everyone; a failed one stays so the card still reports failure.
+  const drop = success
+  if (!drop) {
+    return sandboxShown === false ? text.replace(' · direct (unsandboxed)', '') : text
+  }
+  return text.slice(match[0].length)
+}
+
+/**
  * The sandbox sentence the host put on the result's `meta`, if any.
  *
  * WHY IT COMES FROM `meta` AND NOT FROM THE CONTENT. The sentence used to be the
@@ -278,19 +314,18 @@ export function createRunShellRow({ React }) {
     const args = readArguments(done ? call?.argsRaw : block?.argsRaw)
     const command = typeof args?.command === 'string' ? args.command : ''
     const description = typeof args?.description === 'string' ? args.description.trim() : ''
-    const output = done ? resultText(block) : ''
-    const note = done ? sandboxNote(block) : ''
-    // THE USER'S PREFERENCE, READ FROM ITS OWN STORE. Absent — an older host, or a
-    // card rendered in a test — means SHOWN, which is the default and the safe
-    // direction for a security disclosure. `useSyncExternalStore` is called
-    // unconditionally (with a constant no-op pair when there is no store) so the
-    // hook order cannot change between renders.
+    // THE SWITCH GOVERNS EVERY SANDBOX WORD ON THE CARD, not just the sentence
+    // under the output. Turning it off used to hide the note line and leave the
+    // `(unsandboxed)` marker in the header, which reads as a switch that does
+    // nothing — the user still saw sandbox copy. Off now strips BOTH: the header
+    // marker and the note line. The model's copy is never touched either way.
     const noteStore = props.noteStore !== null && typeof props.noteStore === 'object' ? props.noteStore : null
-    const noteShown = React.useSyncExternalStore(
+    const sandboxShown = React.useSyncExternalStore(
       noteStore === null ? NO_SUBSCRIPTION : noteStore.subscribe,
       noteStore === null ? ALWAYS_SHOWN : noteStore.getSnapshot,
-    )
-    const shownNote = note !== '' && noteShown === true ? note : ''
+    ) === true
+    const output = done ? displayText(block, sandboxShown) : ''
+    const note = done && sandboxShown ? sandboxNote(block) : ''
     const interrupted = done && block.error?.code === 'interrupted'
     const state = !done
       ? (block?.phase === 'preparing' ? 'preparing' : 'running')
@@ -381,13 +416,14 @@ export function createRunShellRow({ React }) {
         // THE SANDBOX SENTENCE, ON ITS OWN LINE UNDER THE OUTPUT.
         //
         // It used to live inside the result content, which the model paid for on
-        // every request. Now the host sends it as `data.meta.note` and this row
-        // renders it — same words, no context cost — unless the user turned the
-        // line off in settings. Its own class, because it is a note and not
+        // every request. The host now sends it as `data.meta.note` and this row
+        // renders it — same words, no context cost. The same switch that hides it
+        // also strips the header marker (see `displayText`), so "off" really means
+        // no sandbox copy on the card. Its own class, because it is a note and not
         // captured output: no code face, no pre-wrap of a command.
-        shownNote === ''
+        note === ''
           ? null
-          : h('div', { className: 'dsh-gb-tool-note', 'data-sandbox-note': '' }, shownNote))
+          : h('div', { className: 'dsh-gb-tool-note', 'data-sandbox-note': '' }, note))
       : null)
   }
 
