@@ -815,22 +815,21 @@ const checks = [
     buildCssFor(sanitize({ refine: false }), { themeModeAvailable: true }).includes(CUBE_HIDER)],
   ['without the theme service the hide rules disappear',
     !buildCssFor(sanitize({}), { themeModeAvailable: false }).includes('settings.general.item"] > *:has(')],
-  ['the theme-mode row and the ten knobs live on the appearance page, only enabled in General',
+  ['the theme-mode row and the nine knobs live on the appearance page, only enabled in General',
     // The view-tabs pill (46) and the split composer (47) were removed outright,
-    // rows and rules together; the markdown scope (45) stayed.
-    verifyPanel.appearanceSlots.length === 11
+    // rows and rules together; Markdown styling stays without its row (45).
+    verifyPanel.appearanceSlots.length === 10
     && verifyPanel.generalSlots.length === 1
     && verifyPanel.generalSlots[0].id === 'dsh-cds-theme-enabled'],
   ['the removed reference-derived looks leave no row, key or rule behind',
     !verifyPanel.slots.some(function (slot) {
-      // 45 is the assistant markdown scope and stays.
-      return slot.order === 46 || slot.order === 47
+      return slot.order === 45 || slot.order === 46 || slot.order === 47
     })
-    && Object.hasOwn(DEFAULT_STATE, 'markdownScope') === true
+    && Object.hasOwn(DEFAULT_STATE, 'markdownScope') === false
     && Object.hasOwn(DEFAULT_STATE, 'viewTabsPill') === false
     && Object.hasOwn(DEFAULT_STATE, 'composerSplit') === false
-    && !defaultSheet.includes('markdown scope: lists')
-    && buildCssFor(sanitize({ markdownScope: true }), { omitFonts: true })
+    && defaultSheet.includes('markdown scope: lists')
+    && buildCssFor(sanitize({ markdownScope: false }), { omitFonts: true })
       .includes('markdown scope: lists')
     && !defaultSheet.includes('view tabs: the reference pill')
     && !defaultSheet.includes('composer: split layout')
@@ -841,18 +840,17 @@ const checks = [
     (function () {
       const on = buildCssFor(sanitize({}), { omitFonts: true })
       const off = buildCssFor(sanitize({ refine: false }), { omitFonts: true })
-      // The wash sits on the LEAVES (one plate per count), not on the cell that
-      // holds both numbers.
+      // Each segment uses its diff colour; the shared cell joins and clips them.
       const plates = [
-        ['[class*="diffAdded"]', '--dsw-alias-file-diff-added-bg'],
-        ['[class*="diffRemoved"]', '--dsw-alias-file-diff-deleted-bg'],
+        ['[class*="diffAdded"]', '--cds-bg-git-added', '--dsw-alias-file-diff-added-bg'],
+        ['[class*="diffRemoved"]', '--cds-bg-git-removed', '--dsw-alias-file-diff-deleted-bg'],
       ]
-      for (const [needle, token] of plates) {
+      for (const [needle, token, fallback] of plates) {
         const at = on.indexOf('[data-slot="tool.call.toolview"] [data-tool] ' + needle)
         if (at < 0) return false
         const body = on.slice(on.indexOf('{', at) + 1, on.indexOf('}', on.indexOf('{', at)))
-        if (!body.includes('background: var(' + token + ')')) return false
-        if (!body.includes('border-radius: var(--dsw-radius-xs)')) return false
+        if (!body.includes('background: var(' + token + ', var(' + fallback + '))')) return false
+        if (!body.includes('border-radius: 0')) return false
         if (body.includes('color:')) return false
         if (!off.includes('[data-slot="tool.call.toolview"] [data-tool] ' + needle)) return false
       }

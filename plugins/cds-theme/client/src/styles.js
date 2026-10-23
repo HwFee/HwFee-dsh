@@ -303,12 +303,12 @@ function codeRules() {
     // HOVER ONLY. A focus-within member (on the block, the code-wrap or the
     // tool slot) kept the rail painted after a row was clicked open, until the
     // user clicked elsewhere, because expanding a row moves focus into it.
-    // Focus no longer reveals; the button keeps its own focus-visible rule so
-    // keyboard users still see it when they tab to it.
+    // Only focus INSIDE THE BANNER reveals it. Focusing the disclosure
+    // row does not; a focused child cannot reveal an opacity:0 parent.
     '.md-code-block:hover [data-code-block-banner],',
     '[data-code-wrap]:hover [data-code-block-banner],',
     '[data-slot="tool.call.toolview"]:hover [data-code-block-banner],',
-    '[data-code-block-banner] button:focus-visible {',
+    '[data-code-block-banner]:focus-within {',
     '  opacity: 1 !important;',
     '  pointer-events: auto !important;',
     '}',
@@ -1076,6 +1076,7 @@ function toolRowsRules() {
     // The diff card's copy control joins the shared rail rather than repeating
     // its geometry: size, radius, transparent fill and ink are one definition.
     '[data-cds-diff-copy],',
+    '[data-cds-native-copy],',
     '.md-code-block [data-code-block-banner] button {',
     '  width: var(--cds-copy-size);',
     '  height: var(--cds-copy-size);',
@@ -1094,10 +1095,47 @@ function toolRowsRules() {
     '[data-slot="tool.call.toolview"] [data-code-block-banner] button:focus-visible,',
     '[data-cds-diff-copy]:hover,',
     '[data-cds-diff-copy]:focus-visible,',
+    '[data-cds-native-copy]:hover,',
+    '[data-cds-native-copy]:focus-visible,',
     '.md-code-block [data-code-block-banner] button:hover,',
     '.md-code-block [data-code-block-banner] button:focus-visible {',
     '  background: transparent !important;',
     '  color: var(--cds-copy-ink-hover);',
+    '}',
+    // Text stays in the DOM for native feedback and accessibility; no React
+    // children or handlers are replaced. Only the owned mark enables the icon.
+    '[data-cds-native-copy] {',
+    '  display: inline-flex;',
+    '  align-items: center;',
+    '  justify-content: center;',
+    '  box-sizing: border-box;',
+    '  flex: none;',
+    '  padding: 0;',
+    '  margin: 0;',
+    '  border: 0;',
+    '  font-size: 0 !important;',
+    '  cursor: pointer;',
+    '  opacity: 0;',
+    '  pointer-events: none;',
+    '}',
+    '[data-search]:hover [data-cds-native-copy],',
+    '[data-read]:hover [data-cds-native-copy],',
+    '[data-diff]:hover [data-cds-native-copy],',
+    '[data-terminal]:hover [data-cds-native-copy],',
+    '[data-cds-native-copy]:focus-visible {',
+    '  opacity: 1;',
+    '  pointer-events: auto;',
+    '}',
+    '[data-cds-native-copy]::before {',
+    '  content: "";',
+    '  width: var(--cds-copy-icon);',
+    '  height: var(--cds-copy-icon);',
+    '  background: currentColor;',
+    '  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%3E%3Crect%20x%3D%221.52075%22%20y%3D%224.07373%22%20width%3D%2210.3932%22%20height%3D%2210.3932%22%20rx%3D%222%22%20stroke%3D%22black%22%2F%3E%3Cpath%20d%3D%22M11.9792%201.53296C13.36%201.53296%2014.4792%202.65225%2014.4792%204.03296V9.42847C14.4792%2010.3756%2013.9521%2011.1987%2013.1755%2011.6228V10.3298C13.3652%2010.0787%2013.4792%209.7674%2013.4792%209.42847V4.03296C13.4792%203.20453%2012.8077%202.53296%2011.9792%202.53296H6.58374C6.27966%202.53301%205.99684%202.6235%205.7605%202.77905H4.42358C4.85652%202.03463%205.66056%201.53304%206.58374%201.53296H11.9792Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;',
+    '}',
+    '[data-cds-native-copy="copied"] { color: var(--dsw-alias-state-success-primary); }',
+    '[data-cds-native-copy="copied"]::before {',
+    '  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M3.5%208.5l3%203%206-6%22%20stroke%3D%22black%22%20stroke-width%3D%221.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");',
     '}',
     // NOTHING IN THE BANNER BUT THE BUTTONS. Inside a tool card the banner's
     // label block is chrome the reference never draws, so every direct child
@@ -1157,7 +1195,7 @@ function toolRowsRules() {
 }
 
 /**
- * The `+N` / `−N` change counts: UI family and a tinted plate, in BOTH card
+ * The `+N` / `−N` change counts: code family and joined diff backgrounds, in BOTH card
  * states.
  *
  * WHY TWO HOOKS. Which card draws those counts depends on `refine`:
@@ -1176,26 +1214,20 @@ function toolRowsRules() {
  * cell appears in; a rule inside the component half never reaches it. So this
  * block is appended after the always-on group, outside the `refine` gate.
  *
- * WHY `!important` IS REQUIRED. `uiFontRules()` pins the TEXT family on every
- * descendant of `[data-conversation-content]` with `!important`
- * (`[data-conversation-content] :not(code):not(pre):not(kbd):not(samp)`,
- * specificity (0,1,4)). A plain declaration loses to it even at (0,3,0), and
- * the counts kept inheriting the conversation font — which is what the user
- * saw as Mono. So this rule matches the `!important` AND outranks the selector,
- * exactly like the code-family restore in `toolRowsRules()`.
+ * SAME FAMILY AS THE DIFF GUTTER. Use the code-font token rather than a
+ * hardcoded face, so a user's code-font choice reaches both sets of numbers.
+ * The conversation text rule sets font-family with !important on descendants,
+ * so both the group and its number spans must explicitly restore the code role.
  *
  * SCOPED TO A TOOL ROW, twice: `[data-slot="tool.call.toolview"]` is the host's
  * outlet for the row, and `[data-tool]` is set on the row itself (and on the
  * theme's own `[data-cds-diffrow]`). So this can reach a tool row's stat cell
  * and nothing else — never a markdown block, a settings row, or the read card.
  *
- * THE PLATE. Each count gets the host's own diff wash behind it —
- * `--dsw-alias-file-diff-added-bg` / `-deleted-bg`, both declared by the host on
- * `body` (`.work/host-src/ui-theme.js`: `--dsw-alias-file-diff-added-bg:#e6f4e7`,
- * `--dsw-alias-file-diff-deleted-bg:#fce6e2`), so the tint follows the palette
- * the theme already remaps rather than a literal here. The two counts do NOT
- * sit in one plate: each gets its own, because the pair states two different
- * facts and a single wash would have to pick one of the two hues.
+ * ONE JOINED GROUP. The two counts touch, with one radius around the outside.
+ * Their backgrounds use the SAME tokens as the diff rows: --cds-bg-git-added
+ * and --cds-bg-git-removed. When refinement is off those custom tokens are not
+ * emitted, so each falls back to the corresponding native file-diff token.
  *
  * The plate is a WASH BEHIND THE INK, never a replacement for it: `+N` keeps the
  * host's green and `−N` its red, hover states included — no `color`, no
@@ -1213,10 +1245,17 @@ function toolRowsRules() {
  */
 function diffStatFamilyRules() {
   return [
-    '/* ---- the ±N change counts: UI family + a tinted plate ------------- */',
+    '/* ---- the ±N change counts: code family + joined diff backgrounds ------------- */',
     '[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"],',
     '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diffrow-stats] {',
-    '  font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;',
+    '  display: inline-flex;',
+    '  align-items: center;',
+    '  gap: 0;',
+    '  flex: none;',
+    '  border-radius: var(--dsw-radius-xs);',
+    '  overflow: hidden;',
+    '  white-space: nowrap;',
+    '  font-family: var(--ds-font-family-code) !important;',
     '  font-variant-numeric: tabular-nums;',
     '}',
     // The host's cell holds both numbers; the theme's own marker holds two spans.
@@ -1231,20 +1270,24 @@ function diffStatFamilyRules() {
     '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="add"] {',
     '  display: inline-block;',
     '  flex: none;',
-    '  border-radius: var(--dsw-radius-xs);',
+    '  border-radius: 0;',
+    '  margin: 0;',
     '  padding: 0 4px;',
     '  line-height: 16px;',
-    '  background: var(--dsw-alias-file-diff-added-bg);',
+    '  font-family: var(--ds-font-family-code) !important;',
+    '  background: var(--cds-bg-git-added, var(--dsw-alias-file-diff-added-bg));',
     '  font-variant-numeric: tabular-nums;',
     '}',
     '[data-slot="tool.call.toolview"] [data-tool] [class*="diffRemoved"],',
     '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="del"] {',
     '  display: inline-block;',
     '  flex: none;',
-    '  border-radius: var(--dsw-radius-xs);',
+    '  border-radius: 0;',
+    '  margin: 0;',
     '  padding: 0 4px;',
     '  line-height: 16px;',
-    '  background: var(--dsw-alias-file-diff-deleted-bg);',
+    '  font-family: var(--ds-font-family-code) !important;',
+    '  background: var(--cds-bg-git-removed, var(--dsw-alias-file-diff-deleted-bg));',
     '  font-variant-numeric: tabular-nums;',
     '}',
   ].join('\n')
@@ -1339,7 +1382,7 @@ function diffCardRules() {
     '}',
     '[data-cds-diffrow-stats] {',
     '  display: inline-flex;',
-    '  gap: 6px;',
+    '  gap: 0;',
     '  flex: none;',
     '  font-size: 12px;',
     '  font-variant-numeric: tabular-nums;',
@@ -2792,14 +2835,14 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
       settingsRules(),
     )
 
-    // ---- the opt-in look (OFF by default) --------------------------------
+    // ---- fixed assistant markdown styling -------------------------------
     //
     // THE MARKDOWN SCOPE paints only the assistant's lists/task lists,
     // emphasis and links; code blocks, inline chips, tool cards and genui cards
     // are excluded inside the rule text itself (`markdown-scope.js`). Everything
-    // there is plain CSS — no marker, no observer — so the switch is exactly the
-    // presence of these rules.
-    if (state.markdownScope === true) parts.push(markdownScopeRules())
+    // there is plain CSS. Its comparison switch was retired; old saved values
+    // no longer affect whether these rules are emitted.
+    parts.push(markdownScopeRules())
   }
 
   // ---- the solidified replication items: ALWAYS ON -------------------------

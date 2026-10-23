@@ -1,6 +1,5 @@
 /**
- * The assistant markdown scope: an opt-in look, and the wiring that makes the
- * switch actually reach the sheet.
+ * Fixed assistant markdown styling, retired settings and joined diff counts.
  *
  * The look shipped as dead code once — the state key, the `sanitize` whitelist
  * and the rule module existed, but nothing called them, so flipping the row in
@@ -110,92 +109,65 @@ function withDocument(fn) {
 
 // ------------------------------------------------------------------ state
 
-test('the markdown look defaults to OFF and survives sanitize', function () {
-  assert.equal(DEFAULT_STATE.markdownScope, false)
-  // Every key of DEFAULT_STATE must come back through sanitize: the whitelist
-  // rebuilds the object, so a key missing here is silently dropped on every
-  // save — the failure mode that made `uiFontFamily` invisible once.
+test('the retired markdown flag is dropped while the other settings survive', function () {
+  assert.equal(Object.hasOwn(DEFAULT_STATE, 'markdownScope'), false)
   const clean = sanitize({})
-  for (const key of Object.keys(DEFAULT_STATE)) {
-    assert.ok(Object.hasOwn(clean, key), 'sanitize dropped ' + key)
-    assert.deepEqual(clean[key], DEFAULT_STATE[key], key + ' changed by an empty sanitize')
+  for (const key of Object.keys(DEFAULT_STATE)) assert.deepEqual(clean[key], DEFAULT_STATE[key])
+  for (const value of [true, false, 'yes']) {
+    assert.deepEqual(sanitize({ markdownScope: value }), clean)
   }
-  assert.equal(sanitize({ markdownScope: true }).markdownScope, true)
-  // Opt-in only: a truthy non-boolean must not light the look.
-  assert.equal(sanitize({ markdownScope: 'yes' }).markdownScope, false)
-  // A stored payload from an older version cannot turn it on.
-  assert.equal(sanitize({ warmth: 40 }).markdownScope, false)
-  assert.equal(sanitize(null).markdownScope, false)
 })
 
-test('the settings store persists the key and reads it back', function () {
-  const memory = new Map()
+test('loading and saving old markdown settings cannot restore the removed flag', function () {
+  const memory = new Map([[STORAGE_KEY, JSON.stringify({ markdownScope: false })]])
   const storage = {
-    getItem(key) { return memory.has(key) ? memory.get(key) : null },
+    getItem(key) { return memory.get(key) ?? null },
     setItem(key, value) { memory.set(key, value) },
   }
   const store = createSettingsStore(storage)
-  assert.equal(store.getState().markdownScope, false)
-  store.setState({ markdownScope: true })
-  const stored = JSON.parse(memory.get(STORAGE_KEY))
-  assert.equal(stored.markdownScope, true, 'the markdown key must survive a save')
+  assert.equal(Object.hasOwn(store.getState(), 'markdownScope'), false)
+  store.setState({ markdownScope: true, warmth: 40 })
+  assert.equal(Object.hasOwn(JSON.parse(memory.get(STORAGE_KEY)), 'markdownScope'), false)
   const reloaded = createSettingsStore(storage)
-  assert.equal(reloaded.getState().markdownScope, true)
-  // And an unsubscribe exists, so a lifecycle can detach.
-  const off = store.subscribe(function () {})
-  assert.equal(typeof off, 'function')
-  off()
+  assert.equal(reloaded.getState().warmth, 40)
+  assert.equal(Object.hasOwn(reloaded.getState(), 'markdownScope'), false)
 })
 
-// -------------------------------------------------------------------- css
-
-test('the markdown scope is emitted only when enabled && refine && its flag', function () {
+test('markdown is fixed component styling and ignores its retired switch', function () {
   const marker = 'markdown scope: lists, tasks, emphasis, links'
-  assert.ok(!rules({}).includes(marker), 'default state must emit nothing')
-  assert.ok(rules({ markdownScope: true }).includes(marker), 'on + refine emits the block')
-  assert.ok(!rules({ markdownScope: true, refine: false }).includes(marker),
-    'refine off must drop it — it is a component rule')
-  assert.ok(!rules({ markdownScope: true, enabled: false }).includes(marker),
-    'the master switch releases everything')
-  // A stale key from an old payload must be dropped by `sanitize`, and it must not
-  // drag the markdown block in: the block reads its own key only. `viewTabsPill`
-  // and `composerSplit` were removed with their features; a saved payload that
-  // still carries them has to behave exactly like one that does not.
-  const stale = { markdownScope: false, viewTabsPill: true, composerSplit: true }
-  assert.ok(!rules(stale).includes(marker), 'removed keys cannot emit the block')
-  assert.deepEqual(sanitize(stale), sanitize({}),
-    'a payload with removed keys sanitizes to the default state')
+  assert.ok(rules({}).includes(marker), 'the default theme paints assistant markdown')
+  for (const markdownScope of [true, false]) {
+    assert.equal(rules({ markdownScope }), rules({}), 'an old saved flag cannot change the sheet')
+  }
+  assert.ok(!rules({ refine: false }).includes(marker), 'the component master still releases component rules')
+  assert.ok(!rules({ enabled: false }).includes(marker), 'the theme master releases everything')
+  assert.deepEqual(sanitize({ markdownScope: false, viewTabsPill: true, composerSplit: true }), sanitize({}))
 })
 
-test('the settings sheet rewrites when the flag flips, and cleans up on teardown', function () {
+test('the sheet keeps markdown after old settings load and cleans up on teardown', function () {
   withDocument(function (doc) {
-    let state = sanitize({})
+    let state = sanitize({ markdownScope: false })
     const styles = createStyles({ getState: function () { return state } })
     styles.activate()
     styles.apply()
     const tag = doc.getElementById(STYLE_ID)
-    assert.ok(tag)
-    const offText = tag.textContent
-    assert.ok(!offText.includes('markdown scope'))
-
+    const fixedText = tag.textContent
+    assert.ok(fixedText.includes('markdown scope'))
     state = sanitize({ markdownScope: true })
     styles.apply()
-    const onText = tag.textContent
-    assert.notEqual(onText, offText, 'flipping the flag must rewrite the rules tag')
-    assert.ok(onText.includes('markdown scope'))
-    assert.ok(tag.writes >= 2)
-
+    assert.equal(tag.textContent, fixedText)
+    assert.equal(tag.writes, 1, 'a retired switch cannot rebuild the sheet')
+    state = sanitize({ refine: false })
+    styles.apply()
+    assert.ok(!tag.textContent.includes('markdown scope'))
     state = sanitize({})
     styles.apply()
-    assert.equal(tag.textContent, offText, 'turning it off restores the byte-identical sheet')
-    assert.equal(doc.getElementById(FONT_STYLE_ID).writes, 1, 'the font sheet is never rebuilt')
-
+    assert.equal(tag.textContent, fixedText)
+    assert.equal(doc.getElementById(FONT_STYLE_ID).writes, 1)
     styles.teardown()
     assert.equal(doc.getElementById(STYLE_ID), null)
   })
 })
-
-// -------------------------------------------------------------- markdown
 
 test('the scope is the assistant row, not a salted class', function () {
   assert.equal(MARKDOWN_ROOT, '[data-chat-flow] [data-chat-flow-kind="assistant-step"]')
@@ -261,101 +233,27 @@ test('the block leaves code chips, code blocks and leading alone', function () {
 
 // ---------------------------------------------------------------- the rows
 
-test('the markdown row renders OFF at the default state and flips to ON', function () {
-  // THE BUG THIS PINS. `ToggleRow` used to read `state[key] !== false`, which is
-  // correct for every row that defaults ON (all the older ones) and WRONG for an
-  // opt-in row: `false !== false` is false, so the switch already looked ON, and
-  // the first click wrote `false` again — the control appeared stuck. The row
-  // therefore declares `offByDefault`, and this test drives the real component
-  // through the real store.
-  const memory = new Map()
-  const store = createSettingsStore({
-    getItem(key) { return memory.has(key) ? memory.get(key) : null },
-    setItem(key, value) { memory.set(key, value) },
-  })
-  function element(type, props) {
-    const children = Array.prototype.slice.call(arguments, 2)
-    if (typeof type === 'function') {
-      return type(Object.assign({}, props, { children: children.length > 0 ? children : props.children }))
-    }
-    return { type, props: props || {}, children }
+test('the markdown row is absent from appearance, general and fallback registrations', function () {
+  const panel = createRowPanel()
+  for (const rows of [panel.slots, panel.appearanceSlots, panel.generalSlots]) {
+    assert.ok(!rows.some(row => row.id === 'dsh-cds-theme-markdown-scope' || row.key === 'markdownScope'))
   }
-  const React = {
-    createElement: element,
-    useSyncExternalStore(subscribe, getSnapshot) { return getSnapshot() },
-  }
-  const panel = createPanel({
-    React,
-    primitives: { IconCheckOutlineRegular: function () { return null } },
-    settings: store,
-    themeMode: null,
-  })
-
-  /** The switch element of one row, rendered through its own bound component. */
-  function switchOf(id) {
-    const slot = panel.slots.find(function (entry) { return entry.id === id })
-    assert.ok(slot, 'missing row ' + id)
-    const tree = slot.component({ t: function (key) { return key } })
-    // row → control → button[role=switch]
-    const control = tree.children[1]
-    const button = control.children[0]
-    assert.equal(button.props.role, 'switch')
-    return button
-  }
-
-  for (const entry of [
-    { id: 'dsh-cds-theme-markdown-scope', key: 'markdownScope' },
-  ]) {
-    assert.equal(store.getState()[entry.key], false, entry.key + ' must default off')
-    let button = switchOf(entry.id)
-    assert.equal(button.props['aria-checked'], false,
-      entry.id + ' must render OFF at the default state, not ON')
-
-    // One click turns it on…
-    button.props.onClick()
-    assert.equal(store.getState()[entry.key], true, entry.id + ' click must write true')
-    button = switchOf(entry.id)
-    assert.equal(button.props['aria-checked'], true, entry.id + ' must render ON after one click')
-
-    // …and the next click turns it off again.
-    button.props.onClick()
-    assert.equal(store.getState()[entry.key], false)
-    button = switchOf(entry.id)
-    assert.equal(button.props['aria-checked'], false)
-  }
-  // The older rows keep reading ON, so the fix is scoped to the opt-in ones.
-  assert.equal(switchOf('dsh-cds-theme-enabled').props['aria-checked'], true)
-  assert.equal(switchOf('dsh-cds-theme-refine').props['aria-checked'], true)
 })
 
 // ------------------------------------------------------- +N / −N counts
 
-/**
- * The rule that matches `needle`, as `{ selector, body }`.
- *
- * The sheet is emitted one declaration per line, so a block is "the selector
- * lines up to `{`, then everything until the closing `}` on its own line". A
- * plain `indexOf('}')` is enough for the blocks read here — none of them nests.
- */
+/** The first complete CSS rule containing a selector fragment. */
 function ruleFor(css, needle) {
   const lines = css.split('\n')
-  const at = lines.findIndex(function (line) { return line.includes(needle) })
+  const at = lines.findIndex(line => line.includes(needle))
   if (at < 0) return null
-  // The `{` closes the LAST selector line, not a line of its own.
-  let open = at
-  while (open < lines.length && !lines[open].trimEnd().endsWith('{')) open += 1
-  if (open >= lines.length) return null
-  const close = lines.findIndex(function (line, index) {
-    return index > open && line.trim() === '}'
-  })
+  const open = lines.findIndex((line, index) => index >= at && line.includes('{'))
+  const close = lines.findIndex((line, index) => index > open && line.includes('}'))
   if (close < 0) return null
-  return {
-    selector: lines.slice(at, open + 1).join('\n'),
-    body: lines.slice(open + 1, close).join('\n'),
-  }
+  return { selector: lines.slice(at, open + 1).join('\n'), body: lines.slice(open + 1, close).join('\n') }
 }
 
-test('the file-change counts use the UI family in BOTH card states', function () {
+test('the file-change counts use the diff code family in BOTH card states', function () {
   const css = rules({})
   const rule = ruleFor(css, '[class*="diffStat"]')
   assert.ok(rule, 'expected a diffStat rule')
@@ -365,11 +263,14 @@ test('the file-change counts use the UI family in BOTH card states', function ()
   assert.ok(rule.selector.includes('[data-tool]'), 'and to the tool summary, not to every stat cell')
   assert.ok(rule.selector.includes('[data-cds-diffrow-stats]'),
     'the theme\'s own card draws its counts with this marker — it needs the rule too')
-  // `!important` is load-bearing: the conversation-content prose rule is itself
-  // !important, and this rule has to beat it or the counts stay on the text
-  // family (which is exactly the Mono the user reported).
-  assert.ok(rule.body.includes('font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;'),
-    'the counts take the UI family, falling back to the text role, with !important')
+  // Restore the same code role as the diff gutter on the group AND leaves:
+  // an inherited family cannot beat the conversation's explicit prose rule.
+  for (const refine of [true, false]) {
+    for (const needle of ['[class*="diffStat"]', '[class*="diffAdded"]', '[class*="diffRemoved"]']) {
+      assert.ok(ruleFor(rules({ refine }), needle).body.includes('font-family: var(--ds-font-family-code) !important;'),
+        'both host/theme counters must retain the diff code family: ' + needle)
+    }
+  }
   assert.ok(rule.body.includes('font-variant-numeric: tabular-nums;'))
   // The colours are the host's: no color, no opacity.
   for (const banned of ['color:', 'opacity']) {
@@ -377,11 +278,11 @@ test('the file-change counts use the UI family in BOTH card states', function ()
   }
 })
 
-test('each count sits on its own tinted plate, and the host ink is left alone', function () {
+test('the counts reuse the diff row backgrounds and keep the host ink', function () {
   const css = rules({})
   const cases = [
-    { needle: '[class*="diffAdded"]', token: '--dsw-alias-file-diff-added-bg' },
-    { needle: '[class*="diffRemoved"]', token: '--dsw-alias-file-diff-deleted-bg' },
+    { needle: '[class*="diffAdded"]', kind: 'add', fallback: '--dsw-alias-file-diff-added-bg' },
+    { needle: '[class*="diffRemoved"]', kind: 'del', fallback: '--dsw-alias-file-diff-deleted-bg' },
   ]
   for (const entry of cases) {
     const rule = ruleFor(css, entry.needle)
@@ -392,10 +293,15 @@ test('each count sits on its own tinted plate, and the host ink is left alone', 
       'the plate stays scoped to a tool row: ' + rule.selector)
     assert.ok(rule.selector.includes('[data-cds-diff-stat'),
       'the theme card\'s own count rides the same block')
-    assert.ok(rule.body.includes('background: var(' + entry.token + ');'),
-      entry.needle + ' must take ' + entry.token)
-    assert.ok(rule.body.includes('border-radius: var(--dsw-radius-xs);'),
-      'a small radius, from the theme\'s own rung')
+    const diff = ruleFor(css, '[data-cds-diffcard] [data-cds-diff-row][data-kind="' + entry.kind + '"]')
+    assert.ok(diff, 'the actual diff row must have a background rule')
+    const token = /background-color:\s*var\((--[\w-]+)\)/.exec(diff.body)?.[1]
+    assert.ok(token, 'the actual diff row must use a background token')
+    assert.ok(rule.body.includes('background: var(' + token + ', var(' + entry.fallback + '));'),
+      entry.needle + ' must share the diff row token, with the native diff as fallback')
+    assert.ok(rule.body.includes('border-radius: 0;'),
+      'only the outside of the joined group is rounded')
+    assert.ok(rule.body.includes('margin: 0;'), 'host margins must not separate the segments')
     assert.ok(/\bpadding: 0 4px;/.test(rule.body), 'tight inline padding only')
     // The row's line box is 24px; an inherited one would stretch the wash into a
     // band across the row, so the plate pins its own 16px.
@@ -415,6 +321,18 @@ test('each count sits on its own tinted plate, and the host ink is left alone', 
   }
 })
 
+test('the red and green segments touch, with one outer radius on the group', function () {
+  for (const refine of [true, false]) {
+    const group = ruleFor(rules({ refine }), '[class*="diffStat"]')
+    assert.ok(group.selector.includes('[data-cds-diffrow-stats]'), 'both card variants share the group')
+    assert.ok(group.body.includes('display: inline-flex;'))
+    assert.ok(group.body.includes('gap: 0;'), 'no gap between the two backgrounds')
+    assert.ok(group.body.includes('border-radius: var(--dsw-radius-xs);'))
+    assert.ok(group.body.includes('overflow: hidden;'), 'clip both segments to the outer radius')
+    assert.ok(group.body.includes('flex: none;'), 'a long summary cannot squeeze the group')
+  }
+})
+
 test('the counts rule survives refine=false, where the host card is back', function () {
   // The rule exists for the HOST card, and the host card is what appears when
   // refinement is off — so it must NOT sit inside the `if (state.refine)` block.
@@ -425,6 +343,13 @@ test('the counts rule survives refine=false, where the host card is back', funct
   assert.ok(rule.selector.includes('[data-cds-diffrow-stats]'),
     'the theme card variant rides the same block')
   assert.ok(ruleFor(off, '[class*="diffAdded"]'), 'and so does the plate')
+  for (const [needle, fallback] of [
+    ['[class*="diffAdded"]', '--dsw-alias-file-diff-added-bg'],
+    ['[class*="diffRemoved"]', '--dsw-alias-file-diff-deleted-bg'],
+  ]) {
+    assert.ok(ruleFor(off, needle).body.includes(', var(' + fallback + '))'),
+      'the host diff token remains available when refinement removes the custom token')
+  }
   assert.ok(!off.includes('[data-composer-card]:not('),
     'and refine=false still drops the component half around it')
 })
@@ -442,8 +367,8 @@ test('the lifecycle leaves the markdown scope to CSS and mounts no removed look'
     assert.ok(!source.includes(gone), 'the removed look must leave no effect behind: ' + gone)
   }
   const styles = readFileSync(new URL('../client/src/styles.js', import.meta.url), 'utf8')
-  assert.ok(/state\.markdownScope === true\)\s*parts\.push\(markdownScopeRules\(\)\)/.test(styles),
-    'buildCss must emit the markdown block on the flag')
+  assert.ok(styles.includes('parts.push(markdownScopeRules())'), 'the component sheet keeps markdown')
+  assert.ok(!styles.includes('state.markdownScope'), 'the retired flag cannot gate the rules')
   for (const gone of ['tabsStyleRules', 'composerLayoutRules', 'sendButtonRules']) {
     assert.ok(!styles.includes(gone), 'buildCss must not emit a removed look: ' + gone)
   }

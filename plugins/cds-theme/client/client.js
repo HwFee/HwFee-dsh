@@ -171,11 +171,7 @@ window.__ModuleLoader__.load({
       thinkingLabelBlue: false,
       pasteAsFile: true,
       preferThemeCjk: true,
-      heroRipple: true,
-      // The assistant markdown look, OFF at the start so installing this version
-      // cannot change the interface on its own: the scope rules paint the
-      // assistant's lists/emphasis/links, and nothing else.
-      markdownScope: false
+      heroRipple: true
     };
     var ACCENT_IDS = ["clay", "ochre", "sand", "graphite"];
     function clampWarmth(value) {
@@ -213,10 +209,8 @@ window.__ModuleLoader__.load({
         // Existing profiles adopt the corrected default; only boolean false opts out.
         preferThemeCjk: input.preferThemeCjk === void 0 ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
         // The blank-session backdrop defaults on; a stored false turns it off.
-        heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
-        // The markdown look is opt-in: only an explicit `true` turns it on, so a
-        // payload written by an older version can never light it up.
-        markdownScope: input.markdownScope === true
+        heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false
+        // Markdown is fixed component styling now; its former setting is ignored.
         // Any other key in an old payload is ignored. Every retired switch field is
         // dropped here: `compactHero` (its runtime is gone — the new-session layout
         // is CSS-only, see `newSessionInputRules` in styles.js, and a stored value
@@ -2738,12 +2732,12 @@ window.__ModuleLoader__.load({
         // HOVER ONLY. A focus-within member (on the block, the code-wrap or the
         // tool slot) kept the rail painted after a row was clicked open, until the
         // user clicked elsewhere, because expanding a row moves focus into it.
-        // Focus no longer reveals; the button keeps its own focus-visible rule so
-        // keyboard users still see it when they tab to it.
+        // Only focus INSIDE THE BANNER reveals it. Focusing the disclosure
+        // row does not; a focused child cannot reveal an opacity:0 parent.
         ".md-code-block:hover [data-code-block-banner],",
         "[data-code-wrap]:hover [data-code-block-banner],",
         '[data-slot="tool.call.toolview"]:hover [data-code-block-banner],',
-        "[data-code-block-banner] button:focus-visible {",
+        "[data-code-block-banner]:focus-within {",
         "  opacity: 1 !important;",
         "  pointer-events: auto !important;",
         "}",
@@ -3449,6 +3443,7 @@ window.__ModuleLoader__.load({
         // The diff card's copy control joins the shared rail rather than repeating
         // its geometry: size, radius, transparent fill and ink are one definition.
         "[data-cds-diff-copy],",
+        "[data-cds-native-copy],",
         ".md-code-block [data-code-block-banner] button {",
         "  width: var(--cds-copy-size);",
         "  height: var(--cds-copy-size);",
@@ -3467,10 +3462,47 @@ window.__ModuleLoader__.load({
         '[data-slot="tool.call.toolview"] [data-code-block-banner] button:focus-visible,',
         "[data-cds-diff-copy]:hover,",
         "[data-cds-diff-copy]:focus-visible,",
+        "[data-cds-native-copy]:hover,",
+        "[data-cds-native-copy]:focus-visible,",
         ".md-code-block [data-code-block-banner] button:hover,",
         ".md-code-block [data-code-block-banner] button:focus-visible {",
         "  background: transparent !important;",
         "  color: var(--cds-copy-ink-hover);",
+        "}",
+        // Text stays in the DOM for native feedback and accessibility; no React
+        // children or handlers are replaced. Only the owned mark enables the icon.
+        "[data-cds-native-copy] {",
+        "  display: inline-flex;",
+        "  align-items: center;",
+        "  justify-content: center;",
+        "  box-sizing: border-box;",
+        "  flex: none;",
+        "  padding: 0;",
+        "  margin: 0;",
+        "  border: 0;",
+        "  font-size: 0 !important;",
+        "  cursor: pointer;",
+        "  opacity: 0;",
+        "  pointer-events: none;",
+        "}",
+        "[data-search]:hover [data-cds-native-copy],",
+        "[data-read]:hover [data-cds-native-copy],",
+        "[data-diff]:hover [data-cds-native-copy],",
+        "[data-terminal]:hover [data-cds-native-copy],",
+        "[data-cds-native-copy]:focus-visible {",
+        "  opacity: 1;",
+        "  pointer-events: auto;",
+        "}",
+        "[data-cds-native-copy]::before {",
+        '  content: "";',
+        "  width: var(--cds-copy-icon);",
+        "  height: var(--cds-copy-icon);",
+        "  background: currentColor;",
+        '  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%3E%3Crect%20x%3D%221.52075%22%20y%3D%224.07373%22%20width%3D%2210.3932%22%20height%3D%2210.3932%22%20rx%3D%222%22%20stroke%3D%22black%22%2F%3E%3Cpath%20d%3D%22M11.9792%201.53296C13.36%201.53296%2014.4792%202.65225%2014.4792%204.03296V9.42847C14.4792%2010.3756%2013.9521%2011.1987%2013.1755%2011.6228V10.3298C13.3652%2010.0787%2013.4792%209.7674%2013.4792%209.42847V4.03296C13.4792%203.20453%2012.8077%202.53296%2011.9792%202.53296H6.58374C6.27966%202.53301%205.99684%202.6235%205.7605%202.77905H4.42358C4.85652%202.03463%205.66056%201.53304%206.58374%201.53296H11.9792Z%22%20fill%3D%22black%22%2F%3E%3C%2Fsvg%3E") center / contain no-repeat;',
+        "}",
+        '[data-cds-native-copy="copied"] { color: var(--dsw-alias-state-success-primary); }',
+        '[data-cds-native-copy="copied"]::before {',
+        '  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M3.5%208.5l3%203%206-6%22%20stroke%3D%22black%22%20stroke-width%3D%221.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");',
         "}",
         // NOTHING IN THE BANNER BUT THE BUTTONS. Inside a tool card the banner's
         // label block is chrome the reference never draws, so every direct child
@@ -3530,10 +3562,17 @@ window.__ModuleLoader__.load({
     }
     function diffStatFamilyRules() {
       return [
-        "/* ---- the \xB1N change counts: UI family + a tinted plate ------------- */",
+        "/* ---- the \xB1N change counts: code family + joined diff backgrounds ------------- */",
         '[data-slot="tool.call.toolview"] [data-tool] [class*="diffStat"],',
         '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diffrow-stats] {',
-        "  font-family: var(--dsw-font-family-ui, var(--dsw-font-family)) !important;",
+        "  display: inline-flex;",
+        "  align-items: center;",
+        "  gap: 0;",
+        "  flex: none;",
+        "  border-radius: var(--dsw-radius-xs);",
+        "  overflow: hidden;",
+        "  white-space: nowrap;",
+        "  font-family: var(--ds-font-family-code) !important;",
         "  font-variant-numeric: tabular-nums;",
         "}",
         // The host's cell holds both numbers; the theme's own marker holds two spans.
@@ -3548,20 +3587,24 @@ window.__ModuleLoader__.load({
         '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="add"] {',
         "  display: inline-block;",
         "  flex: none;",
-        "  border-radius: var(--dsw-radius-xs);",
+        "  border-radius: 0;",
+        "  margin: 0;",
         "  padding: 0 4px;",
         "  line-height: 16px;",
-        "  background: var(--dsw-alias-file-diff-added-bg);",
+        "  font-family: var(--ds-font-family-code) !important;",
+        "  background: var(--cds-bg-git-added, var(--dsw-alias-file-diff-added-bg));",
         "  font-variant-numeric: tabular-nums;",
         "}",
         '[data-slot="tool.call.toolview"] [data-tool] [class*="diffRemoved"],',
         '[data-slot="tool.call.toolview"] [data-tool] [data-cds-diff-stat="del"] {',
         "  display: inline-block;",
         "  flex: none;",
-        "  border-radius: var(--dsw-radius-xs);",
+        "  border-radius: 0;",
+        "  margin: 0;",
         "  padding: 0 4px;",
         "  line-height: 16px;",
-        "  background: var(--dsw-alias-file-diff-deleted-bg);",
+        "  font-family: var(--ds-font-family-code) !important;",
+        "  background: var(--cds-bg-git-removed, var(--dsw-alias-file-diff-deleted-bg));",
         "  font-variant-numeric: tabular-nums;",
         "}"
       ].join("\n");
@@ -3630,7 +3673,7 @@ window.__ModuleLoader__.load({
         "}",
         "[data-cds-diffrow-stats] {",
         "  display: inline-flex;",
-        "  gap: 6px;",
+        "  gap: 0;",
         "  flex: none;",
         "  font-size: 12px;",
         "  font-variant-numeric: tabular-nums;",
@@ -4440,7 +4483,7 @@ window.__ModuleLoader__.load({
           motionRules(),
           settingsRules()
         );
-        if (state.markdownScope === true) parts.push(markdownScopeRules());
+        parts.push(markdownScopeRules());
       }
       parts.push(
         footnoteRules(),
@@ -4540,8 +4583,6 @@ window.__ModuleLoader__.load({
       "preferThemeCjk.desc": "Use the embedded Noto Sans SC before system fallbacks in body text and code; the home greeting keeps Noto Serif SC. Off restores the previous order. Explicit font choices take priority.",
       "heroRipple.title": "Home backdrop with click ripples",
       "heroRipple.desc": "On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.",
-      "markdownScope.title": "Assistant markdown: lists, emphasis, links",
-      "markdownScope.desc": "Task lists, bold, italic, strikethrough and links in the assistant\u2019s reply get the reference\u2019s ink, markers and underline offset. Code blocks and inline code keep their own treatment; user messages, tool cards and settings are out of scope.",
       "enabled.title": "Enable CDS theme",
       "enabled.desc": "Off releases every token override and restores the host skin.",
       // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -4595,8 +4636,6 @@ window.__ModuleLoader__.load({
       "preferThemeCjk.desc": "\u6B63\u6587\u4E0E\u4EE3\u7801\u4E2D\u7684\u4E2D\u6587\u4F18\u5148\u4F7F\u7528\u5185\u5D4C\u3001\u6821\u51C6\u5B57\u91CD\u7684\u601D\u6E90\u9ED1\u4F53\uFF0C\u9996\u9875\u95EE\u5019\u8BED\u4ECD\u7528\u601D\u6E90\u5B8B\u4F53\uFF1B\u5173\u95ED\u6062\u590D\u539F\u56DE\u9000\u987A\u5E8F\u3002\u624B\u52A8\u9009\u62E9\u7684\u5B57\u4F53\u59CB\u7EC8\u4F18\u5148\u3002",
       "heroRipple.title": "\u9996\u9875\u80CC\u666F\u70B9\u51FB\u6CE2\u7EB9",
       "heroRipple.desc": "\u65B0\u4F1A\u8BDD\u65F6\uFF0C\u95EE\u5019\u8BED\u4E0E\u8F93\u5165\u6846\u80CC\u540E\u6D6E\u51FA\u4E00\u5C42\u6DE1\u7684\u4EE3\u7801\u5B57\u5F62\uFF0C\u6BCF\u6B21\u70B9\u51FB\u4ECE\u5149\u6807\u5904\u8361\u5F00\u6C34\u6CE2\u3002\u8F93\u5165\u6846\u4F1A\u7565\u900F\uFF0C\u8BA9\u6CE2\u7EB9\u4ECE\u5E95\u4E0B\u900F\u51FA\u6765\u3002\u5173\u95ED\u5373\u6574\u5C42\u79FB\u9664\u3002",
-      "markdownScope.title": "\u52A9\u624B\u6B63\u6587\u7684\u5217\u8868\u3001\u5F3A\u8C03\u4E0E\u94FE\u63A5",
-      "markdownScope.desc": "\u52A9\u624B\u7684\u4EFB\u52A1\u5217\u8868\u3001\u7C97\u4F53\u3001\u659C\u4F53\u3001\u5220\u9664\u7EBF\u4E0E\u94FE\u63A5\u6539\u7528\u53C2\u8003\u7248\u7684\u58A8\u8272\u3001\u9879\u76EE\u7B26\u53F7\u4E0E\u4E0B\u5212\u7EBF\u95F4\u8DDD\u3002\u4EE3\u7801\u5757\u4E0E\u884C\u5185\u4EE3\u7801\u4FDD\u6301\u539F\u6837\uFF1B\u7528\u6237\u6D88\u606F\u3001\u5DE5\u5177\u5361\u7247\u4E0E\u8BBE\u7F6E\u9875\u4E0D\u5728\u8303\u56F4\u5185\u3002",
       "enabled.title": "\u542F\u7528 CDS \u4E3B\u9898",
       "enabled.desc": "\u5173\u95ED\u5373\u91CA\u653E\u5168\u90E8\u4EE4\u724C\u8986\u76D6\uFF0C\u754C\u9762\u56DE\u5230\u5BBF\u4E3B\u539F\u6837\u5F0F\u3002",
       // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------
@@ -5177,33 +5216,6 @@ window.__ModuleLoader__.load({
           }
         },
         {
-          // A REPLICATION ITEM, so by docs/replication-toggles.md it ships WITH its
-          // comparison switch — and OFF at the start, because installing this version
-          // must not change the interface on its own. Off is the host's own list
-          // markers, emphasis and link colour; on is the reference's.
-          //
-          // ORDER 45 is free: 44 is the backdrop above, 42 is retired. The row is a
-          // look-only switch — the rules it gates live in `markdown-scope.js` and are
-          // emitted inside `refine` (styles.js), so turning refinement off removes
-          // the look without touching this setting. Orders 46 and 47 are vacant: the
-          // view-tabs pill and the split composer were removed outright.
-          id: "dsh-cds-theme-markdown-scope",
-          order: 45,
-          key: "markdownScope",
-          titleKey: "markdownScope.title",
-          descKey: "markdownScope.desc",
-          component: function BoundToggle(props) {
-            return React2.createElement(ToggleRow, {
-              slot: {
-                key: "markdownScope",
-                titleKey: "markdownScope.title",
-                descKey: "markdownScope.desc"
-              },
-              t: props.t
-            });
-          }
-        },
-        {
           id: "dsh-cds-theme-enabled",
           order: 30,
           key: "enabled",
@@ -5231,6 +5243,7 @@ window.__ModuleLoader__.load({
         // item; order 42 is vacant again now that the hero-compaction switch is
         // retired (see the note beside `newSessionInputRules` in styles.js).
         //
+        // Order 45 is retired: Markdown styling is fixed inside component refinement.
         // Orders 46 and 47 are now vacant: the view-tabs pill and the split
         // composer were removed outright at the user's request, rows and rules
         // together. They are not retired — there is nothing left to retire — and a
@@ -5263,6 +5276,98 @@ window.__ModuleLoader__.load({
         AccentRow,
         SliderRow,
         ToggleRow
+      };
+    }
+
+    // client/src/native-copy.js
+    var NATIVE_COPY_ATTR = "data-cds-native-copy";
+    var SURFACES = "[data-search], [data-read], [data-diff], [data-terminal]";
+    var LABEL = /^(copy(?: code| results| output)?|copied!?|复制|复制成功|已复制)$/i;
+    var COPIED = /^(copied!?|复制成功|已复制)$/i;
+    function findNativeCopyButtons(doc) {
+      const found = /* @__PURE__ */ new Set();
+      for (const surface of doc.querySelectorAll(SURFACES)) {
+        if (!surface.closest("[data-conversation-content]")) continue;
+        const header = surface.firstElementChild;
+        if (!header) continue;
+        let candidates;
+        if (surface.hasAttribute("data-diff")) candidates = [header];
+        else if (surface.hasAttribute("data-read")) candidates = Array.from(header.lastElementChild?.children || []);
+        else candidates = Array.from(header.children || []);
+        for (const button of candidates) {
+          if (button.tagName !== "BUTTON" || button.closest("[data-code-block-banner]")) continue;
+          if (LABEL.test(button.textContent.trim())) found.add(button);
+        }
+      }
+      return found;
+    }
+    function createNativeCopyMarker(doc) {
+      const view = doc.defaultView;
+      let observer = null;
+      let frame = null;
+      let started = false;
+      let marked = /* @__PURE__ */ new Set();
+      function sweep() {
+        if (!started) return;
+        const next = findNativeCopyButtons(doc);
+        for (const button of marked) {
+          if (!next.has(button)) button.removeAttribute(NATIVE_COPY_ATTR);
+        }
+        for (const button of next) {
+          const state = COPIED.test(button.textContent.trim()) ? "copied" : "idle";
+          if (button.getAttribute(NATIVE_COPY_ATTR) !== state) button.setAttribute(NATIVE_COPY_ATTR, state);
+        }
+        marked = next;
+      }
+      function schedule() {
+        if (!started || frame !== null) return;
+        frame = view.requestAnimationFrame(() => {
+          frame = null;
+          sweep();
+        });
+      }
+      return {
+        start() {
+          if (started || !doc.body || !view?.MutationObserver || !view.requestAnimationFrame) return;
+          started = true;
+          sweep();
+          observer = new view.MutationObserver((records) => {
+            for (const record of records) {
+              const target = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+              if (target?.closest("[" + NATIVE_COPY_ATTR + "]")) {
+                schedule();
+                return;
+              }
+              for (const node of record.addedNodes || []) {
+                if (node.nodeType !== 1) continue;
+                if (target?.closest(SURFACES) || node.matches(SURFACES) || node.querySelector(SURFACES)) {
+                  schedule();
+                  return;
+                }
+              }
+              if (record.removedNodes?.length && marked.size > 0) {
+                for (const button of marked) {
+                  if (!button.isConnected || !button.closest("[data-conversation-content]")) {
+                    schedule();
+                    return;
+                  }
+                }
+              }
+            }
+          });
+          observer.observe(doc.body, { subtree: true, childList: true, characterData: true });
+        },
+        stop() {
+          if (!started) return;
+          started = false;
+          observer.disconnect();
+          observer = null;
+          if (frame !== null) view.cancelAnimationFrame(frame);
+          frame = null;
+          for (const button of marked) button.removeAttribute(NATIVE_COPY_ATTR);
+          marked.clear();
+        },
+        sweep
       };
     }
 
@@ -7540,6 +7645,22 @@ window.__ModuleLoader__.load({
         ctx.effect(function() {
           if (typeof document === "undefined") return function() {
           };
+          const marker = createNativeCopyMarker(document);
+          const sync = function() {
+            const state = settings2.getState();
+            if (state.enabled !== false && state.refine !== false) marker.start();
+            else marker.stop();
+          };
+          sync();
+          const unsubscribe = settings2.subscribe(sync);
+          return function() {
+            unsubscribe();
+            marker.stop();
+          };
+        }, "dsh-cds-theme: native tool copy controls");
+        ctx.effect(function() {
+          if (typeof document === "undefined") return function() {
+          };
           const marker = createDiffNumberMarker(document);
           const wanted = function() {
             const state = settings2.getState();
@@ -7714,6 +7835,7 @@ window.__ModuleLoader__.load({
     var name = PLUGIN_ID;
     var inject = ["theme", "slots", "locale"];
     var __internals = {
+      createNativeCopyMarker,
       PLUGIN_ID,
       DEFAULT_STATE,
       BUBBLE_RADIUS,

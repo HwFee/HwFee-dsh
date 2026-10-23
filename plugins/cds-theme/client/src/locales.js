@@ -51,8 +51,6 @@ export const en = {
   'preferThemeCjk.desc': 'Use the embedded Noto Sans SC before system fallbacks in body text and code; the home greeting keeps Noto Serif SC. Off restores the previous order. Explicit font choices take priority.',
   'heroRipple.title': 'Home backdrop with click ripples',
   'heroRipple.desc': 'On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.',
-  'markdownScope.title': 'Assistant markdown: lists, emphasis, links',
-  'markdownScope.desc': 'Task lists, bold, italic, strikethrough and links in the assistant’s reply get the reference’s ink, markers and underline offset. Code blocks and inline code keep their own treatment; user messages, tool cards and settings are out of scope.',
   'enabled.title': 'Enable CDS theme',
   'enabled.desc': 'Off releases every token override and restores the host skin.',
   // ---- the theme's own edit / write card (diffview.js) ------------------
@@ -107,8 +105,6 @@ export const zh = {
   'preferThemeCjk.desc': '正文与代码中的中文优先使用内嵌、校准字重的思源黑体，首页问候语仍用思源宋体；关闭恢复原回退顺序。手动选择的字体始终优先。',
   'heroRipple.title': '首页背景点击波纹',
   'heroRipple.desc': '新会话时，问候语与输入框背后浮出一层淡的代码字形，每次点击从光标处荡开水波。输入框会略透，让波纹从底下透出来。关闭即整层移除。',
-  'markdownScope.title': '助手正文的列表、强调与链接',
-  'markdownScope.desc': '助手的任务列表、粗体、斜体、删除线与链接改用参考版的墨色、项目符号与下划线间距。代码块与行内代码保持原样；用户消息、工具卡片与设置页不在范围内。',
   'enabled.title': '启用 CDS 主题',
   'enabled.desc': '关闭即释放全部令牌覆盖，界面回到宿主原样式。',
   // ---- 主题自绘的编辑 / 写入卡片（diffview.js）----------------------------

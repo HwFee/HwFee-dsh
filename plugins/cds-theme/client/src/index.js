@@ -95,6 +95,7 @@ import { buildGlow, assertPairs, createThemeBridge } from './theme.js'
 import { buildCss, createStyles, fontSheet } from './styles.js'
 import { createPanel, installPanelCss, removePanelCss } from './panel.js'
 import { createThemeModeStore, THEME_MODES, THEME_MODE_LABELS, DEFAULT_PREFERENCE } from './thememode.js'
+import { createNativeCopyMarker } from './native-copy.js'
 import { createLifecycle } from './lifecycle.js'
 import { ACCENT_PRESETS, RADII } from './palette.js'
 import { parseColor, formatColor, mixColor, contrast, luminance } from './color.js'
@@ -205,6 +206,7 @@ export { apply }
  * lifecycle. `apply` itself is the plugin body and runs at mount.
  */
 export const __internals = {
+  createNativeCopyMarker,
   PLUGIN_ID,
   DEFAULT_STATE,
   BUBBLE_RADIUS,

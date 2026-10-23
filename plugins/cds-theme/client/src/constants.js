@@ -32,10 +32,6 @@ export const BUBBLE_RADIUS = 18
  *            the hero with a water ripple spreading from every click. On by
  *            default because it is a replication of the shipped look; off
  *            removes the canvas, the listener and the see-through composer card.
- * `markdownScope` the three markdown families the user asked this theme to
- *            paint — lists and task lists, bold/italic/strikethrough, links —
- *            scoped to `[data-chat-flow-kind="assistant-step"]` alone. Off
- *            leaves those three exactly as the host draws them.
  * `enabled`  master switch; off means the plugin releases its token layer.
  *
  * THERE ARE NO PER-ITEM REPLICATION SWITCHES ANY MORE. Seven shipped during the
@@ -83,10 +79,6 @@ export const DEFAULT_STATE = {
   pasteAsFile: true,
   preferThemeCjk: true,
   heroRipple: true,
-  // The assistant markdown look, OFF at the start so installing this version
-  // cannot change the interface on its own: the scope rules paint the
-  // assistant's lists/emphasis/links, and nothing else.
-  markdownScope: false,
 }
 
 export const ACCENT_IDS = ['clay', 'ochre', 'sand', 'graphite']
@@ -139,9 +131,7 @@ export function sanitize(raw) {
     preferThemeCjk: input.preferThemeCjk === undefined ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
     // The blank-session backdrop defaults on; a stored false turns it off.
     heroRipple: input.heroRipple === undefined ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
-    // The markdown look is opt-in: only an explicit `true` turns it on, so a
-    // payload written by an older version can never light it up.
-    markdownScope: input.markdownScope === true,
+    // Markdown is fixed component styling now; its former setting is ignored.
     // Any other key in an old payload is ignored. Every retired switch field is
     // dropped here: `compactHero` (its runtime is gone — the new-session layout
     // is CSS-only, see `newSessionInputRules` in styles.js, and a stored value

@@ -7,6 +7,7 @@ import { createPasteConverter } from './paste.js'
 import { createHeroRipple } from './ripple.js'
 import { createDiffNumberMarker } from './diffnumbers.js'
 import { installVariantHooks } from './varianthooks.js'
+import { createNativeCopyMarker } from './native-copy.js'
 import { createDiffView } from './diffview.js'
 import {
   appearanceSectionOptions, createAppearanceSection, registerSettingsRows,
@@ -215,6 +216,20 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
         if (dispose !== null) { dispose(); dispose = null }
       }
     }, 'dsh-cds-theme: payload card variant hooks')
+
+    // Legacy tool primitives have text-copy controls outside the code banner.
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const marker = createNativeCopyMarker(document)
+      const sync = function () {
+        const state = settings.getState()
+        if (state.enabled !== false && state.refine !== false) marker.start()
+        else marker.stop()
+      }
+      sync()
+      const unsubscribe = settings.subscribe(sync)
+      return function () { unsubscribe(); marker.stop() }
+    }, 'dsh-cds-theme: native tool copy controls')
 
     // The diff card's line numbers: `diffnumbers.js` re-seeds the CSS counters
     // from a hunk start when the card publishes one, and does nothing when it

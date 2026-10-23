@@ -250,8 +250,6 @@ const APPEARANCE_ROW_IDS = [
   'dsh-cds-theme-paste-as-file',
   'dsh-cds-theme-prefer-theme-cjk',
   'dsh-cds-theme-hero-ripple',
-  // The assistant markdown scope (45). It ships OFF.
-  'dsh-cds-theme-markdown-scope',
 ]
 
 // The flat fallback concatenates the two ledgers: appearance rows first (in
@@ -267,6 +265,7 @@ const ALL_ROW_IDS = APPEARANCE_ROW_IDS.concat(['dsh-cds-theme-enabled'])
 const RETIRED_ROW_IDS = [
   'dsh-cds-theme-code-block-details',
   'dsh-cds-theme-markdown-body',
+  'dsh-cds-theme-markdown-scope',
   // The hero-compaction switch went with its runtime (the measured seat fed its
   // own collapse); the new-session layout is CSS-only and has no row.
   'dsh-cds-theme-compact-hero',
@@ -396,8 +395,8 @@ test('the row orders are the same numbers on the new page', function () {
   createRows({ slots })
 
   const orders = slots.entries(APPEARANCE_SLOT).map(function (entry) { return entry.options.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 44, 39, 43, 45].sort(function (a, b) { return a - b }),
-    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39/43/45 and the backdrop 44 (40/41 are usage-stats on this page, 42 is vacated)')
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 44, 39, 43].sort(function (a, b) { return a - b }),
+    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39/43 and the backdrop 44 (40/41 are usage-stats on this page, 42 is vacated)')
   const generalOrders = slots.entries(GENERAL_SLOT).map(function (entry) { return entry.options.order })
   assert.deepEqual(generalOrders, [30])
 })
@@ -410,7 +409,7 @@ test('the rows keep their components and locale namespace on the new slot', func
   const registered = slots.declarations.filter(function (opts) {
     return opts.name === APPEARANCE_SLOT || opts.name === GENERAL_SLOT
   })
-  assert.equal(registered.length, 12)
+  assert.equal(registered.length, ALL_ROW_IDS.length)
   for (const options of registered) {
     assert.equal(options.locale, LOCALE_NS, options.id + ' must inject t')
     assert.equal(typeof options.component, 'function', options.id + ' must render')
@@ -423,14 +422,14 @@ test('the rows keep their components and locale namespace on the new slot', func
 
 // ------------------------------------------------------------ the fallback
 
-test('without a settings.section ledger all twelve rows use the General list', function () {
+test('without a settings.section ledger all eleven rows use the General list', function () {
   const slots = fakeSlots()
   slots.declare(GENERAL_SLOT)   // a host without the settings shell
   const rows = createRows({ slots })
 
   assert.equal(rows.controller.mode, 'flat')
   assert.equal(rows.controller.appearanceRows(), 0)
-  assert.equal(rows.controller.generalRows(), 12)
+  assert.equal(rows.controller.generalRows(), ALL_ROW_IDS.length)
   assert.match(rows.controller.reason(), /settings\.section/)
   assert.equal(rows.warnings.length, 1)
   assert.match(rows.warnings[0], /fall back to the General list/)
@@ -522,13 +521,13 @@ test('a late appearance declaration after the fallback does not double-register'
   slots.declare(GENERAL_SLOT)
   const rows = createRows({ slots })
   assert.equal(rows.controller.mode, 'flat')
-  assert.equal(slots.ids(GENERAL_SLOT).length, 12)
+  assert.equal(slots.ids(GENERAL_SLOT).length, ALL_ROW_IDS.length)
 
   // The host finally declares the child slot; the flat list already owns the
   // rows, so the appearance mount must stay a no-op (duplicate ids would throw
   // inside the outlet).
   assert.doesNotThrow(function () { slots.declare(APPEARANCE_SLOT) })
-  assert.equal(slots.ids(GENERAL_SLOT).length, 12, 'still exactly one copy of every row')
+  assert.equal(slots.ids(GENERAL_SLOT).length, ALL_ROW_IDS.length, 'still exactly one copy of every row')
   assert.deepEqual(slots.ids(APPEARANCE_SLOT), [])
 })
 
@@ -592,7 +591,7 @@ test('dispose of a flat fallback leaves the General list empty', function () {
   const slots = fakeSlots()
   slots.declare(GENERAL_SLOT)
   const rows = createRows({ slots, section: null })
-  assert.equal(slots.ids(GENERAL_SLOT).length, 12)
+  assert.equal(slots.ids(GENERAL_SLOT).length, ALL_ROW_IDS.length)
   rows.controller.dispose()
   assert.deepEqual(slots.ids(GENERAL_SLOT), [])
 })
@@ -619,7 +618,7 @@ test('the lifecycle registers the section instead of the flat General list', fun
 
 test('the panel splits the rows the way the section expects', function () {
   const panel = createRowPanel()
-  assert.equal(panel.appearanceSlots.length, 11, 'theme-mode row + ten controls')
+  assert.equal(panel.appearanceSlots.length, APPEARANCE_ROW_IDS.length, 'theme-mode row + nine controls')
   assert.equal(panel.generalSlots.length, 1)
   assert.equal(panel.generalSlots[0].id, 'dsh-cds-theme-enabled')
   assert.equal(panel.modeSlot.id, 'dsh-cds-theme-mode')
@@ -627,7 +626,7 @@ test('the panel splits the rows the way the section expects', function () {
   assert.equal(panel.appearanceSlots.length + panel.generalSlots.length, panel.slots.length)
   // `slots` keeps display order, so the fallback list reads top to bottom.
   const orders = panel.slots.map(function (slot) { return slot.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44, 45])
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44])
 })
 
 test('the two verified replication rows are gone from every slot', function () {
@@ -660,7 +659,7 @@ test('the rejected row is gone everywhere and its order stays vacated', function
   //   42          — the hero-compaction switch, retired with its runtime
   //   46/47       — the view-tabs pill and the split composer, removed outright
   //
-  // 45 is NOT vacated: it is the assistant markdown scope, which stayed.
+  // 45 is retired: Markdown styling stays without a setting.
   const panel = createRowPanel()
   const orders = panel.slots.map(function (slot) { return slot.order })
   assert.equal(orders.indexOf(27), -1, 'order 27 is retired with code-block-details')
@@ -681,8 +680,8 @@ test('the rejected row is gone everywhere and its order stays vacated', function
     assert.equal(orders.indexOf(dropped), -1,
       'order ' + dropped + ' belonged to a removed reference-derived look')
   }
-  assert.equal(orders.indexOf(45) >= 0, true,
-    'order 45 is the assistant markdown scope, which stayed')
+  assert.equal(orders.indexOf(45), -1,
+    'order 45 is retired with the markdown switch')
   // 40 and 41 belong to dsh-usage-stats on this same page. They are deliberately
   // NOT asserted vacated here: usage-stats is free to renumber its own rows, and
   // a vacancy assertion in this plugin would block that for no reason. What this

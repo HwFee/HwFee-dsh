@@ -504,33 +504,6 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       },
     },
     {
-      // A REPLICATION ITEM, so by docs/replication-toggles.md it ships WITH its
-      // comparison switch — and OFF at the start, because installing this version
-      // must not change the interface on its own. Off is the host's own list
-      // markers, emphasis and link colour; on is the reference's.
-      //
-      // ORDER 45 is free: 44 is the backdrop above, 42 is retired. The row is a
-      // look-only switch — the rules it gates live in `markdown-scope.js` and are
-      // emitted inside `refine` (styles.js), so turning refinement off removes
-      // the look without touching this setting. Orders 46 and 47 are vacant: the
-      // view-tabs pill and the split composer were removed outright.
-      id: 'dsh-cds-theme-markdown-scope',
-      order: 45,
-      key: 'markdownScope',
-      titleKey: 'markdownScope.title',
-      descKey: 'markdownScope.desc',
-      component: function BoundToggle(props) {
-        return React.createElement(ToggleRow, {
-          slot: {
-            key: 'markdownScope',
-            titleKey: 'markdownScope.title',
-            descKey: 'markdownScope.desc',
-          },
-          t: props.t,
-        })
-      },
-    },
-    {
       id: 'dsh-cds-theme-enabled',
       order: 30,
       key: 'enabled',
@@ -558,6 +531,7 @@ export function createPanel({ React, primitives, settings, themeMode }) {
     // item; order 42 is vacant again now that the hero-compaction switch is
     // retired (see the note beside `newSessionInputRules` in styles.js).
     //
+    // Order 45 is retired: Markdown styling is fixed inside component refinement.
     // Orders 46 and 47 are now vacant: the view-tabs pill and the split
     // composer were removed outright at the user's request, rows and rules
     // together. They are not retired — there is nothing left to retire — and a

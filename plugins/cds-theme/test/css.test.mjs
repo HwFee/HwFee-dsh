@@ -798,9 +798,10 @@ test('the step body feathers its bottom edge and never its top edge', function (
       'a top-edge fade would land on the pinned 「思考」 header: ' + rule.selector)
   }
 
-  // Degrade: every mask rule in the sheet is attributed to a scroll hook.
+  // Content fades need scroll hooks. Owned icon pseudo-elements are glyphs.
   for (const rule of rules) {
     if (!/mask-image:/.test(rule.body)) continue
+    if (rule.selector === '[data-cds-native-copy="copied"]::before') continue
     assert.ok(rule.selector.includes('data-scroll-'),
       'unconditional mask rule would clip permanently: ' + rule.selector)
   }

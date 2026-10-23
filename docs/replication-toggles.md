@@ -50,6 +50,7 @@
 |---|---|
 | `codeBlockDetails` | 代码块横幅语言标签（Mono 10.5/12/500 大写 .05em）+ 折叠行 |
 | `markdownBody` | Markdown 表格的闭合发丝线框、表头着色、引用块节奏 |
+| `markdownScope` | 助手正文的列表、任务列表、强调与链接；设置行与状态键已删除，随组件精修固定生效 |
 | `footnotes` | 脚注区 12/15 三级色 + 上方半像素线 + 上标等宽数字。**宿主对 `.footnotes` 没有任何样式**，这是它唯一的样式来源 |
 | `statTypography` | 输入框统计胶囊与两个用量弹层的等宽数字 + dt/dd 阶梯 |
 | `buttonSpring` | 本插件自有控件（`.dct-swatch` / `.dct-toggle` / `.dct-mode-cube`）按压的 15 阶弹簧 |
