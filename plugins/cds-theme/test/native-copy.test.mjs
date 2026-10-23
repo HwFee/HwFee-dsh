@@ -104,7 +104,7 @@ test('native icons share copy tokens, retain success feedback, and follow refine
   assert.match(css, /\[data-cds-native-copy\],[\s\S]*?width: var\(--cds-copy-size\)/)
   assert.match(css, /\[data-cds-native-copy\]::before \{[\s\S]*?width: var\(--cds-copy-icon\)/)
   assert.match(css, /\[data-cds-native-copy="copied"\]::before/)
-  assert.ok(css.includes('[data-code-block-banner]:focus-within {'), 'reveal the parent, not only the focused child')
+  assert.ok(!css.includes('[data-code-block-banner]:focus-within'), 'retained focus must not reveal the banner')
   for (const state of [{ refine: false }, { enabled: false }]) {
     assert.ok(!buildCssFor(sanitize(state)).includes('[data-cds-native-copy]'))
   }

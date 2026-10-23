@@ -1,5 +1,29 @@
 # 工具面板复制按钮复核
 
+## 2026-10-23：轨迹入口与复制相邻，收紧用量面板
+
+原生工具、Shell 和编辑/新建文件卡片的轨迹入口现为 18×18 控件内的 12×12 SVG，统一放在复制左侧、间隔约 8px，同一面板悬停时显示，移开即隐藏。编辑卡片的入口移到复制所在的标题行；正文里不再留第二个入口或按钮行。
+
+- [tool-chrome.js](../plugins/cds-theme/client/src/tool-chrome.js) 从稳定工具钩子识别原生“查看 / Inspect”按钮，保留 React 节点与原回调，只管理可撤销标记。角标位置不是写死常量：标记在面板挂载时量一次复制按钮的实际几何，把偏移写成 `--cds-trace-top` / `--cds-trace-right`，因此宿主三种不同的复制位置（搜索卡自己的 9px/14px 标题栏、代码 banner、裸角落）都能对齐；窗口缩放时清掉旧偏移并重测一次，停用与卸载会一并还原。[tool-chrome-styles.js](../plugins/cds-theme/client/src/tool-chrome-styles.js) 只负责图标本身。[diffview.js](../plugins/cds-theme/client/src/diffview.js) 与 [tool-view.js](../plugins/git-bash/client/src/tool-view.js) 直接传递宿主的 inspect 回调。
+- 搜索结果下方的第二个卡片来自宿主同时输出结构化列表和截断后的完整文本。现在只对格式完整、含存储路径及 read/grep 提示的恢复文本收起重复列表，显示无边框提示；未识别文本和错误保持原样。
+- 用量面板删去小说行上方横线与 padding，改为 4px 间距；面板内边距 8px 12px。热力图隐藏滚动条但保留横向滚动，高度预算不再预留 12px 滚动条空间。当前机器通过实际设置滑块将高度 348→332，实测小说行底部至内容区末端 5px，加外壳 8px 后总留白约 13px；源码默认高度仍为 344。
+- 三个插件构建及完整 npm test、主题 verify、仓库 audit、diff whitespace 检查通过。回归已反向验证：恢复按钮占行、重复恢复文本、额外卡片框、写死角标位置、吞掉回调、旧滚动条预留、缩放不重测时测试失败，恢复后通过。不适用：纯逻辑单测截图；假 DOM/React 树单测亦以真实界面场景补充。
+- 真实桌面截图：[.work/shots/tool-trace-installed](../.work/shots/tool-trace-installed/) 为用量面板浅/深/窄屏、深色与高度设置；[.work/shots/tool-trace-final](../.work/shots/tool-trace-final/) 为三个面板悬停显示与移出隐藏。已逐张检查，实测三个面板的图标与复制间距为 8.33px / 8px / 8px，垂直中心偏差 ≤0.33px。
+
+代码及构建产物通过本地 tarball 和插件管理服务应用到 desktop profile，运行时确认新组件已加载；ui-settings.enabled 已通过宿主设置服务开启并持久化。临时设置辅助包已移除，空白验证会话已归档。未提交、推送或发布 npm 包。
+
+## 2026-10-23：统一为仅悬停显示
+
+编辑 diff 展开后，焦点留在标题上，旧的行级 `focus-within` 规则使复制按钮持续可见。现在 diff、代码 banner、旧版 read/search/diff/terminal 和 git-bash 的复制控件仅由容器悬停显示；移开鼠标即隐藏，焦点及复制成功状态均不延长显示。
+
+- `plugins/cds-theme/client/src/styles.js` 移除三类控件的焦点显示分支；`plugins/git-bash/client/src/styles.js` 同步移除焦点显示分支。
+- 两个插件的构建及完整 `npm test` 通过，主题 verify、仓库 audit 和 `git diff --check` 通过。git-bash 的进程超时测试首次并行运行时未能在 500ms 内启动子进程，单独重试及随后完整运行通过。
+- 新增回归守卫覆盖主题和 shell 的显示选择器；主题守卫在修改实现前已失败，确认能抓住旧规则。
+- 在真实 DSH 桌面渲染器中，以实际 diff 组件输出和四种受控卡片验证 CSS：悬停时 opacity 为 1；移开鼠标、保留焦点时 opacity 为 0、pointer-events 为 none。此验证不调用模型，不创建会话。
+- 截图及测量在 `.work/shots/hover-repair/`，已逐张查看。构建产物已备份后同步至本机 desktop profile，并完整退出重开 DSH；重启后主题正常加载，旧 diff 焦点规则不存在。本次为本机修复，未发布 npm 包。
+
+下文保留此前复核记录；其中允许键盘焦点显示的行为已由以上规则替换。
+
 本轮范围：grep/glob 复制按钮，以及其他工具面板的同类 UI 遗漏与边界行为。genui 改造按用户要求暂缓。
 
 ## 已修复

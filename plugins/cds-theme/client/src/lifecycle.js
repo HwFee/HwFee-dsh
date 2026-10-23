@@ -8,6 +8,7 @@ import { createHeroRipple } from './ripple.js'
 import { createDiffNumberMarker } from './diffnumbers.js'
 import { installVariantHooks } from './varianthooks.js'
 import { createNativeCopyMarker } from './native-copy.js'
+import { createToolChromeMarker } from './tool-chrome.js'
 import { createDiffView } from './diffview.js'
 import {
   appearanceSectionOptions, createAppearanceSection, registerSettingsRows,
@@ -230,6 +231,19 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
       const unsubscribe = settings.subscribe(sync)
       return function () { unsubscribe(); marker.stop() }
     }, 'dsh-cds-theme: native tool copy controls')
+
+    ctx.effect(function () {
+      if (typeof document === 'undefined') return function () {}
+      const marker = createToolChromeMarker(document)
+      const sync = function () {
+        const state = settings.getState()
+        if (state.enabled !== false && state.refine !== false) marker.start()
+        else marker.stop()
+      }
+      sync()
+      const unsubscribe = settings.subscribe(sync)
+      return function () { unsubscribe(); marker.stop() }
+    }, 'dsh-cds-theme: tool trace controls and search recovery')
 
     // The diff card's line numbers: `diffnumbers.js` re-seeds the CSS counters
     // from a hunk start when the card publishes one, and does nothing when it

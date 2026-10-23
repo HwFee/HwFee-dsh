@@ -28,6 +28,13 @@
  *      size stays 12px and no font ever goes below `CARD_LABEL_FLOOR` /
  *      `CARD_VALUE_FLOOR`.
  *
+ * THE FOOT'S SPACING IS NOW ONE NUMBER (`footGap`). It used to be two: the
+ * overview's uniform stack gap PLUS 8px of `padding-top` under a .5px hairline
+ * divider, i.e. 18.5px of air over a single line of prose. The divider is gone
+ * and the foot sits `footGap` (4px, 2px in the packed tier) under the band, so
+ * `fixedHeight` adds ONE gap there where it used to add two — 14.5px of the
+ * tab's budget returns to the graphics instead of being spent on whitespace.
+ *
  * The returned lengths are emitted as custom properties by `overviewVars()`;
  * the stylesheet consumes them with today's values as fallbacks, so a host that
  * never calls this module still renders the roomy layout.
@@ -65,11 +72,26 @@ export const CARD_LABEL_FLOOR = 10
 export const CARD_VALUE_FLOOR = 15
 
 /**
- * Reserve for the heat band's horizontal scrollbar (measured ~10px with
- * `scrollbar-width: thin`; 12 leaves a pixel of slack). A long history still
- * scrolls sideways, and that bar eats vertical space inside the band.
+ * Reserve for the heat band's horizontal scrollbar — now ZERO, because the band
+ * no longer draws one.
+ *
+ * It used to be 12px (`scrollbar-width: thin` plus a pixel of slack), and that
+ * was the whole reason the Overview tab always ended in dead space under the
+ * foot: the cell budget subtracted the bar whether or not the history was long
+ * enough to produce it, and `cell` is an integer, so
+ * `slack = reserve + (content % 7)`. Most profiles never overflow a 1104px band
+ * (≈44 columns ≈ 308 days), so that 12px was pure whitespace.
+ *
+ * The band now hides its scrollbar exactly the way the model list does
+ * (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`), which
+ * removes the gutter itself instead of pretending it is small. `overflow-x:
+ * auto` STAYS, so wheel/trackpad/touch scrolling of a genuinely long history
+ * still works — it just has no visible bar and reserves no height. The constant
+ * survives (at 0) rather than disappearing: it keeps `cellFor()`'s arithmetic
+ * readable and leaves one named place to reintroduce a reserve if some future
+ * host forces classic scrollbars back in.
  */
-export const HEAT_SCROLLBAR_RESERVE = 12
+export const HEAT_SCROLLBAR_RESERVE = 0
 
 /** The viewport breakpoint the stylesheet wraps the cards into two columns at. */
 export const NARROW_VIEWPORT_PX = 560
@@ -114,7 +136,7 @@ export const LAYOUT_TIERS = [
     minCell: 10,
     overviewGap: 10, gridGap: 6,
     cardPad: 8, cardGap: 2, labelSize: 11, labelLh: 15, valueSize: 17, valueLh: 22,
-    footPad: 8, footLh: 17,
+    footGap: 4, footLh: 17,
     heatPad: 8, heatGap: 4,
   },
   {
@@ -122,7 +144,7 @@ export const LAYOUT_TIERS = [
     minCell: 8,
     overviewGap: 6, gridGap: 6,
     cardPad: 8, cardGap: 2, labelSize: 11, labelLh: 15, valueSize: 17, valueLh: 22,
-    footPad: 8, footLh: 17,
+    footGap: 4, footLh: 17,
     heatPad: 4, heatGap: 3,
   },
   {
@@ -131,7 +153,7 @@ export const LAYOUT_TIERS = [
     overviewGap: 4, gridGap: 4,
     cardPad: 6, cardGap: 2, labelSize: CARD_LABEL_FLOOR, labelLh: 12,
     valueSize: CARD_VALUE_FLOOR, valueLh: 18,
-    footPad: 4, footLh: 15,
+    footGap: 2, footLh: 15,
     heatPad: 2, heatGap: 2,
   },
 ]
@@ -155,8 +177,7 @@ export function gridRows(viewportWidth) {
 /** Everything in the tab that does NOT shrink with the heat cells. */
 export function fixedHeight(tier, rows) {
   const grid = cardHeight(tier) * rows + tier.gridGap * (rows - 1)
-  const foot = tier.footPad + 0.5 + tier.footLh
-  return grid + tier.overviewGap * 2 + foot
+  return grid + tier.overviewGap + tier.footGap + tier.footLh
 }
 
 /** The cell size a tier would use at this body height (before its min test). */
@@ -209,7 +230,7 @@ export function overviewLayout(bodyHeight, options) {
     labelLh: chosen.labelLh,
     valueSize: chosen.valueSize,
     valueLh: chosen.valueLh,
-    footPad: chosen.footPad,
+    footGap: chosen.footGap,
     footLh: chosen.footLh,
     heatPad: chosen.heatPad,
     heatGap: chosen.heatGap,
@@ -234,7 +255,7 @@ export function overviewVars(bodyHeight, options) {
     '--dus-card-label-lh': layout.labelLh + 'px',
     '--dus-card-value-size': layout.valueSize + 'px',
     '--dus-card-value-lh': layout.valueLh + 'px',
-    '--dus-foot-pad': layout.footPad + 'px',
+    '--dus-foot-gap': layout.footGap + 'px',
     '--dus-foot-lh': layout.footLh + 'px',
     '--dus-heat-pad': layout.heatPad + 'px',
     '--dus-heat-gap': layout.heatGap + 'px',

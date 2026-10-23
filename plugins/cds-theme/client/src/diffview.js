@@ -587,7 +587,13 @@ export function createDiffView({ React }) {
       'data-tool': props.toolName,
       'data-state': state,
       'data-expanded': expanded ? 'true' : 'false',
+      'data-inspect': expanded && body.length > 0 && typeof props.inspect === 'function' ? '' : undefined,
     },
+    expanded && body.length > 0 && typeof props.inspect === 'function' ? h('button', {
+      type: 'button', 'data-cds-tool-inspect': '',
+      title: t('diff.inspect'), 'aria-label': t('diff.inspect'), onClick: props.inspect,
+    }, h('svg', { width: 12, height: 12, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true' },
+      h('path', { d: 'M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round', strokeLinejoin: 'round' }))) : null,
     // The copy control is a SIBLING of the disclosure header, not a child: a
     // button inside a role="button" row is a nested control, and the host's own
     // rail solves it the same way (absolutely positioned in the row's corner).

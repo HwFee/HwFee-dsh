@@ -34,6 +34,9 @@ export const en = {
   'run.running': 'Running a command',
   'run.stopped': 'Stopped running the command',
   'run.copy': 'Copy command',
+  // The trajectory entrance in the command box's corner. Named for what the
+  // user gets, not for the mechanism ("inspect" reads like a developer verb).
+  'run.inspect': 'View in trajectory',
 }
 
 export const zh = {
@@ -57,4 +60,5 @@ export const zh = {
   'run.running': '正在运行命令',
   'run.stopped': '已停止运行命令',
   'run.copy': '复制命令',
+  'run.inspect': '在轨迹中查看',
 }

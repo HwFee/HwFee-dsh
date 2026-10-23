@@ -114,14 +114,29 @@ export const FONT_BASE_GLOBAL = '__CDS_THEME_FONT_BASE__'
  * base64 of any `false` entry appears in `client/client.js`. Adding a face is
  * therefore one edit here plus one import in `font-assets.js`, and mislabelling
  * it makes a test red rather than shipping quietly.
+ *
+ * `local` is a LIST, and that is not cosmetic. `local()` matches an installed
+ * family-name STRING exactly, and the Anthropic distribution ships three
+ * different display names for what the theme treats as one family:
+ *
+ *   Anthropic Sans Text / Anthropic Sans Display / Anthropic Sans Web Text
+ *   Anthropic Serif Text / Anthropic Serif Display / Anthropic Serif Web Text
+ *   Anthropic Mono (one name for all weights)
+ *
+ * A single `local("Anthropic Sans")` matched NONE of them: measured 2026-10-23
+ * in the real renderer, that face reported `status: error`, the stack fell to
+ * the inlined `anthropic-cjk`, and every Latin glyph was drawn in Noto Sans SC.
+ * The page looked "not quite right" rather than obviously broken, which is why
+ * it survived review. Each candidate costs a few bytes in the `src` list, and
+ * `fontSourcesFor` emits them in order, so the first installed one wins.
  */
 export const FONT_FACES = [
-  { family: 'anthropic-sans', file: 'AnthropicSans-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Sans' },
-  { family: 'anthropic-sans', file: 'AnthropicSans-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Sans' },
-  { family: 'anthropic-serif', file: 'AnthropicSerif-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Serif' },
-  { family: 'anthropic-serif', file: 'AnthropicSerif-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Serif' },
-  { family: 'anthropic-mono', file: 'AnthropicMono-Roman-Web.woff2', style: 'normal', redistributable: false, local: 'Anthropic Mono' },
-  { family: 'anthropic-mono', file: 'AnthropicMono-Italic-Web.woff2', style: 'italic', redistributable: false, local: 'Anthropic Mono' },
+  { family: 'anthropic-sans', file: 'AnthropicSans-Roman-Web.woff2', style: 'normal', redistributable: false, local: ['Anthropic Sans Text', 'Anthropic Sans Display', 'Anthropic Sans Web Text', 'Anthropic Sans'] },
+  { family: 'anthropic-sans', file: 'AnthropicSans-Italic-Web.woff2', style: 'italic', redistributable: false, local: ['Anthropic Sans Text', 'Anthropic Sans Display', 'Anthropic Sans Web Text', 'Anthropic Sans'] },
+  { family: 'anthropic-serif', file: 'AnthropicSerif-Roman-Web.woff2', style: 'normal', redistributable: false, local: ['Anthropic Serif Text', 'Anthropic Serif Display', 'Anthropic Serif Web Text', 'Anthropic Serif'] },
+  { family: 'anthropic-serif', file: 'AnthropicSerif-Italic-Web.woff2', style: 'italic', redistributable: false, local: ['Anthropic Serif Text', 'Anthropic Serif Display', 'Anthropic Serif Web Text', 'Anthropic Serif'] },
+  { family: 'anthropic-mono', file: 'AnthropicMono-Roman-Web.woff2', style: 'normal', redistributable: false, local: ['Anthropic Mono'] },
+  { family: 'anthropic-mono', file: 'AnthropicMono-Italic-Web.woff2', style: 'italic', redistributable: false, local: ['Anthropic Mono'] },
 ]
 
 /**
@@ -189,12 +204,38 @@ export const CJK_FACES = [
 export const CJK_WEIGHT_RANGE = '300 800'
 
 /**
+ * Normalize a face's `local` field to a non-empty list of family names.
+ *
+ * Exported because the tests assert on the same normalization the emitter uses
+ * instead of re-deriving it. A bare string is accepted (older entries and any
+ * caller that supplies one name), so this widening does not break a caller.
+ */
+export function localNames(face) {
+  if (face === undefined || face === null) return []
+  const raw = face.local
+  const list = Array.isArray(raw) ? raw : (typeof raw === 'string' ? [raw] : [])
+  const seen = new Set()
+  const out = []
+  for (const name of list) {
+    if (typeof name !== 'string') continue
+    const trimmed = name.trim()
+    if (trimmed === '') continue
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(trimmed)
+  }
+  return out
+}
+
+/**
  * The `src` list for one face. Pure and injectable, so the fallback is testable
  * without a browser.
  *
  * `options.fileBase` is the absolute `file://` fonts base (trailing slash).
  * `options.restricted` marks a face this package may NOT redistribute, and
- * `options.local` is that face's own installed family name.
+ * `options.local` is that face's own installed family name — a string or a list
+ * of candidates, tried in order.
  *
  * THE INLINED `data:` URL WINS WHEN PRESENT, AND A RESTRICTED FACE IS NEVER
  * ALLOWED TO GET ONE. That second clause is the licence rule, enforced here
@@ -202,6 +243,11 @@ export const CJK_WEIGHT_RANGE = '300 800'
  * restricted face resolves through `local()` and nothing else. A machine that
  * has the family installed renders the replica exactly as before; a machine
  * without it falls through the stack to the system faces.
+ *
+ * EVERY local() candidate is emitted for a restricted face, not just the first.
+ * `local()` resolves at most one installed family, and CSS takes the first
+ * `src` entry that resolves, so listing all of them is how one @font-face covers
+ * machines that installed the family under a different display name.
  *
  * No URL is emitted for a restricted face even when a `file://` base exists.
  * The package does not ship `fonts/`, so such a URL would 404 once per face on
@@ -220,11 +266,17 @@ export function fontSourcesFor(file, options) {
   // emit `local("<file>.woff2")` — a name no machine has installed — by
   // forgetting to pass it.
   const declared = FONT_FACES.concat(CJK_FACES).find(function (face) { return face.file === file })
-  const localName = typeof opts.local === 'string' && opts.local !== ''
-    ? opts.local
-    : (declared && typeof declared.local === 'string' && declared.local !== '' ? declared.local : file)
+  const candidates = Array.isArray(opts.local) || typeof opts.local === 'string'
+    ? localNames({ local: opts.local })
+    : localNames(declared)
+  // A face with no declared name keeps the old behaviour: the file name stands
+  // in, which resolves nowhere and is the honest "we do not know" answer.
+  const locals = candidates.length > 0 ? candidates : [file]
+  const localSrc = locals
+    .map(function (name) { return 'local("' + name + '")' })
+    .join(', ')
   if (opts.restricted === true || (declared !== undefined && declared.redistributable !== true)) {
-    return 'local("' + localName + '")'
+    return localSrc
   }
   // The inlined face wins unconditionally: it cannot 404, needs no origin and
   // no token, and is what makes the replica render in the desktop shell.
@@ -233,7 +285,7 @@ export function fontSourcesFor(file, options) {
     return 'url("' + inline + '") format("woff2")'
   }
   const fileBase = typeof opts.fileBase === 'string' ? opts.fileBase : ''
-  if (fileBase === '') return 'local("' + localName + '")'
+  if (fileBase === '') return localSrc
   return 'url("' + fileBase + file + '") format("woff2")'
 }
 
@@ -308,9 +360,24 @@ export function fontStackCss() {
     '  --font-cjk-sans-kr: "Apple SD Gothic Neo";',
     // The shipped shifted face first; the system families behind it so an
     // uncovered rare glyph still lands in the SAME typeface when installed.
-    '  --font-cjk-sans: "anthropic-cjk", "Noto Sans SC", "Source Han Sans SC", var(--font-cjk-sans-sc), var(--font-cjk-sans-tc), var(--font-cjk-sans-jp), var(--font-cjk-sans-kr), "Microsoft YaHei";',
-    '  --font-cjk-serif: "anthropic-cjk-serif", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, var(--font-cjk-sans);',
+    //
+    // The `-rest` tokens exist so a composite can pull in the SYSTEM CJK
+    // families WITHOUT repeating the embedded face. `preferredCjkStackCss` has
+    // to write the full composite on `body` (see its header), and expanding
+    // `var(--font-cjk-sans)` there put `anthropic-cjk` in the list twice: once
+    // where the preference wants it, once where the root stack happens to
+    // mention it. The second copy could never match, but it made the emitted
+    // stack read as if two different orders were in force.
+    '  --font-cjk-sans-rest: "Noto Sans SC", "Source Han Sans SC", var(--font-cjk-sans-sc), var(--font-cjk-sans-tc), var(--font-cjk-sans-jp), var(--font-cjk-sans-kr), "Microsoft YaHei";',
+    '  --font-cjk-serif-rest: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, var(--font-cjk-sans-rest);',
+    '  --font-cjk-sans: "anthropic-cjk", var(--font-cjk-sans-rest);',
+    '  --font-cjk-serif: "anthropic-cjk-serif", var(--font-cjk-serif-rest);',
     '  --font-cjk-sans-fallback: var(--font-cjk-sans);',
+    // The Latin-only half. Kept separate from --font-sans-fallbacks for the same
+    // reason as the -rest tokens: `preferredCjkStackCss` has to write a complete
+    // composite on body, and expanding a token that already ends in the CJK
+    // chain appended that whole chain a second time.
+    '  --font-latin-fallbacks: system-ui, "Segoe UI", Roboto, Helvetica, Arial;',
     '  --font-sans-fallbacks: system-ui, "Segoe UI", Roboto, Helvetica, Arial, var(--font-cjk-sans), sans-serif;',
     '  --font-anthropic-sans: "anthropic-sans", var(--font-sans-fallbacks);',
     '  --font-anthropic-serif: "anthropic-serif", ui-serif, Georgia, "Times New Roman", var(--font-cjk-serif), serif;',
@@ -329,6 +396,20 @@ export function fontStackCss() {
  * beside the host tokens instead. Never override --dsh-font-family-* or the
  * host's family tokens: explicit user picks must keep their existing priority.
  *
+ * THE SYSTEM LIST IS BUILT FROM THE `-rest` TOKENS, NOT THE FULL `--font-cjk-*`
+ * ONES. Those full tokens begin with the embedded face; expanding one here and
+ * also naming the embedded face directly is what produced a stack with
+ * `anthropic-cjk` in it TWICE and `system-ui` wedged between the copies:
+ *
+ *   anthropic-sans, anthropic-cjk, system-ui, "Segoe UI", ..., anthropic-cjk, ...
+ *                                      ^^^^^^^^^^ ^^^^^^^^^^^^ first copy of CJK
+ *
+ * The second copy could never match, so rendering was correct — but the Latin
+ * run fell to `system-ui` before reaching any CJK arm, which is exactly the
+ * Latin/Chinese split this switch exists to remove. With the `-rest` tokens the
+ * Chinese arm sits immediately behind the Latin face, so a Latin glyph that the
+ * Anthropic face lacks and a Chinese glyph are served by the same typeface.
+ *
  * A false preference emits nothing and restores fontStackCss() byte-for-byte.
  * Serif keeps the embedded serif CJK face rather than borrowing the sans one.
  */
@@ -337,9 +418,9 @@ export function preferredCjkStackCss(preferThemeCjk) {
   return [
     '/* ---- preferred Chinese fonts: calibrated faces before system ------- */',
     'body {',
-    '  --font-anthropic-sans: "anthropic-sans", "anthropic-cjk", var(--font-sans-fallbacks);',
-    '  --font-anthropic-mono: "anthropic-mono", "anthropic-cjk", ui-monospace, "Cascadia Mono", Consolas, var(--font-cjk-sans), monospace;',
-    '  --font-anthropic-serif: "anthropic-serif", "anthropic-cjk-serif", ui-serif, Georgia, "Times New Roman", var(--font-cjk-serif), serif;',
+    '  --font-anthropic-sans: "anthropic-sans", "anthropic-cjk", var(--font-cjk-sans-rest), var(--font-latin-fallbacks), sans-serif;',
+    '  --font-anthropic-mono: "anthropic-mono", "anthropic-cjk", var(--font-cjk-sans-rest), ui-monospace, "Cascadia Mono", Consolas, monospace;',
+    '  --font-anthropic-serif: "anthropic-serif", "anthropic-cjk-serif", var(--font-cjk-serif-rest), ui-serif, Georgia, "Times New Roman", serif;',
     '}',
   ].join('\n')
 }

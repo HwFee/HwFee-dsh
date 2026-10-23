@@ -369,16 +369,26 @@ test('the overview tab fills the body and never scrolls vertically', function ()
   // braces — clipping a stray pixel beats growing the scrollbar the user
   // rejected.
   const overview = ruleBody(PANEL_CSS, 'dus-overview')
+  // The Overview wrapper is a plain column: its two seams are stated on the
+  // children instead (`.dus-grid` margin-bottom = the overview gap, `.dus-foot`
+  // margin-top = the tighter foot gap), because a uniform `gap` could not give
+  // the foot less air than the cards↔band seam.
   for (const declaration of [
     /display:\s*flex/,
     /flex-direction:\s*column/,
-    /gap:\s*var\(--dus-overview-gap,\s*10px\)/,
     /height:\s*100%/,
     /min-height:\s*0/,
     /overflow-y:\s*hidden/,
   ]) {
     assert.match(overview, declaration, '.dus-overview must keep its fill contract')
   }
+  assert.ok(!/(^|[;\s])gap:/.test(overview),
+    'a uniform gap is gone: the foot needs less air than the cards↔band seam')
+  // Both seams are still fed by layout.js, and the foot's is the smaller one.
+  assert.match(ruleBody(PANEL_CSS, 'dus-grid'),
+    /margin-bottom:\s*var\(--dus-overview-gap,\s*10px\)/, 'the grid carries the band seam')
+  assert.match(ruleBody(PANEL_CSS, 'dus-foot'),
+    /margin-top:\s*var\(--dus-foot-gap,\s*4px\)/, 'the foot carries its own, tighter seam')
   assert.ok(!/overflow-y:\s*auto/.test(overview),
     'auto was the scrollbar the user complained about; the tab shrinks instead')
   assert.ok(!/overflow(-y)?:\s*scroll/.test(overview))
@@ -396,7 +406,15 @@ test('the overview tab fills the body and never scrolls vertically', function ()
   // square, surplus goes into the gaps.
   assert.match(heat, /align-items:\s*stretch/)
   assert.match(heat, /justify-content:\s*space-between/)
-  assert.match(heat, /overflow-x:\s*auto/)
+  // Scrolling still works, but NO BAR IS DRAWN and no gutter is reserved — the
+  // same treatment as the model list, and the reason `HEAT_SCROLLBAR_RESERVE`
+  // is 0 in `layout.js`. `scrollbar-width: thin` would reserve real height.
+  assert.match(heat, /overflow-x:\s*auto/, 'touch/trackpad scrolling stays available')
+  assert.match(heat, /scrollbar-width:\s*none/, 'no gutter: the bar must not eat height')
+  assert.ok(!/scrollbar-width:\s*thin/.test(heat), 'thin still reserves height')
+  assert.match(PANEL_CSS, /\.dus-heat::-webkit-scrollbar\s*\{\s*display:\s*none/,
+    'the Chromium/WebKit path hides it too, like .dus-models')
+  assert.match(heat, /overscroll-behavior-x:\s*contain/)
   const week = ruleBody(PANEL_CSS, 'dus-heat-week')
   assert.match(week, /flex:\s*1 0 9px/)
   assert.match(week, /max-width:\s*var\(--dus-heat-cell-max,\s*22px\)/,
@@ -408,6 +426,13 @@ test('the overview tab fills the body and never scrolls vertically', function ()
   assert.match(ruleBody(PANEL_CSS, 'dus-card-value'), /font-size:\s*var\(--dus-card-value-size,\s*17px\)/)
   assert.match(ruleBody(PANEL_CSS, 'dus-foot'), /font-size:\s*12px/,
     'the foot is prose: its size never changes, only its leading')
+  // The foot carries NO rule and no vertical padding: the .5px `border-top`
+  // hairline plus 8px `padding-top` stacked a stray line and 18.5px of air over
+  // one line of prose. Its only spacing is the one `--dus-foot-gap` margin.
+  const foot = ruleBody(PANEL_CSS, 'dus-foot')
+  assert.ok(!/border/.test(foot), 'no divider above the book line')
+  assert.ok(!/padding/.test(foot), 'no vertical padding on the foot; the gap is the margin')
+  assert.match(foot, /margin-top:\s*var\(--dus-foot-gap,\s*4px\)/, 'one gap owns its spacing')
 })
 
 test('equal height comes from .dus-body + the 100% overview filler, never from a growing heat band', function () {
@@ -502,10 +527,14 @@ test('bodyHeightStyle writes the clamped height and the derived Overview lengths
   // Every other property is a shrink length derived from that height; the
   // height is the only one that is not prefixed `--dus-overview`/`--dus-heat`/
   // `--dus-card`/`--dus-grid`/`--dus-foot`.
+  //
+  // At the 240 floor on a WIDE viewport the tab fits the `tight` tier: the type
+  // keeps full size and only the graphics give.
   const style = bodyHeightStyle(240)
-  assert.equal(style['--dus-heat-cell-max'], '13px', 'the compact tier at the 240 floor')
-  assert.equal(style['--dus-card-label-size'], '10px', 'the label floor')
-  assert.equal(style['--dus-card-value-size'], '15px', 'the value floor')
+  assert.equal(style['--dus-heat-cell-max'], '10px', 'the tight tier at the 240 floor')
+  assert.equal(style['--dus-card-label-size'], '11px', 'full-size labels still fit')
+  assert.equal(style['--dus-card-value-size'], '17px')
+  assert.equal(style['--dus-foot-gap'], '4px', 'one small gap above the foot, no divider')
   for (const [name, value] of Object.entries(style)) {
     assert.equal(typeof value, 'string', name + ' is a string')
     assert.match(value, /-?\d+(?:\.\d+)?px$/, name + ' is a px length')
@@ -515,11 +544,18 @@ test('bodyHeightStyle writes the clamped height and the derived Overview lengths
   assert.ok(parseFloat(tall['--dus-heat-cell-max']) > parseFloat(style['--dus-heat-cell-max']),
     'a taller setting draws bigger cells')
   assert.equal(tall['--dus-heat-cell-max'], '22px', 'and stops at the design cap')
-  // The viewport width only changes the card-row count (and with it the budget).
+  // The viewport width only changes the card-row count (and with it the budget):
+  // three card rows at a narrow width still need the packed tier at 240.
   const narrow = bodyHeightStyle(240, 400)
-  assert.equal(narrow['--dus-heat-cell-max'], '6px',
-    'two-row cards cost a card row, so the band gets the smallest cells')
+  assert.equal(narrow['--dus-heat-cell-max'], '9px',
+    'three card rows cost a row, so the band gets the smallest cells')
+  assert.equal(narrow['--dus-card-label-size'], '10px', 'the packed tier sits on the label floor')
   assert.equal(narrow['--dus-card-value-size'], '15px', 'the type floor is unchanged')
+  assert.equal(narrow['--dus-foot-gap'], '2px', 'and the packed foot gap')
+  // The default body now reaches the 22px design cap: with no scrollbar reserve
+  // the band fits full-size cells, so the tab is not padded out by an idle strip.
+  assert.equal(bodyHeightStyle(344)['--dus-heat-cell-max'], '22px',
+    'the default height draws the full cells, not a reserve-limited size')
 })
 
 /**
@@ -582,8 +618,9 @@ test('the panel reads the shared store and rewrites the variable live', function
   assert.ok(root, 'the panel rendered')
   assert.equal(root.props.style[BODY_HEIGHT_VAR], '344px', 'default height on the panel root')
   // The same inline style carries the Overview shrink lengths (layout.js), so
-  // one store read drives both the tab height and the graphics scale.
-  assert.equal(root.props.style['--dus-heat-cell-max'], '18px')
+  // one store read drives both the tab height and the graphics scale. With no
+  // scrollbar reserve the default height already reaches the 22px design cap.
+  assert.equal(root.props.style['--dus-heat-cell-max'], '22px')
 
   // A drag in General settings goes through the same store: the next panel
   // render must carry the new value, with no reload and no remount.
@@ -593,6 +630,14 @@ test('the panel reads the shared store and rewrites the variable live', function
   assert.equal(after.props.style['--dus-heat-cell-max'], '22px',
     'a taller body hands the band the full 22px cap')
   assert.deepEqual(JSON.parse(storage.getItem(STORAGE_KEY)), { bodyHeight: 456, units: 'myriad' })
+
+  // The derived lengths follow the same read going DOWN too — that is what makes
+  // "缩小而不是滚动" live rather than a reload-only behaviour.
+  store.setBodyHeight(MIN_BODY_HEIGHT)
+  const small = flatten(render()).find(function (node) { return node.props?.className === 'dus-panel' })
+  assert.equal(small.props.style[BODY_HEIGHT_VAR], MIN_BODY_HEIGHT + 'px')
+  assert.equal(small.props.style['--dus-heat-cell-max'], '10px',
+    'the short body shrinks the cells without a scrollbar')
 })
 
 test('the overview tab renders one .dus-overview wrapper around its sections', function () {

@@ -43,6 +43,7 @@ function render(block, options) {
     toolName: config.toolName || 'edit',
     cwd: config.cwd,
     t: config.t,
+    inspect: config.inspect,
     useDisclosure: function useDisclosure() {
       return { expanded: config.expanded !== false, toggle: function toggle() {} }
     },
@@ -97,6 +98,21 @@ function editBlock(hunk, extra) {
 }
 
 const THREE_LINES = { path: 'C:\\work\\src\\a.js', oldText: 'a\nb\nc', newText: 'a\nB\nc' }
+
+test('trace control keeps the Host callback, stays beside copy, and respects disclosure/availability', () => {
+  let calls = 0
+  const inspect = () => { calls++ }
+  const tree = render(editBlock(THREE_LINES), { inspect })
+  const button = findAll(tree, 'data-cds-tool-inspect')[0]
+  assert.equal(button.props['aria-label'], 'View in trajectory')
+  button.props.onClick()
+  assert.equal(calls, 1)
+  assert.ok(tree.children.includes(button))
+  assert.equal(findAll(findAll(tree, 'data-cds-diffcard')[0], 'data-cds-tool-inspect').length, 0)
+  assert.equal(findAll(tree, 'data-cds-tool-inspect').length, 1)
+  assert.equal(findAll(render(editBlock(THREE_LINES)), 'data-cds-tool-inspect').length, 0)
+  assert.equal(findAll(render(editBlock(THREE_LINES), { inspect, expanded: false }), 'data-cds-tool-inspect').length, 0)
+})
 
 // ------------------------------------------------------------- numbering
 

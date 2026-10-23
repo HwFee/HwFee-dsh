@@ -1682,12 +1682,12 @@ window.__ModuleLoader__.load({
     }
     var FONT_BASE_GLOBAL = "__CDS_THEME_FONT_BASE__";
     var FONT_FACES = [
-      { family: "anthropic-sans", file: "AnthropicSans-Roman-Web.woff2", style: "normal", redistributable: false, local: "Anthropic Sans" },
-      { family: "anthropic-sans", file: "AnthropicSans-Italic-Web.woff2", style: "italic", redistributable: false, local: "Anthropic Sans" },
-      { family: "anthropic-serif", file: "AnthropicSerif-Roman-Web.woff2", style: "normal", redistributable: false, local: "Anthropic Serif" },
-      { family: "anthropic-serif", file: "AnthropicSerif-Italic-Web.woff2", style: "italic", redistributable: false, local: "Anthropic Serif" },
-      { family: "anthropic-mono", file: "AnthropicMono-Roman-Web.woff2", style: "normal", redistributable: false, local: "Anthropic Mono" },
-      { family: "anthropic-mono", file: "AnthropicMono-Italic-Web.woff2", style: "italic", redistributable: false, local: "Anthropic Mono" }
+      { family: "anthropic-sans", file: "AnthropicSans-Roman-Web.woff2", style: "normal", redistributable: false, local: ["Anthropic Sans Text", "Anthropic Sans Display", "Anthropic Sans Web Text", "Anthropic Sans"] },
+      { family: "anthropic-sans", file: "AnthropicSans-Italic-Web.woff2", style: "italic", redistributable: false, local: ["Anthropic Sans Text", "Anthropic Sans Display", "Anthropic Sans Web Text", "Anthropic Sans"] },
+      { family: "anthropic-serif", file: "AnthropicSerif-Roman-Web.woff2", style: "normal", redistributable: false, local: ["Anthropic Serif Text", "Anthropic Serif Display", "Anthropic Serif Web Text", "Anthropic Serif"] },
+      { family: "anthropic-serif", file: "AnthropicSerif-Italic-Web.woff2", style: "italic", redistributable: false, local: ["Anthropic Serif Text", "Anthropic Serif Display", "Anthropic Serif Web Text", "Anthropic Serif"] },
+      { family: "anthropic-mono", file: "AnthropicMono-Roman-Web.woff2", style: "normal", redistributable: false, local: ["Anthropic Mono"] },
+      { family: "anthropic-mono", file: "AnthropicMono-Italic-Web.woff2", style: "italic", redistributable: false, local: ["Anthropic Mono"] }
     ];
     var RESTRICTED_FACES = FONT_FACES.filter(function(face) {
       return face.redistributable !== true;
@@ -1699,21 +1699,42 @@ window.__ModuleLoader__.load({
       { family: "anthropic-cjk-serif", file: "NotoSerifSC-Shifted-330.woff2", style: "normal", redistributable: true }
     ];
     var CJK_WEIGHT_RANGE = "300 800";
+    function localNames(face) {
+      if (face === void 0 || face === null) return [];
+      const raw = face.local;
+      const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+      const seen = /* @__PURE__ */ new Set();
+      const out = [];
+      for (const name2 of list) {
+        if (typeof name2 !== "string") continue;
+        const trimmed = name2.trim();
+        if (trimmed === "") continue;
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(trimmed);
+      }
+      return out;
+    }
     function fontSourcesFor(file, options) {
       const opts = options === void 0 || options === null ? {} : options;
       const declared = FONT_FACES.concat(CJK_FACES).find(function(face) {
         return face.file === file;
       });
-      const localName = typeof opts.local === "string" && opts.local !== "" ? opts.local : declared && typeof declared.local === "string" && declared.local !== "" ? declared.local : file;
+      const candidates = Array.isArray(opts.local) || typeof opts.local === "string" ? localNames({ local: opts.local }) : localNames(declared);
+      const locals = candidates.length > 0 ? candidates : [file];
+      const localSrc = locals.map(function(name2) {
+        return 'local("' + name2 + '")';
+      }).join(", ");
       if (opts.restricted === true || declared !== void 0 && declared.redistributable !== true) {
-        return 'local("' + localName + '")';
+        return localSrc;
       }
       const inline = INLINE_FACE_DATA[file];
       if (typeof inline === "string" && inline !== "") {
         return 'url("' + inline + '") format("woff2")';
       }
       const fileBase = typeof opts.fileBase === "string" ? opts.fileBase : "";
-      if (fileBase === "") return 'local("' + localName + '")';
+      if (fileBase === "") return localSrc;
       return 'url("' + fileBase + file + '") format("woff2")';
     }
     function runtimeFileBase() {
@@ -1752,9 +1773,24 @@ window.__ModuleLoader__.load({
         '  --font-cjk-sans-kr: "Apple SD Gothic Neo";',
         // The shipped shifted face first; the system families behind it so an
         // uncovered rare glyph still lands in the SAME typeface when installed.
-        '  --font-cjk-sans: "anthropic-cjk", "Noto Sans SC", "Source Han Sans SC", var(--font-cjk-sans-sc), var(--font-cjk-sans-tc), var(--font-cjk-sans-jp), var(--font-cjk-sans-kr), "Microsoft YaHei";',
-        '  --font-cjk-serif: "anthropic-cjk-serif", "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, var(--font-cjk-sans);',
+        //
+        // The `-rest` tokens exist so a composite can pull in the SYSTEM CJK
+        // families WITHOUT repeating the embedded face. `preferredCjkStackCss` has
+        // to write the full composite on `body` (see its header), and expanding
+        // `var(--font-cjk-sans)` there put `anthropic-cjk` in the list twice: once
+        // where the preference wants it, once where the root stack happens to
+        // mention it. The second copy could never match, but it made the emitted
+        // stack read as if two different orders were in force.
+        '  --font-cjk-sans-rest: "Noto Sans SC", "Source Han Sans SC", var(--font-cjk-sans-sc), var(--font-cjk-sans-tc), var(--font-cjk-sans-jp), var(--font-cjk-sans-kr), "Microsoft YaHei";',
+        '  --font-cjk-serif-rest: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, var(--font-cjk-sans-rest);',
+        '  --font-cjk-sans: "anthropic-cjk", var(--font-cjk-sans-rest);',
+        '  --font-cjk-serif: "anthropic-cjk-serif", var(--font-cjk-serif-rest);',
         "  --font-cjk-sans-fallback: var(--font-cjk-sans);",
+        // The Latin-only half. Kept separate from --font-sans-fallbacks for the same
+        // reason as the -rest tokens: `preferredCjkStackCss` has to write a complete
+        // composite on body, and expanding a token that already ends in the CJK
+        // chain appended that whole chain a second time.
+        '  --font-latin-fallbacks: system-ui, "Segoe UI", Roboto, Helvetica, Arial;',
         '  --font-sans-fallbacks: system-ui, "Segoe UI", Roboto, Helvetica, Arial, var(--font-cjk-sans), sans-serif;',
         '  --font-anthropic-sans: "anthropic-sans", var(--font-sans-fallbacks);',
         '  --font-anthropic-serif: "anthropic-serif", ui-serif, Georgia, "Times New Roman", var(--font-cjk-serif), serif;',
@@ -1767,9 +1803,9 @@ window.__ModuleLoader__.load({
       return [
         "/* ---- preferred Chinese fonts: calibrated faces before system ------- */",
         "body {",
-        '  --font-anthropic-sans: "anthropic-sans", "anthropic-cjk", var(--font-sans-fallbacks);',
-        '  --font-anthropic-mono: "anthropic-mono", "anthropic-cjk", ui-monospace, "Cascadia Mono", Consolas, var(--font-cjk-sans), monospace;',
-        '  --font-anthropic-serif: "anthropic-serif", "anthropic-cjk-serif", ui-serif, Georgia, "Times New Roman", var(--font-cjk-serif), serif;',
+        '  --font-anthropic-sans: "anthropic-sans", "anthropic-cjk", var(--font-cjk-sans-rest), var(--font-latin-fallbacks), sans-serif;',
+        '  --font-anthropic-mono: "anthropic-mono", "anthropic-cjk", var(--font-cjk-sans-rest), ui-monospace, "Cascadia Mono", Consolas, monospace;',
+        '  --font-anthropic-serif: "anthropic-serif", "anthropic-cjk-serif", var(--font-cjk-serif-rest), ui-serif, Georgia, "Times New Roman", serif;',
         "}"
       ].join("\n");
     }
@@ -2517,6 +2553,57 @@ window.__ModuleLoader__.load({
       ].join("\n");
     }
 
+    // client/src/tool-chrome-styles.js
+    var TRACE_ICON = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none"><path d="M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7" stroke="black" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+    function toolChromeRules() {
+      return `
+    [data-cds-tool-body], [data-cds-diffcard] { position: relative; }
+    [data-conversation-content] [data-cds-tool-inspect] {
+      --cds-trace-top: 8px;
+      --cds-trace-right: 34px;
+      position: absolute !important; top: var(--cds-trace-top) !important; right: var(--cds-trace-right) !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-sizing: border-box; width: var(--cds-copy-size, 18px); height: var(--cds-copy-size, 18px);
+      padding: 0 !important; margin: 0 !important; border: 0 !important;
+      border-radius: var(--cds-copy-radius, 4px) !important;
+      background: transparent !important; color: var(--cds-copy-ink, var(--dsw-alias-label-tertiary));
+      font-size: 0 !important; line-height: 0; cursor: pointer; z-index: 3;
+      opacity: 0 !important; pointer-events: none;
+      transition: opacity 100ms ${EASING.swift};
+    }
+    [data-conversation-content] [data-cds-diffrow] > [data-cds-tool-inspect] { top: 3px !important; right: 26px !important; }
+    [data-cds-diffrow][data-inspect] > [data-cds-diffrow-head] { padding-right: 52px; }
+    [data-cds-tool-inspect] > svg { display: none; }
+    [data-cds-tool-inspect]::before {
+      content: ''; width: var(--cds-copy-icon, 12px); height: var(--cds-copy-icon, 12px);
+      background: currentColor; mask: url('${TRACE_ICON}') center / contain no-repeat;
+    }
+    [data-cds-tool-body]:hover > [data-cds-tool-inspect],
+    [data-cds-diffrow]:hover > [data-cds-tool-inspect],
+    .dsh-gb-tool-request:hover > [data-cds-tool-inspect] {
+      opacity: 1 !important; pointer-events: auto;
+    }
+    [data-cds-tool-inspect]:hover { color: var(--cds-copy-ink-hover, var(--dsw-alias-label-primary)); }
+    [data-cds-tool-inspect]:focus-visible { outline: 1px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+    /* The seat is derived from the copy control it sits beside, not assumed: each
+       host panel puts its copy in a different box (a header bar with its own
+       padding, a banner, a bare corner), so the marker measures that control once
+       per panel and hands the offset over as --cds-trace-top. The fallbacks are the
+       corner seat for a card whose copy has not been marked yet. */
+    [data-conversation-content] [data-cds-search-recovery] {
+      border: 0 !important; border-radius: 0 !important; background: transparent !important;
+      margin: 6px 0 0 !important; padding: 0 !important; max-height: none; overflow: visible;
+      font-size: 0 !important; line-height: 0; box-shadow: none;
+    }
+    [data-cds-search-recovery]::after {
+      content: attr(data-cds-search-recovery); display: block;
+      font: var(--dsw-font-xxs-11, 11px/16px var(--dsw-font-family));
+      color: var(--dsw-alias-label-tertiary); white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    @media (prefers-reduced-motion: reduce) { [data-cds-tool-inspect] { transition: none; } }
+    `;
+    }
+
     // client/src/styles.js
     function elevationRules(state) {
       const lines = [];
@@ -2720,7 +2807,7 @@ window.__ModuleLoader__.load({
         // exactly that twice. A control that is only ever revealed by hover is a
         // property of the CONTROL, not of the container it happens to sit in, so
         // the hide rule is now unconditional and the reveal is a whitelist of the
-        // containers we know: hovering the code surface, or focus inside it.
+        // containers we know: hovering the code surface.
         "body[data-ds-dark-theme] [data-conversation-content] {",
         "  --cds-card-surface: #1a1a19;",
         "}",
@@ -2732,12 +2819,11 @@ window.__ModuleLoader__.load({
         // HOVER ONLY. A focus-within member (on the block, the code-wrap or the
         // tool slot) kept the rail painted after a row was clicked open, until the
         // user clicked elsewhere, because expanding a row moves focus into it.
-        // Only focus INSIDE THE BANNER reveals it. Focusing the disclosure
-        // row does not; a focused child cannot reveal an opacity:0 parent.
+        // Focus must not reveal the banner, including focus retained by a copy
+        // button after clicking it. Pointer exit always hides the controls.
         ".md-code-block:hover [data-code-block-banner],",
         "[data-code-wrap]:hover [data-code-block-banner],",
-        '[data-slot="tool.call.toolview"]:hover [data-code-block-banner],',
-        "[data-code-block-banner]:focus-within {",
+        '[data-slot="tool.call.toolview"]:hover [data-code-block-banner] {',
         "  opacity: 1 !important;",
         "  pointer-events: auto !important;",
         "}",
@@ -3316,7 +3402,7 @@ window.__ModuleLoader__.load({
         // i.e. 4px of drift on two of the four sides, in the direction the eye
         // reads as "off-centre under its row". Zeroing it here is what makes the
         // margin half below exact rather than approximate.
-        '[data-conversation-content] [data-slot="tool.call.toolview"] [class*="_bodyWrap"] > *:not([class*="_ioCard"]) {',
+        '[data-conversation-content] [data-slot="tool.call.toolview"] [class*="_bodyWrap"] > *:not([class*="_ioCard"]):not([data-cds-tool-inspect]):not([data-cds-search-recovery]) {',
         "  margin: 0;",
         "  padding: 12px;",
         "  overflow: hidden;",
@@ -3488,8 +3574,7 @@ window.__ModuleLoader__.load({
         "[data-search]:hover [data-cds-native-copy],",
         "[data-read]:hover [data-cds-native-copy],",
         "[data-diff]:hover [data-cds-native-copy],",
-        "[data-terminal]:hover [data-cds-native-copy],",
-        "[data-cds-native-copy]:focus-visible {",
+        "[data-terminal]:hover [data-cds-native-copy] {",
         "  opacity: 1;",
         "  pointer-events: auto;",
         "}",
@@ -3701,9 +3786,8 @@ window.__ModuleLoader__.load({
         "  transition: opacity var(--cds-copy-reveal, 100ms) " + EASING.swift + ", color var(--cds-copy-reveal, 100ms) " + EASING.swift + ";",
         "  z-index: 2;",
         "}",
-        "[data-cds-diffrow]:hover [data-cds-diff-copy],",
-        "[data-cds-diffrow]:focus-within [data-cds-diff-copy],",
-        "[data-cds-diff-copy]:focus-visible {",
+        // Opening a diff focuses its header. Focus persists after pointer exit.
+        "[data-cds-diffrow]:hover [data-cds-diff-copy] {",
         "  opacity: 1 !important;",
         "  pointer-events: auto !important;",
         "}",
@@ -4490,6 +4574,7 @@ window.__ModuleLoader__.load({
         buttonSpringRules(),
         statTypographyRules()
       );
+      if (state.refine !== false) parts.push(toolChromeRules());
       parts.push(diffStatFamilyRules());
       return parts.join("\n\n");
     }
@@ -4599,6 +4684,7 @@ window.__ModuleLoader__.load({
       "diff.write.failed": "Failed to write {name}",
       "diff.stopped": "Stopped editing {name}",
       "diff.copy": "Copy diff",
+      "diff.inspect": "View in trajectory",
       "diff.copied": "Copied",
       "diff.expand": "\u2026 {count} more lines",
       "diff.expandAria": "Expand the remaining {count} diff lines",
@@ -4647,6 +4733,7 @@ window.__ModuleLoader__.load({
       "diff.write.failed": "\u5199\u5165\u5931\u8D25 {name}",
       "diff.stopped": "\u5DF2\u505C\u6B62\u7F16\u8F91 {name}",
       "diff.copy": "\u590D\u5236\u5DEE\u5F02",
+      "diff.inspect": "\u5728\u8F68\u8FF9\u4E2D\u67E5\u770B",
       "diff.copied": "\u5DF2\u590D\u5236",
       "diff.expand": "\u2026 \u5176\u4F59 {count} \u884C",
       "diff.expandAria": "\u5C55\u5F00\u5176\u4F59 {count} \u884C\u5DEE\u5F02",
@@ -6513,6 +6600,128 @@ window.__ModuleLoader__.load({
       };
     }
 
+    // client/src/tool-chrome.js
+    var TRACE_ATTR = "data-cds-tool-inspect";
+    var BODY_ATTR = "data-cds-tool-body";
+    var RECOVERY_ATTR = "data-cds-search-recovery";
+    var INSPECT_LABEL = /^(?:在轨迹中查看|在轨迹中检查|查看轨迹|查看|View in trajectory|Inspect in trajectory|Inspect)$/i;
+    function searchRecoveryNotice(text) {
+      const value = text.trim();
+      const split = value.lastIndexOf("\n\n(");
+      const notice = split < 0 ? value : value.slice(split + 2);
+      return notice.startsWith("(") && notice.endsWith(")") && /Full (?:sorted|formatted) result stored at:/.test(notice) && /\bUse (?:read|grep)\b/.test(notice) ? notice : null;
+    }
+    function createToolChromeMarker(doc) {
+      const view = doc.defaultView;
+      let observer = null, frame = null, started = false;
+      let marked = /* @__PURE__ */ new Map();
+      function seat(button, body) {
+        if (button.dataset.cdsTraceSeated === "1") return;
+        const copy = body.querySelector("[data-cds-native-copy]") || body.querySelector("[data-search] > *:first-child button") || body.querySelector("[data-code-block-banner] button");
+        if (copy === null || typeof copy.getBoundingClientRect !== "function" || typeof body.getBoundingClientRect !== "function") return;
+        const a = copy.getBoundingClientRect(), b = body.getBoundingClientRect();
+        if (a.width === 0 && a.height === 0) return;
+        button.style.setProperty("--cds-trace-top", Math.round(a.top - b.top) + "px");
+        button.style.setProperty("--cds-trace-right", Math.round(b.right - a.left + 8) + "px");
+        button.dataset.cdsTraceSeated = "1";
+      }
+      function sweep() {
+        if (!started) return;
+        const next = /* @__PURE__ */ new Map();
+        const put = (node, name2, value = "") => {
+          if (!next.has(node)) next.set(node, /* @__PURE__ */ new Map());
+          next.get(node).set(name2, value);
+        };
+        for (const root of doc.querySelectorAll("[data-tool]")) {
+          if (!root.closest('[data-slot="tool.call.toolview"]') || !root.closest("[data-conversation-content]")) continue;
+          for (const button of root.querySelectorAll("button")) {
+            if (button.hasAttribute(TRACE_ATTR) && !marked.get(button)?.has(TRACE_ATTR)) continue;
+            if (!INSPECT_LABEL.test(button.textContent.trim()) || !button.querySelector("svg")) continue;
+            put(button, TRACE_ATTR);
+            put(button.parentElement, BODY_ATTR);
+            if (!button.hasAttribute("title") || marked.get(button)?.has("title")) put(button, "title", button.textContent.trim());
+            seat(button, button.parentElement);
+          }
+          for (const surface of root.querySelectorAll("[data-search]")) {
+            const recovery = surface.nextElementSibling;
+            if (!recovery || recovery.tagName !== "DIV") continue;
+            const notice = searchRecoveryNotice(recovery.textContent);
+            if (notice !== null) put(recovery, RECOVERY_ATTR, notice);
+          }
+        }
+        for (const [node, attrs] of marked) {
+          for (const name2 of attrs.keys()) if (!next.get(node)?.has(name2)) node.removeAttribute(name2);
+        }
+        for (const [node, attrs] of next) {
+          for (const [name2, value] of attrs) if (node.getAttribute(name2) !== value) node.setAttribute(name2, value);
+        }
+        marked = next;
+      }
+      function schedule() {
+        if (!started || frame !== null) return;
+        frame = view.requestAnimationFrame(() => {
+          frame = null;
+          sweep();
+        });
+      }
+      function reseat() {
+        for (const node of marked.keys()) {
+          if (node.dataset?.cdsTraceSeated !== "1") continue;
+          node.style?.removeProperty("--cds-trace-top");
+          node.style?.removeProperty("--cds-trace-right");
+          delete node.dataset.cdsTraceSeated;
+        }
+        if (frame !== null) view.cancelAnimationFrame(frame);
+        frame = view.requestAnimationFrame(() => {
+          frame = null;
+          sweep();
+        });
+      }
+      return {
+        start() {
+          if (started || !doc.body || !view?.MutationObserver || !view.requestAnimationFrame) return;
+          started = true;
+          sweep();
+          observer = new view.MutationObserver((records) => {
+            for (const record of records) {
+              if (record.type === "characterData") continue;
+              for (const node of record.addedNodes || []) {
+                if (node.nodeType === 1 && (node.closest("[data-tool]") || node.hasAttribute("data-tool") || node.querySelector("[data-tool]"))) {
+                  schedule();
+                  return;
+                }
+              }
+              if (record.removedNodes?.length && [...marked.keys()].some((node) => !node.isConnected)) {
+                schedule();
+                return;
+              }
+            }
+          });
+          observer.observe(doc.body, { subtree: true, childList: true });
+          view.addEventListener("resize", reseat);
+        },
+        stop() {
+          if (!started) return;
+          started = false;
+          view.removeEventListener("resize", reseat);
+          observer.disconnect();
+          observer = null;
+          if (frame !== null) view.cancelAnimationFrame(frame);
+          frame = null;
+          for (const [node, attrs] of marked) {
+            for (const name2 of attrs.keys()) node.removeAttribute(name2);
+            if (node.dataset?.cdsTraceSeated === "1") {
+              node.style?.removeProperty("--cds-trace-top");
+              node.style?.removeProperty("--cds-trace-right");
+              delete node.dataset.cdsTraceSeated;
+            }
+          }
+          marked.clear();
+        },
+        sweep
+      };
+    }
+
     // client/src/tokenscan.js
     var TOKEN_KINDS = Object.freeze([
       "keyword",
@@ -7245,8 +7454,20 @@ window.__ModuleLoader__.load({
             "data-cds-diffrow": "",
             "data-tool": props.toolName,
             "data-state": state,
-            "data-expanded": expanded ? "true" : "false"
+            "data-expanded": expanded ? "true" : "false",
+            "data-inspect": expanded && body.length > 0 && typeof props.inspect === "function" ? "" : void 0
           },
+          expanded && body.length > 0 && typeof props.inspect === "function" ? h("button", {
+            type: "button",
+            "data-cds-tool-inspect": "",
+            title: t("diff.inspect"),
+            "aria-label": t("diff.inspect"),
+            onClick: props.inspect
+          }, h(
+            "svg",
+            { width: 12, height: 12, viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true" },
+            h("path", { d: "M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7", stroke: "currentColor", strokeWidth: 1.2, strokeLinecap: "round", strokeLinejoin: "round" })
+          )) : null,
           // The copy control is a SIBLING of the disclosure header, not a child: a
           // button inside a role="button" row is a nested control, and the host's own
           // rail solves it the same way (absolutely positioned in the row's corner).
@@ -7658,6 +7879,22 @@ window.__ModuleLoader__.load({
             marker.stop();
           };
         }, "dsh-cds-theme: native tool copy controls");
+        ctx.effect(function() {
+          if (typeof document === "undefined") return function() {
+          };
+          const marker = createToolChromeMarker(document);
+          const sync = function() {
+            const state = settings2.getState();
+            if (state.enabled !== false && state.refine !== false) marker.start();
+            else marker.stop();
+          };
+          sync();
+          const unsubscribe = settings2.subscribe(sync);
+          return function() {
+            unsubscribe();
+            marker.stop();
+          };
+        }, "dsh-cds-theme: tool trace controls and search recovery");
         ctx.effect(function() {
           if (typeof document === "undefined") return function() {
           };

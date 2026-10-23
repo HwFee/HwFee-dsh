@@ -199,7 +199,51 @@ export function createRunShellRow({ React }) {
   }
 
   /**
-   * @param {object} props slot owner props: `block`, `phase`, `useDisclosure`, `t`
+   * The trajectory entrance for this call.
+   *
+   * A FLOATING GLYPH, NOT A LINE OF ITS OWN. The host hands every tool row an
+   * `inspect` callback (`ToolCall` builds it from `inspectCall(callId)`), and its
+   * own cards draw it as a labelled button under the payload — which pushes the
+   * card one row taller for an action nobody asks for until they want it. The
+   * copy control in this same box already establishes the pattern the user
+   * asked to match: an absolutely positioned glyph in the command box's corner,
+   * invisible and unclickable until the box is hovered, revealed by
+   * `:focus-visible` for the keyboard.
+   *
+   * @param {object} props
+   * @param {() => void} props.onInspect the host's callback
+   * @param {string} props.label localised accessible label and tooltip
+   * @returns {object} the button
+   */
+  function InspectButton({ onInspect, label }) {
+    return h('button', {
+      type: 'button',
+      className: 'dsh-gb-inspect',
+      // The stable hook the theme's shared tool chrome keys on. Kept even when
+      // the theme is absent: this plugin's own stylesheet styles it alone.
+      'data-cds-tool-inspect': '',
+      title: label,
+      'aria-label': label,
+      onClick: onInspect,
+    }, h('svg', {
+      width: 12,
+      height: 12,
+      viewBox: '0 0 16 16',
+      fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      'aria-hidden': 'true',
+    }, h('path', {
+      d: 'M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7',
+      stroke: 'currentColor',
+      strokeWidth: 1.2,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      fill: 'none',
+    })))
+  }
+
+  /**
+   * @param {object} props slot owner props: `block`, `phase`, `useDisclosure`, `t`, `inspect`
    * @returns {object} the row
    */
   function RunShellRow(props) {
@@ -218,6 +262,11 @@ export function createRunShellRow({ React }) {
     const disclosure = typeof props.useDisclosure === 'function' ? props.useDisclosure() : null
     const expanded = disclosure !== null && disclosure.expanded === true
     const toggle = disclosure === null ? null : disclosure.toggle
+    // THE HOST'S TRAJECTORY ENTRANCE, WHEN IT OFFERS ONE. `inspect` is absent on
+    // hosts that predate it and on cards rendered outside a trajectory-aware
+    // tree, so the control appears only when there is something to call — a
+    // button that does nothing is worse than no button.
+    const inspect = typeof props.inspect === 'function' ? props.inspect : undefined
     const canExpand = command !== '' || output !== ''
     const title = description !== ''
       ? description
@@ -267,8 +316,17 @@ export function createRunShellRow({ React }) {
     h('span', { className: 'dsh-gb-tool-title' }, title)),
     canExpand && expanded
       ? h('div', { className: 'dsh-gb-tool-body' },
-        h('div', { className: 'dsh-gb-tool-request' },
-          h('span', { className: 'dsh-gb-tool-prompt', 'aria-hidden': 'true' }, '$'),
+        h('div', {
+          className: 'dsh-gb-tool-request',
+          // THE BOX KNOWS WHETHER IT HAS A CORNER PAIR. Two glyphs need more
+          // right padding than one, and the reserve has to be static — a
+          // reserve that appeared on hover would reflow the command every time
+          // the pointer crossed the box. Declaring the fact here keeps the
+          // stylesheet from guessing: `[data-inspect]` on the box, not a
+          // selector engine feature the renderer may not support.
+          'data-inspect': inspect === undefined ? undefined : '',
+        },
+        h('span', { className: 'dsh-gb-tool-prompt', 'aria-hidden': 'true' }, '$'),
           h('code', { className: 'dsh-gb-tool-command' },
             tokenizeShell(command).map(function (token, index) {
               return h('span', { key: index, 'data-token': token.kind }, token.text)
@@ -279,6 +337,7 @@ export function createRunShellRow({ React }) {
           // change between renders and React would throw, dropping the whole
           // row. `h(...)` gives it its own component instance, mounted and
           // unmounted with the body.
+          inspect === undefined ? null : h(InspectButton, { onInspect: inspect, label: t('run.inspect') }),
           h(CopyCommandButton, { text: command, label: t('run.copy') })),
         output !== ''
           ? h('pre', { className: 'dsh-gb-tool-respond' }, output)

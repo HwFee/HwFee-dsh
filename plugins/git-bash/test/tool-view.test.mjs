@@ -1,17 +1,24 @@
 /**
- * The `run_shell` tool card: pure pieces.
+ * The `run_shell` tool card: pure pieces and the row's own tree.
  *
  * The React view itself is exercised on the real renderer (screenshots under
  * `.work/shots/toolrows/`); what can be pinned in Node is the part that decides
  * WHAT the card says — the tokenizer, the argument reader and the result
- * flattener. Those three are where a wrong answer is silent: a mis-split
- * command only shows up as a missing colour, and an unflattened result only
- * shows up as an empty card.
+ * flattener — plus the SHAPE of the expanded body, which is where the
+ * trajectory entrance lives.
+ *
+ * THE ROW IS RENDERED WITH A MINIMAL REACT STAND-IN, the same way
+ * `settings-row.test.mjs` does it. The fake implements only `createElement` and
+ * the three hooks the copy control reaches for, so if the row starts relying on
+ * anything else these tests fail loudly instead of silently exercising a
+ * different React. Function components are invoked by the local `render` helper;
+ * hooks are never actually mounted, which is enough to read the tree.
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { tokenizeShell, readArguments, resultText } from '../client/src/tool-view.js'
+import { tokenizeShell, readArguments, resultText, createRunShellRow } from '../client/src/tool-view.js'
+import { en, zh } from '../client/src/locales.js'
 
 test('the command name, its flags and its arguments get different colours', function () {
   const tokens = tokenizeShell('grep -rn "box-shadow" src')
@@ -55,4 +62,181 @@ test('the result flattens text blocks, JSON blocks and a bare error', function (
   // No content at all on a failed call still renders the structured reason.
   assert.equal(resultText({ content: [], error: { name: 'HarnessError', code: 'E_SHELL' } }), 'HarnessError: E_SHELL')
   assert.equal(resultText({ content: [] }), '')
+})
+
+// ---------------------------------------------------------------- the row
+
+/** A React stand-in covering what the shell row reaches for. */
+function fakeReact() {
+  return {
+    createElement(type, props, ...children) {
+      return { type, props: props ?? {}, children: children.flat(Infinity).filter((child) => child != null) }
+    },
+    useState(initial) { return [initial, function set() {}] },
+    useRef(initial) { return { current: initial } },
+    useEffect() {},
+  }
+}
+
+/** `t` with the host's `{param}` interpolation, missing keys made obvious. */
+function translate(dictionary) {
+  return function t(key, params) {
+    const text = dictionary[key] ?? 'MISSING:' + key
+    return params === undefined ? text : text.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? '')
+  }
+}
+
+/**
+ * Expand function components so the tree carries real host elements.
+ *
+ * @param {object} node an element, an array or a string
+ * @returns {object} the same node with component children resolved
+ */
+function render(node) {
+  if (Array.isArray(node)) return node.map(render)
+  if (node === null || typeof node !== 'object') return node
+  if (typeof node.type === 'function') {
+    const expanded = node.type(node.props)
+    return render(expanded)
+  }
+  return { type: node.type, props: node.props, children: render(node.children) }
+}
+
+/** Every descendant node whose className token list contains `name`. */
+function byClass(node, name) {
+  const hits = []
+  const walk = function walk(current) {
+    if (current === null || typeof current !== 'object') return
+    const className = typeof current.props?.className === 'string' ? current.props.className : ''
+    if (className.split(/\s+/).includes(name)) hits.push(current)
+    for (const child of current.children ?? []) walk(child)
+  }
+  walk(node)
+  return hits
+}
+
+/** The first descendant carrying an attribute. */
+function byAttr(node, name) {
+  let hit = null
+  const walk = function walk(current) {
+    if (hit !== null || current === null || typeof current !== 'object') return
+    if (current.props?.[name] !== undefined) { hit = current; return }
+    for (const child of current.children ?? []) walk(child)
+  }
+  walk(node)
+  return hit
+}
+
+/**
+ * Render the card for one call.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.expanded] the disclosure state
+ * @param {boolean} [options.disclosure] whether the host forwards `useDisclosure`
+ * @param {Function} [options.inspect] the host's trajectory callback
+ * @param {object} [options.dictionary] the locale table (`en` by default)
+ * @returns {object} the rendered tree
+ */
+function renderCard({ expanded = true, disclosure = true, inspect, dictionary = en } = {}) {
+  const React = fakeReact()
+  const RunShellRow = createRunShellRow({ React })
+  const toggleCalls = []
+  const tree = RunShellRow({
+    toolName: 'run_shell',
+    phase: 'result',
+    block: {
+      kind: 'result',
+      call: { name: 'run_shell', argsRaw: JSON.stringify({ command: 'git status --short' }) },
+      content: [{ type: 'text', text: ' M client/src/styles.js' }],
+    },
+    ...(disclosure
+      ? {
+        useDisclosure: function useDisclosure() {
+          return {
+            expanded,
+            toggle: function toggle() { toggleCalls.push('toggle') },
+          }
+        },
+      }
+      : {}),
+    ...(inspect === undefined ? {} : { inspect }),
+    t: translate(dictionary),
+  })
+  return { tree: render(tree), toggleCalls }
+}
+
+test('the expanded card carries the host trajectory entrance in the command box', function () {
+  const calls = []
+  const { tree } = renderCard({ inspect: function inspect() { calls.push('inspect') } })
+  const request = byClass(tree, 'dsh-gb-tool-request')[0]
+  assert.ok(request, 'the command box must be rendered')
+
+  const buttons = byClass(tree, 'dsh-gb-inspect')
+  assert.equal(buttons.length, 1, 'exactly one trajectory entrance per card')
+  // INSIDE THE COMMAND BOX, not under the card: it floats over the fence beside
+  // the copy control, so it adds no row and no height.
+  assert.ok(request.children.includes(buttons[0]),
+    'the entrance must be a child of the command box, not a sibling of it')
+
+  buttons[0].props.onClick()
+  assert.deepEqual(calls, ['inspect'], 'the click must reach the host callback')
+})
+
+test('the entrance is absent when the host offers no inspect callback', function () {
+  // Older hosts, and any card rendered outside a trajectory-aware tree, pass
+  // nothing. A button that does nothing is worse than no button.
+  const { tree } = renderCard({})
+  assert.deepEqual(byClass(tree, 'dsh-gb-inspect'), [])
+  assert.equal(byAttr(tree, 'data-cds-tool-inspect'), null)
+})
+
+test('the entrance is absent while the row is collapsed', function () {
+  const { tree } = renderCard({ expanded: false, inspect: function inspect() {} })
+  assert.deepEqual(byClass(tree, 'dsh-gb-tool-body'), [], 'a collapsed row renders no body')
+  assert.deepEqual(byClass(tree, 'dsh-gb-inspect'), [])
+})
+
+test('the entrance disappears when the host forwards no disclosure control', function () {
+  // Without `useDisclosure` the row has no body at all, so there is nowhere for
+  // the entrance to sit — and rendering it would put a control on a header that
+  // cannot be opened.
+  const { tree } = renderCard({ disclosure: false, inspect: function inspect() {} })
+  assert.deepEqual(byClass(tree, 'dsh-gb-inspect'), [])
+})
+
+test('the entrance is a labelled, theme-hookable glyph', function () {
+  const { tree } = renderCard({ inspect: function inspect() {} })
+  const button = byClass(tree, 'dsh-gb-inspect')[0]
+  // The stable hook the shared tool chrome keys on, present whether or not the
+  // theme is installed.
+  assert.equal(button.props['data-cds-tool-inspect'], '')
+  assert.equal(button.props.type, 'button')
+  assert.equal(button.props.title, 'View in trajectory')
+  assert.equal(button.props['aria-label'], 'View in trajectory')
+
+  const svg = button.children[0]
+  assert.equal(svg.type, 'svg')
+  assert.equal(svg.props.viewBox, '0 0 16 16')
+  assert.equal(svg.props.width, 12)
+  assert.equal(svg.props.height, 12)
+  assert.equal(svg.props['aria-hidden'], 'true')
+  const path = svg.children[0]
+  assert.equal(path.props.d,
+    'M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7')
+  assert.equal(path.props.stroke, 'currentColor')
+  assert.equal(path.props.strokeWidth, 1.2)
+  assert.equal(path.props.strokeLinecap, 'round')
+  assert.equal(path.props.strokeLinejoin, 'round')
+  assert.equal(path.props.fill, 'none')
+})
+
+test('the entrance label follows the page language', function () {
+  const english = byClass(renderCard({ inspect: function inspect() {} }).tree, 'dsh-gb-inspect')[0]
+  assert.equal(english.props['aria-label'], 'View in trajectory')
+  const chinese = byClass(renderCard({ inspect: function inspect() {}, dictionary: zh }).tree, 'dsh-gb-inspect')[0]
+  assert.equal(chinese.props['aria-label'], '在轨迹中查看')
+  // Both dictionaries must carry the key: a missing `zh` entry falls through to
+  // English inside a Chinese page.
+  assert.equal(typeof en['run.inspect'], 'string')
+  assert.equal(typeof zh['run.inspect'], 'string')
 })

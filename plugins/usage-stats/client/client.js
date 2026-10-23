@@ -119,7 +119,7 @@ window.__ModuleLoader__.load({
     var HEAT_CELL_FLOOR = 5;
     var CARD_LABEL_FLOOR = 10;
     var CARD_VALUE_FLOOR = 15;
-    var HEAT_SCROLLBAR_RESERVE = 12;
+    var HEAT_SCROLLBAR_RESERVE = 0;
     var NARROW_VIEWPORT_PX = 560;
     var TIP_INSET = 8;
     var TIP_MAX_WIDTH = 240;
@@ -146,7 +146,7 @@ window.__ModuleLoader__.load({
         labelLh: 15,
         valueSize: 17,
         valueLh: 22,
-        footPad: 8,
+        footGap: 4,
         footLh: 17,
         heatPad: 8,
         heatGap: 4
@@ -162,7 +162,7 @@ window.__ModuleLoader__.load({
         labelLh: 15,
         valueSize: 17,
         valueLh: 22,
-        footPad: 8,
+        footGap: 4,
         footLh: 17,
         heatPad: 4,
         heatGap: 3
@@ -178,7 +178,7 @@ window.__ModuleLoader__.load({
         labelLh: 12,
         valueSize: CARD_VALUE_FLOOR,
         valueLh: 18,
-        footPad: 4,
+        footGap: 2,
         footLh: 15,
         heatPad: 2,
         heatGap: 2
@@ -193,8 +193,7 @@ window.__ModuleLoader__.load({
     }
     function fixedHeight(tier, rows) {
       const grid = cardHeight(tier) * rows + tier.gridGap * (rows - 1);
-      const foot = tier.footPad + 0.5 + tier.footLh;
-      return grid + tier.overviewGap * 2 + foot;
+      return grid + tier.overviewGap + tier.footGap + tier.footLh;
     }
     function cellFor(tier, rows, bodyHeight) {
       const bandBudget = bodyHeight - fixedHeight(tier, rows);
@@ -235,7 +234,7 @@ window.__ModuleLoader__.load({
         labelLh: chosen.labelLh,
         valueSize: chosen.valueSize,
         valueLh: chosen.valueLh,
-        footPad: chosen.footPad,
+        footGap: chosen.footGap,
         footLh: chosen.footLh,
         heatPad: chosen.heatPad,
         heatGap: chosen.heatGap
@@ -252,7 +251,7 @@ window.__ModuleLoader__.load({
         "--dus-card-label-lh": layout.labelLh + "px",
         "--dus-card-value-size": layout.valueSize + "px",
         "--dus-card-value-lh": layout.valueLh + "px",
-        "--dus-foot-pad": layout.footPad + "px",
+        "--dus-foot-gap": layout.footGap + "px",
         "--dus-foot-lh": layout.footLh + "px",
         "--dus-heat-pad": layout.heatPad + "px",
         "--dus-heat-gap": layout.heatGap + "px",
@@ -1150,9 +1149,16 @@ window.__ModuleLoader__.load({
       // the same elevation plane as the input box and reads as a clear sibling
       // object, not a flat fill. `--dsw-alias-bg-base` keeps it on the host canvas
       // tone.
-      ".dus-panel { box-sizing: border-box; display: flex; flex-direction: column; gap: 10px;",
+      //
+      // The CHROME is 8px, not 10px. The body height is the user's setting, so the
+      // shell's own padding and the head↔body gap are the only air this plugin owns
+      // around a fixed-height body; 10/10 read as loose once the foot's divider and
+      // 18.5px of gap above it went away. Vertical padding 10→8 and gap 10→8 take
+      // 6px off the whole panel without touching a single content metric, so the
+      // equal-height contract between the two tabs is unchanged.
+      ".dus-panel { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;",
       "  position: relative;",
-      "  padding: 10px 12px; border-radius: var(--dsw-radius-panel);",
+      "  padding: 8px 12px; border-radius: var(--dsw-radius-panel);",
       "  background: var(--dsw-alias-bg-base);",
       "  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);",
       "  box-shadow: var(--dsw-elevation-soft); }",
@@ -1203,9 +1209,10 @@ window.__ModuleLoader__.load({
       // TOP-ALIGNED, so its reserved height simply pads the shorter tab (the
       // leftover reads as the canvas background below the foot line). This is what
       // keeps the composer dock below the panel from jumping when the user flips
-      // tabs: the panel's content stack is head + 10px + body, identical on both
-      // tabs for every setting value. `overflow: hidden` clips the horizontal slide
-      // translate so the swap animation cannot paint outside the now-fixed box.
+      // tabs: the panel's content stack is head + the panel gap (8px) + body,
+      // identical on both tabs for every setting value. `overflow: hidden` clips the
+      // horizontal slide translate so the swap animation cannot paint outside the
+      // now-fixed box.
       ".dus-body { display: flex; flex-direction: column; gap: 10px; min-width: 0;",
       "  height: var(--dus-body-height, 344px);",
       "  overflow: hidden;",
@@ -1224,8 +1231,12 @@ window.__ModuleLoader__.load({
       // about, the tab clips a pixel rather than growing the very scrollbar the user
       // rejected. Every length here is fed by `overviewVars()` with today's value as
       // the fallback, so the module is the single place the shrink is computed.
+      //
+      // NO `gap` HERE ON PURPOSE. A uniform gap can only give the foot the SAME
+      // air as the cards↔band seam, and the foot wants less (see `.dus-foot`). So
+      // the two seams are stated separately: the grid carries a bottom margin of
+      // `--dus-overview-gap`, the foot a top margin of `--dus-foot-gap`.
       ".dus-overview { display: flex; flex-direction: column;",
-      "  gap: var(--dus-overview-gap, 10px);",
       "  height: 100%; min-height: 0; overflow-y: hidden; }",
       // Six tiles, three across (two across under the 560px breakpoint). They are
       // fills, never outlined boxes: the tile boundary is the tint step between
@@ -1233,7 +1244,8 @@ window.__ModuleLoader__.load({
       // low-contrast surface layering. The type sizes carry floors: the packed tier
       // stops at 10px/15px (label/value), never smaller.
       ".dus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));",
-      "  gap: var(--dus-grid-gap, 6px); }",
+      "  gap: var(--dus-grid-gap, 6px);",
+      "  margin-bottom: var(--dus-overview-gap, 10px); }",
       ".dus-card { display: flex; flex-direction: column; gap: var(--dus-card-gap, 2px);",
       "  padding: var(--dus-card-pad, 8px) 10px;",
       "  border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }",
@@ -1265,12 +1277,22 @@ window.__ModuleLoader__.load({
       // first active day; both take the same grey tile. A calendar with visible
       // holes is what makes the grid read as a calendar instead of a bar chart of
       // busy days.
+      //
+      // NO VISIBLE SCROLLBAR, AND NO RESERVED HEIGHT FOR ONE. The band hides its
+      // scrollbar the same way the model list does — `scrollbar-width: none` plus
+      // `::-webkit-scrollbar { display: none }`, so neither engine reserves a
+      // gutter. `overflow-x: auto` STAYS: a genuinely long history (≈44 columns at
+      // 1104px, ≈308 days) still scrolls by wheel, trackpad and touch, it just has
+      // no bar. This is what let `HEAT_SCROLLBAR_RESERVE` go to 0 in `layout.js` —
+      // the 12px it used to subtract from the cell budget was the dead space under
+      // the foot on every profile whose history never overflowed.
       ".dus-heat { display: flex; align-items: stretch; gap: var(--dus-heat-gap, 4px);",
       "  flex: 0 0 auto; overflow-x: auto; padding: var(--dus-heat-pad, 8px);",
       "  border-radius: var(--dsw-radius-md);",
       "  background: var(--dsw-alias-bg-module-platform);",
       "  justify-content: space-between;",
-      "  overscroll-behavior-x: contain; scrollbar-width: thin; }",
+      "  overscroll-behavior-x: contain; scrollbar-width: none; }",
+      ".dus-heat::-webkit-scrollbar { display: none; }",
       ".dus-heat-week { display: flex; flex-direction: column; gap: var(--dus-heat-gap, 4px);",
       "  flex: 1 0 9px; max-width: var(--dus-heat-cell-max, 22px); }",
       // The quiet cell is a plain grey tile — visibly darker than the band, the
@@ -1325,14 +1347,18 @@ window.__ModuleLoader__.load({
       "  background: var(--dsw-alias-border-l2); }",
       ".dus-model-fill { height: 100%; border-radius: inherit;",
       "  background: var(--dsw-alias-state-business-primary); }",
-      // The comparison is exactly one line — no byline and no basis. A hairline
-      // divider (CDS one-directional rule) separates it from the tiles above. Its
-      // padding and leading follow the same tier as the cards (`layout.js`), with the
-      // 12px font size untouched — the foot is prose, so it is the LAST thing to give
-      // and it never shrinks past its own line box.
+      // The comparison is exactly one line — no byline and no basis. NO DIVIDER AND
+      // NO VERTICAL PADDING: it used to carry a .5px `border-top` hairline plus 8px
+      // of `padding-top`, and with the overview's uniform 10px gap that stacked
+      // 18.5px of air and a rule over a single line of prose — the rule read as a
+      // stray line and the air was the largest gap in the panel. It is now held off
+      // the band by ONE number, `--dus-foot-gap` (4px, 2px packed), which `layout.js`
+      // also subtracts in `fixedHeight()`, so the budget saved here goes back to the
+      // heatmap instead of becoming whitespace. The leading follows the same tier as
+      // the cards, with the 12px font size untouched — the foot is prose, so it is
+      // the LAST thing to give and it never shrinks past its own line box.
       ".dus-foot { display: flex; flex-direction: column;",
-      "  padding-top: var(--dus-foot-pad, 8px);",
-      "  border-top: .5px solid var(--dsw-alias-border-l2);",
+      "  margin-top: var(--dus-foot-gap, 4px);",
       "  color: var(--dsw-alias-label-tertiary); font-size: 12px;",
       "  line-height: var(--dus-foot-lh, 17px); }",
       ".dus-foot-line { color: var(--dsw-alias-label-secondary); }",

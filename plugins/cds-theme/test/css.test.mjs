@@ -435,6 +435,20 @@ test('the code banner is a floating copy control, not a header strip', function 
   assert.match(wrap.body, /min-height:\s*0/)
 })
 
+test('every copy surface reveals only on hover, including an opened diff with retained focus', function () {
+  const rules = parseRules(buildCssFor(sanitize({})))
+  for (const hook of ['data-code-block-banner', 'data-cds-diff-copy', 'data-cds-native-copy']) {
+    const reveal = rules.filter(r => r.selector.includes('[' + hook + ']') && /opacity:\s*1(?:\s*!important)?\s*;/.test(r.body))
+    assert.ok(reveal.length, 'expected hover reveal for ' + hook)
+    for (const rule of reveal) {
+      for (const selector of rule.selector.split(',')) {
+        assert.ok(selector.includes(':hover'), 'copy control stays visible without hover: ' + selector)
+        assert.ok(!selector.includes(':focus'), 'retained focus must not reveal a copy control: ' + selector)
+      }
+    }
+  }
+})
+
 test('inline code is not painted with the block surface', function () {
   // Only fenced blocks are terminals; inline code sits in prose and must not
   // punch a block-coloured hole in it.

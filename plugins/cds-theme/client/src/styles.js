@@ -8,6 +8,7 @@ import { fontCss, preferredCjkStackCss } from './fonts.js'
 import { GREETING_DISPLAY, WEIGHTS } from './typography.js'
 import { RIPPLE_ATTR } from './ripple.js'
 import { markdownScopeRules } from './markdown-scope.js'
+import { toolChromeRules } from './tool-chrome-styles.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -291,7 +292,7 @@ function codeRules() {
     // exactly that twice. A control that is only ever revealed by hover is a
     // property of the CONTROL, not of the container it happens to sit in, so
     // the hide rule is now unconditional and the reveal is a whitelist of the
-    // containers we know: hovering the code surface, or focus inside it.
+    // containers we know: hovering the code surface.
     'body[data-ds-dark-theme] [data-conversation-content] {',
     '  --cds-card-surface: #1a1a19;',
     '}',
@@ -303,12 +304,11 @@ function codeRules() {
     // HOVER ONLY. A focus-within member (on the block, the code-wrap or the
     // tool slot) kept the rail painted after a row was clicked open, until the
     // user clicked elsewhere, because expanding a row moves focus into it.
-    // Only focus INSIDE THE BANNER reveals it. Focusing the disclosure
-    // row does not; a focused child cannot reveal an opacity:0 parent.
+    // Focus must not reveal the banner, including focus retained by a copy
+    // button after clicking it. Pointer exit always hides the controls.
     '.md-code-block:hover [data-code-block-banner],',
     '[data-code-wrap]:hover [data-code-block-banner],',
-    '[data-slot="tool.call.toolview"]:hover [data-code-block-banner],',
-    '[data-code-block-banner]:focus-within {',
+    '[data-slot="tool.call.toolview"]:hover [data-code-block-banner] {',
     '  opacity: 1 !important;',
     '  pointer-events: auto !important;',
     '}',
@@ -949,7 +949,7 @@ function toolRowsRules() {
     // i.e. 4px of drift on two of the four sides, in the direction the eye
     // reads as "off-centre under its row". Zeroing it here is what makes the
     // margin half below exact rather than approximate.
-    '[data-conversation-content] [data-slot="tool.call.toolview"] [class*="_bodyWrap"] > *:not([class*="_ioCard"]) {',
+    '[data-conversation-content] [data-slot="tool.call.toolview"] [class*="_bodyWrap"] > *:not([class*="_ioCard"]):not([data-cds-tool-inspect]):not([data-cds-search-recovery]) {',
     '  margin: 0;',
     '  padding: 12px;',
     '  overflow: hidden;',
@@ -1121,8 +1121,7 @@ function toolRowsRules() {
     '[data-search]:hover [data-cds-native-copy],',
     '[data-read]:hover [data-cds-native-copy],',
     '[data-diff]:hover [data-cds-native-copy],',
-    '[data-terminal]:hover [data-cds-native-copy],',
-    '[data-cds-native-copy]:focus-visible {',
+    '[data-terminal]:hover [data-cds-native-copy] {',
     '  opacity: 1;',
     '  pointer-events: auto;',
     '}',
@@ -1411,9 +1410,8 @@ function diffCardRules() {
       ' color var(--cds-copy-reveal, 100ms) ' + EASING.swift + ';',
     '  z-index: 2;',
     '}',
-    '[data-cds-diffrow]:hover [data-cds-diff-copy],',
-    '[data-cds-diffrow]:focus-within [data-cds-diff-copy],',
-    '[data-cds-diff-copy]:focus-visible {',
+    // Opening a diff focuses its header. Focus persists after pointer exit.
+    '[data-cds-diffrow]:hover [data-cds-diff-copy] {',
     '  opacity: 1 !important;',
     '  pointer-events: auto !important;',
     '}',
@@ -2871,6 +2869,7 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
   // APPENDED AT THE END on purpose: `motionTokenRules()` and the A/B-tier
   // baselines (`test/rule-baseline.mjs`) are byte-pinned slices of the sheet,
   // and inserting this block anywhere before them would break those slices.
+  if (state.refine !== false) parts.push(toolChromeRules())
   parts.push(diffStatFamilyRules())
 
   return parts.join('\n\n')

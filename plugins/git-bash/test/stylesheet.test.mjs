@@ -38,6 +38,81 @@ test('shell payload seat is centred under its row and preserves command/output i
   assert.match(output, /padding:\s*5px 8px\s*;/)
 })
 
+test('copy controls hide after pointer exit even when focus remains in the shell card', function () {
+  const rules = [...ROW_CSS.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+  const reveals = rules.filter(([, selector, body]) => selector.includes('.dsh-gb-copy') && /opacity:\s*1\s*;/.test(body))
+  assert.ok(reveals.length)
+  for (const [, selectors] of reveals) {
+    for (const selector of selectors.split(',')) {
+      assert.ok(selector.includes(':hover'), 'copy reveal must require hover: ' + selector)
+      assert.ok(!selector.includes(':focus'), 'focus must not keep copy visible: ' + selector)
+    }
+  }
+})
+
+test('the trajectory entrance floats over the command box and takes no layout room', function () {
+  // THE USER'S COMPLAINT: the entrance sat on a line of its own under the card.
+  // It is now a corner glyph like the copy control — absolutely positioned, so
+  // it contributes nothing to the box's height.
+  const rule = /\.dsh-gb-inspect\s*\{([^}]+)\}/.exec(ROW_CSS)?.[1]
+  assert.ok(rule, 'the entrance rule must exist')
+  assert.match(rule, /position:\s*absolute\s*;/,
+    'a static control would occupy the flex row and grow the card')
+  assert.match(rule, /top:\s*8px\s*;/)
+  // 30px, not 8px: the copy control owns the 8px corner and this sits one seat
+  // to its left (18px wide + a 4px gap).
+  assert.match(rule, /right:\s*34px\s*;/)
+  assert.match(rule, /width:\s*18px\s*;/)
+  assert.match(rule, /height:\s*18px\s*;/)
+  // No frame, no plate: the reference's rail is bare and lets the command show.
+  assert.match(rule, /border:\s*0\s*;/)
+  assert.match(rule, /background:\s*transparent\s*;/)
+  assert.match(rule, /pointer-events:\s*none\s*;/,
+    'an invisible but clickable control answers the pointer on blank space')
+})
+
+test('the corner pair reserves its width statically, so hover never reflows the command', function () {
+  // The copy glyph spans 8-26px from the right and the entrance spans 30-48px,
+  // so a wrapping command's first line would run under the entrance. The
+  // reserve is keyed on the entrance EXISTING (our own marker attribute, not a
+  // browser feature), and it is static: a reserve that appeared on hover would
+  // reflow the command every time the pointer crossed the box. No VERTICAL room
+  // is taken — that is the whole point of the floating glyph.
+  const reserve = /\.dsh-gb-tool-request\[data-inspect\][^{]*\{([^}]+)\}/.exec(ROW_CSS)?.[1]
+  assert.ok(reserve, 'the pair needs a shared horizontal reserve on the command')
+  // 52px clears the seat cds-theme's shared chrome uses (right 34 + 18 wide)
+  // as well as our own 30px, so the same sheet is correct under either owner.
+  assert.match(reserve, /padding-right:\s*52px\s*;/)
+  assert.doesNotMatch(reserve, /(^|[\s;{])(margin|height|min-height|padding-top|padding-bottom)\s*:/,
+    'the reserve must be horizontal only — a vertical one is the extra row the user removed')
+  const selector = /([^{}]*)\{[^}]*padding-right:\s*48px/.exec(ROW_CSS)?.[1] ?? ''
+  assert.ok(!selector.includes(':hover'),
+    'the reserve must not depend on hover: ' + selector)
+})
+
+test('the trajectory entrance reveals only on command-box hover', function () {
+  // The command box owns the reveal; retained focus must not keep it visible.
+  const rules = [...ROW_CSS.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+  const reveals = rules.filter(([, , body]) => /opacity:\s*1\s*;/.test(body) && /pointer-events:\s*auto\s*;/.test(body))
+    .filter(([, selectors]) => selectors.includes('.dsh-gb-inspect'))
+  assert.ok(reveals.length, 'the entrance must have a reveal rule')
+
+  const selectors = reveals.flatMap(([, list]) => list.split(',').map((one) => one.trim())).filter((one) => one.includes('.dsh-gb-inspect'))
+  assert.ok(selectors.includes('.dsh-gb-tool-request:hover .dsh-gb-inspect'),
+    'the reveal must be scoped to the command box: ' + selectors.join(' | '))
+  assert.ok(!selectors.includes('.dsh-gb-inspect:focus-visible'),
+    'focus must not keep the control visible after pointer exit')
+  for (const selector of selectors) {
+    assert.ok(
+      selector.includes(':hover'),
+      'the entrance must never be painted unconditionally: ' + selector)
+    assert.ok(!selector.includes('focus-within'),
+      'retained focus after a click must not keep it visible: ' + selector)
+    assert.ok(!/\.dsh-gb-tool:hover\s+\.dsh-gb-inspect/.test(selector),
+      'the whole card is clickable; its hover would flash the control on the way past: ' + selector)
+  }
+})
+
 test('the stylesheet constant is a string, not NaN from a broken template literal', function () {
   assert.equal(typeof ROW_CSS, 'string',
     'ROW_CSS is ' + typeof ROW_CSS + ' — the CSS template literal was ended early by a '

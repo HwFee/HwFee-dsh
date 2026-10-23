@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   FONT_FACES, CJK_FACES, CJK_WEIGHT_RANGE, FONT_BASE_GLOBAL, RESTRICTED_FACES,
-  fontFaceCss, fontStackCss, fontCss, fontSourcesFor,
+  fontFaceCss, fontStackCss, fontCss, fontSourcesFor, localNames,
 } from '../client/src/fonts.js'
 import { FONT_BASE_GLOBAL as HOST_FONT_BASE_GLOBAL } from '../lib/index.js'
 import {
@@ -330,18 +330,26 @@ test('every face is classified, and a restricted face never resolves to a URL', 
     assert.equal(typeof face.redistributable, 'boolean',
       face.file + ' must declare `redistributable` explicitly')
   }
-  // Localized family name for the restricted ones, so local() can actually match
-  // an installed face rather than the file name.
+  // Localized family names for the restricted ones, so local() can actually
+  // match an installed face rather than the file name. A LIST is allowed and is
+  // what the Anthropic distribution needs: the system installs the same family
+  // under several display names (`… Text` / `… Display` / `… Web Text`), and
+  // one string matched none of them (measured 2026-10-23 in the real renderer).
   for (const face of FONT_FACES) {
-    assert.equal(typeof face.local, 'string', face.file + ' needs the installed family name')
-    assert.ok(face.local.indexOf('.woff2') < 0, 'local() takes a FAMILY, not a file name')
+    const names = localNames(face)
+    assert.ok(names.length > 0, face.file + ' needs at least one installed family name')
+    for (const name of names) {
+      assert.ok(name.indexOf('.woff2') < 0, 'local() takes a FAMILY, not a file name: ' + name)
+    }
   }
 
   const base = 'file:///C:/plugins/cds-theme/fonts/'
   const restricted = RESTRICTED_FACES[0]
-  // Even with an inline table AND a base, a restricted face is local() only.
+  const restrictedFace = FONT_FACES.find(function (f) { return f.file === restricted })
+  // Even with an inline table AND a base, a restricted face is local() only —
+  // and every declared name is emitted, in order.
   assert.equal(fontSourcesFor(restricted, { fileBase: base, restricted: true }),
-    'local("' + FONT_FACES.find(function (f) { return f.file === restricted }).local + '")')
+    localNames(restrictedFace).map(function (n) { return 'local("' + n + '")' }).join(', '))
   assert.ok(!fontSourcesFor(restricted, { fileBase: base, restricted: true }).includes('url('),
     'a restricted face must never emit a URL — the package does not ship the file')
 
@@ -393,13 +401,58 @@ test('without an inlined face and without a base the src is a local() name, neve
   for (const [index, face] of faces.entries()) {
     assert.ok(!face.src.includes('url('), 'no URL may be emitted without data or a base: ' + face.src)
     assert.ok(!face.src.includes('/dsh-cds-theme/fonts/'), 'the deleted route must not reappear')
-    // A restricted face names its INSTALLED family; a permitted one falls back
-    // to the file name (its data URL is what the shipped build uses anyway).
-    const expected = typeof declared[index].local === 'string'
-      ? declared[index].local
-      : declared[index].file
-    assert.equal(face.src, 'local("' + expected + '")')
+    // A restricted face names EVERY installed family it might be installed as;
+    // a permitted one falls back to the file name (its data URL is what the
+    // shipped build uses anyway).
+    const names = localNames(declared[index])
+    const expected = names.length > 0
+      ? names.map(function (n) { return 'local("' + n + '")' }).join(', ')
+      : 'local("' + declared[index].file + '")'
+    assert.equal(face.src, expected)
   }
+})
+
+/**
+ * REGRESSION — the bug this guards.
+ *
+ * The six Anthropic @font-face blocks used to name ONE installed family each
+ * (`local("Anthropic Sans")`). No such family exists on the machine that has
+ * them: the distribution installs `Anthropic Sans Text`, `Anthropic Sans
+ * Display` and `Anthropic Sans Web Text`. Measured in the real renderer on
+ * 2026-10-23: the face reported `status: error`, the stack fell past it to the
+ * inlined `anthropic-cjk` (Noto Sans SC), and every Latin glyph was drawn in a
+ * Chinese face. `document.fonts.check()` still said `true`, so the bug survived
+ * review — it reports that a FontFace RECORD exists, not that `local()`
+ * resolved.
+ *
+ * Verified to fail on the old shape: collapsing either Anthropic `local` back
+ * to the single string `'Anthropic Sans'` makes the first assertion red.
+ */
+test('every Anthropic face offers the installed display names, not one guess', function () {
+  const REQUIRED = {
+    'anthropic-sans': ['Anthropic Sans Text', 'Anthropic Sans Display'],
+    'anthropic-serif': ['Anthropic Serif Text', 'Anthropic Serif Display'],
+  }
+  for (const [family, needed] of Object.entries(REQUIRED)) {
+    const declared = FONT_FACES.filter(function (f) { return f.family === family })
+    assert.ok(declared.length > 0, family + ' must be declared')
+    for (const face of declared) {
+      const names = localNames(face)
+      for (const name of needed) {
+        assert.ok(names.includes(name),
+          face.file + ' must offer local("' + name + '") — the display name Windows actually ' +
+          'installs. Declared: ' + JSON.stringify(names))
+      }
+    }
+  }
+  // The emitted src really carries them all, in declaration order, so CSS can
+  // resolve the first one that exists.
+  const src = fontSourcesFor('AnthropicSans-Roman-Web.woff2', { restricted: true })
+  for (const name of REQUIRED['anthropic-sans']) {
+    assert.ok(src.includes('local("' + name + '")'), 'src must contain local("' + name + '"): ' + src)
+  }
+  assert.ok(src.indexOf('Anthropic Sans Text') < src.indexOf('Anthropic Sans Display'),
+    'Text comes before Display: it is the body face, and CSS takes the first that resolves')
 })
 
 test('the injected file:// base is used when a permitted face was not inlined', function () {

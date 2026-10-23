@@ -71,7 +71,10 @@ window.__ModuleLoader__.load({
       "run.done": "Ran a command",
       "run.running": "Running a command",
       "run.stopped": "Stopped running the command",
-      "run.copy": "Copy command"
+      "run.copy": "Copy command",
+      // The trajectory entrance in the command box's corner. Named for what the
+      // user gets, not for the mechanism ("inspect" reads like a developer verb).
+      "run.inspect": "View in trajectory"
     };
     var zh = {
       "shell.title": "\u9ED8\u8BA4 shell",
@@ -93,7 +96,8 @@ window.__ModuleLoader__.load({
       "run.done": "\u5DF2\u8FD0\u884C\u547D\u4EE4",
       "run.running": "\u6B63\u5728\u8FD0\u884C\u547D\u4EE4",
       "run.stopped": "\u5DF2\u505C\u6B62\u8FD0\u884C\u547D\u4EE4",
-      "run.copy": "\u590D\u5236\u547D\u4EE4"
+      "run.copy": "\u590D\u5236\u547D\u4EE4",
+      "run.inspect": "\u5728\u8F68\u8FF9\u4E2D\u67E5\u770B"
     };
 
     // lib/mode.js
@@ -449,6 +453,32 @@ window.__ModuleLoader__.load({
           )
         );
       }
+      function InspectButton({ onInspect, label }) {
+        return h("button", {
+          type: "button",
+          className: "dsh-gb-inspect",
+          // The stable hook the theme's shared tool chrome keys on. Kept even when
+          // the theme is absent: this plugin's own stylesheet styles it alone.
+          "data-cds-tool-inspect": "",
+          title: label,
+          "aria-label": label,
+          onClick: onInspect
+        }, h("svg", {
+          width: 12,
+          height: 12,
+          viewBox: "0 0 16 16",
+          fill: "none",
+          xmlns: "http://www.w3.org/2000/svg",
+          "aria-hidden": "true"
+        }, h("path", {
+          d: "M6.5 2.5H3a.5.5 0 0 0-.5.5v10a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V9.5M9 2.5h4.5V7M13.5 2.5l-7 7",
+          stroke: "currentColor",
+          strokeWidth: 1.2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          fill: "none"
+        })));
+      }
       function RunShellRow(props) {
         const t = typeof props.t === "function" ? props.t : function untranslated(key) {
           return key;
@@ -465,6 +495,7 @@ window.__ModuleLoader__.load({
         const disclosure = typeof props.useDisclosure === "function" ? props.useDisclosure() : null;
         const expanded = disclosure !== null && disclosure.expanded === true;
         const toggle = disclosure === null ? null : disclosure.toggle;
+        const inspect = typeof props.inspect === "function" ? props.inspect : void 0;
         const canExpand = command !== "" || output !== "";
         const title = description !== "" ? description : state === "stopped" ? t("run.stopped") : state === "running" || state === "preparing" ? t("run.running") : t("run.done");
         const activate = canExpand && toggle !== null ? toggle : void 0;
@@ -517,7 +548,16 @@ window.__ModuleLoader__.load({
             { className: "dsh-gb-tool-body" },
             h(
               "div",
-              { className: "dsh-gb-tool-request" },
+              {
+                className: "dsh-gb-tool-request",
+                // THE BOX KNOWS WHETHER IT HAS A CORNER PAIR. Two glyphs need more
+                // right padding than one, and the reserve has to be static — a
+                // reserve that appeared on hover would reflow the command every time
+                // the pointer crossed the box. Declaring the fact here keeps the
+                // stylesheet from guessing: `[data-inspect]` on the box, not a
+                // selector engine feature the renderer may not support.
+                "data-inspect": inspect === void 0 ? void 0 : ""
+              },
               h("span", { className: "dsh-gb-tool-prompt", "aria-hidden": "true" }, "$"),
               h(
                 "code",
@@ -532,6 +572,7 @@ window.__ModuleLoader__.load({
               // change between renders and React would throw, dropping the whole
               // row. `h(...)` gives it its own component instance, mounted and
               // unmounted with the body.
+              inspect === void 0 ? null : h(InspectButton, { onInspect: inspect, label: t("run.inspect") }),
               h(CopyCommandButton, { text: command, label: t("run.copy") })
             ),
             output !== "" ? h("pre", { className: "dsh-gb-tool-respond" }, output) : null
@@ -827,6 +868,21 @@ window.__ModuleLoader__.load({
       white-space: inherit;
     }
 
+    /* And room for BOTH corner controls when the trajectory entrance is present.
+       The copy glyph spans 8-26px from the right; the entrance spans 30-48px, so
+       without this the tail of a wrapping command runs under it \u2014 visible only
+       while hovered, which is exactly when the reader is looking at the end of a
+       long command. The row puts our own marker on the box when it renders an
+       entrance, so a card without one keeps the old 22px and its old wrapping.
+       The reserve is STATIC (it does not appear on hover), so revealing the pair
+       never reflows the command.
+
+       52px clears both 18px controls and their shared 8px gap. The theme and this
+       plugin use the same right 34px seat, so theme changes preserve the spacing. */
+    [data-conversation-content] [data-slot="tool.call.toolview"] .dsh-gb-tool-request[data-inspect] .dsh-gb-tool-command {
+      padding-right: 52px;
+    }
+
     /* The copy control: inside the command box, its own corner, quiet until the
        row is hovered \u2014 the same reveal the reference uses for its code rail. */
     .dsh-gb-copy {
@@ -866,13 +922,8 @@ window.__ModuleLoader__.load({
     }
 
     /* HOVER-ONLY, exactly like the read and write cards: the rail is invisible
-       until the pointer is on the tool row (or focus is inside it). */
-    .dsh-gb-tool:hover .dsh-gb-copy,
-    /* HOVER ONLY. The focus-within member kept the control painted after a click
-       landed inside the card, until focus moved elsewhere \u2014 the same bug that was
-       fixed in the theme rail. The button keeps its own :focus-visible rule so a
-       keyboard user still sees it when they tab to it. */
-    .dsh-gb-copy:focus-visible {
+       until the pointer is on the tool row. Retained focus must not reveal it. */
+    .dsh-gb-tool:hover .dsh-gb-copy {
       opacity: 1;
       pointer-events: auto;
     }
@@ -892,6 +943,73 @@ window.__ModuleLoader__.load({
 
     @media (prefers-reduced-motion: reduce) {
       .dsh-gb-copy {
+        transition: none;
+      }
+    }
+
+    /* THE TRAJECTORY ENTRANCE: the same floating glyph as the copy control,
+       one seat to its left.
+
+       WHY IT IS ABSOLUTE AND NOT A ROW. Every tool card in the transcript carries
+       an "open this call in the trajectory" action, and the host's own cards draw
+       it as a labelled button UNDER the payload \u2014 its own line, always taking
+       height, for something a reader wants occasionally rather than every time.
+       This card already has the settled answer to that shape: the copy control is
+       a corner glyph revealed on hover. So the entrance is its sibling at 34px (the
+       copy's 8px plus its 18px width plus an 8px gap), and the box reserves NOTHING
+       for it \u2014 no padding change, no layout shift on reveal.
+
+       INDEPENDENT OF THE THEME. cds-theme also paints any element carrying the
+       tool-inspect attribute through its shared tool chrome, but that only exists
+       while the theme is on and its refine switch is enabled. These rules are the
+       whole story without it: same 18px box, same icon size, same 100ms curve as
+       the copy control beside it, so the two read as one pair either way. */
+    .dsh-gb-inspect {
+      position: absolute;
+      top: 8px;
+      right: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      border-radius: var(--dsw-radius-xs, 4px);
+      background: transparent;
+      color: var(--dsw-alias-label-tertiary);
+      font: inherit;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      /* Invisible AND unclickable until revealed \u2014 the copy control's rule, for the
+         same reason: a painted-out button still answers the pointer on blank space. */
+      pointer-events: none;
+      transition: opacity 100ms cubic-bezier(0.16, 1, 0.3, 1),
+        color 100ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* HOVER THE COMMAND BOX, NOT THE WHOLE CARD. The card's header is clickable
+       (it toggles the body), so a card-wide reveal would flash this control while
+       the pointer is anywhere on the row \u2014 including on the chevron's way past it. */
+    .dsh-gb-tool-request:hover .dsh-gb-inspect {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .dsh-gb-inspect:focus-visible {
+      outline: 1px solid var(--dsw-alias-brand-primary);
+      outline-offset: 1px;
+    }
+
+    .dsh-gb-inspect:hover {
+      color: var(--dsw-alias-label-primary);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .dsh-gb-inspect {
         transition: none;
       }
     }

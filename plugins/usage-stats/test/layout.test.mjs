@@ -50,10 +50,14 @@ test('the module agrees with the slider range it mirrors', function () {
   assert.equal(NARROW_VIEWPORT_PX, 560, 'the stylesheet breakpoint that makes the grid 3 rows')
 })
 
-test('the roomy tier reproduces the measured fixed height (161.5px, two rows)', function () {
-  // cards 2×55 + 6 = 116, gaps 2×10 = 20, foot 8 + 0.5 + 17 = 25.5 → 161.5.
+test('the roomy tier reproduces the measured fixed height (147px, two rows)', function () {
+  // cards 2×55 + 6 = 116, grid→band gap 10, foot gap 4 + 17 = 21 → 147.
+  // (It was 161.5 while the foot carried a .5px divider plus 8px of padding-top
+  // on top of the stack gap; that air is now a single 4px gap and the 14.5px it
+  // used to occupy goes to the heat budget.)
   assert.equal(cardHeight(ROOMY), 55, 'card = 8+8 padding + 15 label + 2 gap + 22 value')
-  assert.equal(fixedHeight(ROOMY, 2), 161.5)
+  assert.equal(fixedHeight(ROOMY, 2), 147)
+  assert.equal(ROOMY.footGap, 4, 'the foot is held off the band by one gap, not two')
   assert.equal(gridRows(1200), 2, 'three cards across → two rows')
   assert.equal(gridRows(NARROW_VIEWPORT_PX), 3, 'two cards across → three rows')
   assert.equal(gridRows(NARROW_VIEWPORT_PX + 1), 2)
@@ -115,10 +119,10 @@ test('within a tier the cell grows monotonically with the body', function () {
 })
 
 test('the shrink order is graphics → gaps/padding → type, never the reverse', function () {
-  // Walking DOWN the settings, the first tier that changes must be the packed
-  // one only after the gaps and padding have already come down: the roomy tier
-  // keeps full-size type at every body height, so type only moves when the cell
-  // would otherwise fall below 8px.
+  // Walking DOWN the settings, the packed tier must only appear once the gaps
+  // and padding have already come down: the roomy tier keeps full-size type at
+  // every body height, so type only moves when the cell would otherwise fall
+  // below 8px.
   const tall = overviewLayout(MAX_BODY_HEIGHT, { viewportWidth: 1200 })
   assert.equal(tall.tier, 'roomy')
   assert.equal(tall.labelSize, 11, 'full-size labels at the top of the range')
@@ -126,13 +130,23 @@ test('the shrink order is graphics → gaps/padding → type, never the reverse'
   assert.equal(tall.overviewGap, 10)
   assert.equal(tall.heatPad, 8)
 
-  const small = overviewLayout(MIN_BODY_HEIGHT, { viewportWidth: 1200 })
-  assert.equal(small.tier, 'packed', 'the 240 floor needs the compact tier on two rows')
+  // The 240 floor still forces the compact tier at a NARROW viewport, where the
+  // cards take three rows. (On a wide viewport 240 now only needs `tight`: the
+  // foot's divider and 8px of padding-top used to cost 14.5px, and spending that
+  // on whitespace rather than the calendar was the thing being fixed.)
+  const small = overviewLayout(MIN_BODY_HEIGHT, { viewportWidth: 320 })
+  assert.equal(small.tier, 'packed', 'the 240 floor needs the compact tier on three card rows')
   assert.equal(small.labelSize, CARD_LABEL_FLOOR, 'the label sits on its floor, not below')
   assert.equal(small.valueSize, CARD_VALUE_FLOOR)
   assert.ok(small.overviewGap < tall.overviewGap, 'gaps gave first')
   assert.ok(small.heatPad < tall.heatPad, 'band padding gave too')
   assert.ok(small.cell < tall.cell, 'the graphics shrank with them')
+  assert.ok(small.footGap < tall.footGap, 'the foot space gives with the rest of the gaps')
+
+  // The wide floor no longer needs the type to give at all.
+  const wideFloor = overviewLayout(MIN_BODY_HEIGHT, { viewportWidth: 1200 })
+  assert.equal(wideFloor.tier, 'tight')
+  assert.ok(wideFloor.cell >= 8, 'the tight tier still clears its own 8px floor')
 
   // No tier ever states a font size below its floor.
   for (const tier of LAYOUT_TIERS) {
@@ -140,25 +154,45 @@ test('the shrink order is graphics → gaps/padding → type, never the reverse'
     assert.ok(tier.valueSize >= CARD_VALUE_FLOOR, tier.id + ' value below the floor')
     assert.ok(tier.labelLh >= tier.labelSize, tier.id + ' label line-height below its size')
     assert.ok(tier.valueLh >= tier.valueSize, tier.id + ' value line-height below its size')
+    assert.ok(tier.footGap >= 0, tier.id + ' foot gap must not go negative')
   }
 })
 
-test('the band height follows the cell and the band never scrolls vertically', function () {
+test('the band needs no scrollbar room, so the tab ends within one cell step of the body', function () {
   // The band is 7 cells + 6 gaps + 2 paddings; the budget the cell formula uses
-  // keeps the horizontal scrollbar inside the body, so the band itself never
-  // needs a vertical scroll.
+  // keeps the band itself inside the body.
   const tier = ROOMY
   assert.equal(bandHeight(tier, 22), 22 * 7 + tier.heatGap * 6 + tier.heatPad * 2)
+  // NOTHING IS RESERVED for a horizontal scrollbar any more: the band hides it
+  // (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`), so the
+  // gutter no longer exists to eat vertical space. While the reserve was 12px
+  // the Overview tab ended in 12–18px of dead space under the foot at EVERY
+  // setting, which is the blank the user saw.
+  assert.equal(HEAT_SCROLLBAR_RESERVE, 0, 'the reserve must stay at zero: the band hides its bar')
   for (const height of allSettings()) {
-    for (const width of [320, 1200]) {
+    for (const width of [320, 400, 1200]) {
       const layout = overviewLayout(height, { viewportWidth: width })
       const rows = gridRows(width)
-      const content = fixedHeight(LAYOUT_TIERS.find(function (t) {
+      const fixed = fixedHeight(LAYOUT_TIERS.find(function (t) {
         return t.id === layout.tier
       }), rows)
-      // The 12px horizontal-scrollbar reserve is already inside the cell budget.
-      assert.ok(content + layout.band + HEAT_SCROLLBAR_RESERVE <= height + 0.001,
-        'width ' + width + ' H ' + height + ': the band budget left no room for the h-scrollbar')
+      const used = fixed + layout.band
+      assert.ok(used <= height + 0.001,
+        'width ' + width + ' H ' + height + ': content ' + used + ' exceeds the body')
+      if (layout.cell >= HEAT_CELL_MAX) {
+        // The 22px DESIGN CAP is what stops the cells, not the budget, so the
+        // leftover is deliberately handed back as blank: drawing bigger squares
+        // is forbidden. Nothing to assert about slack here.
+        continue
+      }
+      // Below the cap the only leftover is integer cell rounding (< 7px): a
+      // whole extra row of cells would have fit, so it is a rounding artefact
+      // and not a reserved strip. A reintroduced scrollbar reserve shows up
+      // here immediately — at the default height a 12px reserve pushes the
+      // slack back to 17px and this assertion fails.
+      assert.ok(height - used < 7,
+        'width ' + width + ' H ' + height + ': ' + (height - used)
+        + 'px of slack is more than one rounding step; a reserve crept back in')
     }
   }
 })
@@ -169,15 +203,19 @@ test('overviewVars emits a complete px-only set, with the type floors', function
     '--dus-overview-gap', '--dus-grid-gap', '--dus-card-pad', '--dus-card-gap',
     '--dus-card-label-size', '--dus-card-label-lh',
     '--dus-card-value-size', '--dus-card-value-lh',
-    '--dus-foot-pad', '--dus-foot-lh',
+    '--dus-foot-gap', '--dus-foot-lh',
     '--dus-heat-pad', '--dus-heat-gap', '--dus-heat-cell-max',
   ]
   assert.deepEqual(Object.keys(vars).sort(), expected.slice().sort())
   for (const [name, value] of Object.entries(vars)) {
     assert.match(value, /^\d+(?:\.\d+)?px$/, name + ' must be a plain px length')
   }
-  assert.equal(vars['--dus-card-label-size'], CARD_LABEL_FLOOR + 'px')
-  assert.equal(vars['--dus-card-value-size'], CARD_VALUE_FLOOR + 'px')
+  // The floors come from the PACKED tier, which the compact corner selects.
+  const packed = overviewVars(240, { viewportWidth: 320 })
+  assert.equal(packed['--dus-card-label-size'], CARD_LABEL_FLOOR + 'px')
+  assert.equal(packed['--dus-card-value-size'], CARD_VALUE_FLOOR + 'px')
+  assert.equal(packed['--dus-foot-gap'], '2px', 'the packed foot gap')
+  assert.equal(vars['--dus-foot-gap'], '4px', 'the roomy/tight foot gap')
   assert.equal(vars['--dus-heat-cell-max'], overviewLayout(240, { viewportWidth: 1200 }).cell + 'px')
   // No ratio to divide: every value is concrete, which is why the shrink is
   // testable here instead of in `calc()`.
