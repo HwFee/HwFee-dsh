@@ -128,16 +128,27 @@ function Get-RegistryDist([string]$name, [string]$version) {
 $candidates = @(Get-ReleasePackages -RepoRoot $root -Only $Only)
 
 $pending = @()
+$unavailable = @()
 foreach ($package in $candidates) {
   $published = Registry-Version $package.Name $package.Version
   if ($published -eq $package.Version) {
-    Write-Host ("skip    {0}@{1}  (already on npm)" -f $package.Name, $package.Version) -ForegroundColor DarkGray
+    $status = Tarball-Status $package.Name $package.Version
+    if ($status -ne 200) {
+      $unavailable += [pscustomobject]@{ Tag = "$($package.Name)@$($package.Version)"; Why = "version is listed, tarball=$status; do not republish this version" }
+      Write-Host ("pending {0}@{1}  (listed, tarball={2})" -f $package.Name, $package.Version, $status) -ForegroundColor Yellow
+    } else {
+      Write-Host ("skip    {0}@{1}  (version listed, tarball 200)" -f $package.Name, $package.Version) -ForegroundColor DarkGray
+    }
     continue
   }
   $pending += $package
 }
 
 if ($pending.Count -eq 0) {
+  if ($unavailable.Count) {
+    $unavailable | ForEach-Object { Write-Host "$($_.Tag): $($_.Why)" }
+    exit 1
+  }
   Write-Host 'Nothing to publish: every manifest version already answers from the registry.'
   exit 0
 }
@@ -148,7 +159,7 @@ if ($WhatIf) { exit 0 }
 $packRoot = Join-Path $env:TEMP ("dsh-publish-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $packRoot | Out-Null
 
-$failures = @()
+$failures = @($unavailable)
 $packs = @{}
 
 try {

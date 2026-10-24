@@ -117,12 +117,12 @@ shell 解析与沙箱判定表：[`plugins/git-bash/README.md`](plugins/git-bash
 命令行：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme
-dsh plugin --profile desktop add dsh-system-fonts
-dsh plugin --profile desktop add @hwfee/dsh-usage-stats
-dsh plugin --profile desktop add @hwfee/dsh-genui
-dsh plugin --profile desktop add @hwfee/dsh-predict
-dsh plugin --profile desktop add @hwfee/dsh-git-bash
+dsh plugin --profile desktop add dsh-cds-theme@0.1.8 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.4 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-predict@0.1.2 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-git-bash@0.1.2 --registry=https://registry.npmjs.org
 ```
 
 也可以把同样的包名填进 **设置 → 插件 → 添加插件**。
@@ -133,7 +133,7 @@ dsh plugin --profile desktop add @hwfee/dsh-git-bash
 dsh plugin --profile desktop remove dsh-cds-theme
 ```
 
-这份文档不写死版本号，当前版本以 npm 页面或 Releases 页面为准。
+以上版本已于 2026-10-24 在 DSH 0.2.1-rc.3 上验证。实测不带版本的 predict 安装仍解析到 0.1.1，因依赖 rc.2 被宿主拒绝；请用上面的锁定版本命令或市场索引安装。完整结果见[安装矩阵](market/install-matrix.md)。
 
 ### 没有 npm 账号：从 GitHub Release 装
 

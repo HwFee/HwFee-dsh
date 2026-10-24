@@ -9,7 +9,7 @@
 | 条目 | category | 状态 |
 |---|---|---|
 | `cds-theme` | `theme` | ✅ 已收录（维护者直接合入 main） |
-| `system-fonts` | `ui` | ✅ 已收录（描述经维护者改正）；**本地描述待更新**，见下 |
+| `system-fonts` | `ui` | ✅ 已收录；界面字体和字号说明已提交 PR #9162 |
 | `usage-stats` | `usage` | ✅ 已收录 |
 | `genui` | `ui` | ✅ 已收录（[PR #8392](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/8392) 已合并，2026-10-21T17:27Z） |
 | `git-bash` | `tools` | ✅ 已收录（同一 PR） |
@@ -17,7 +17,7 @@
 
 PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何既有条目（市场规则要求 PR 不碰与自己无关的条目）。**它已经合并**——之前这张表写「待合并」，是记录过期，2026-10-22 用 `gh pr list` 核对后更正。
 
-**待办：`system-fonts` 的条目描述已落后于代码。** 本条现在写的是「内容、代码、终端三个字体槽 + 行距 + 字距」，
+**历史待办（2026-10-24 已提交 PR #9162）：`system-fonts` 的上游条目描述落后于代码。** 上游条目写的是「内容、代码、终端三个字体槽 + 行距 + 字距」，
 但 0.1.3 起还提供了界面字体、界面字号与行内代码字号两个像素步进器。按 §「描述必须与代码一致」，
 下一次发布后应当用 `submit-to-catalog.ps1 -Apply -Update` 更新这一条自己的条目（`-Update` 是必须的：
 脚本默认只提交上游没有的条目，正是为了避免 PR 去改动已有条目）。改写时要守住那条边界：
@@ -30,6 +30,22 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 所以描述改成「读不到宿主页面/存储/cookie、帧内 CSP 挡网络、发消息须用户确认」。
 两条都逐句对过代码。**本次不新开 PR**：条目结构没变，只是描述措辞与版本推进，
 而市场规则要求 PR 不碰与自己无关的条目；等确有结构性变更时再用 `-Update` 一次性提交。
+
+### 2026-10-24 发布与市场更新
+
+| 包 | 版本 | 分发 |
+|---|---|---|
+| `dsh-cds-theme` | 0.1.8 | npm 与 `cds-theme-v0.1.8` Release |
+| `@hwfee/dsh-genui` | 0.1.2 | npm 与 `genui-v0.1.2` Release |
+| `@hwfee/dsh-git-bash` | 0.1.2 | npm 与 `git-bash-v0.1.2` Release |
+| `@hwfee/dsh-predict` | 0.1.2 | npm 与 `predict-v0.1.2` Release |
+| `@hwfee/dsh-usage-stats` | 0.1.4 | npm 与 `usage-stats-v0.1.4` Release |
+
+字体插件保持 0.1.3，六个当前版本已写入 `index.json`。五个新版本均验证了官方版本记录、tarball HEAD/GET 200，以及下载字节与 Release 资产的 SHA-1 一致。
+
+[市场 PR #9162](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/9162) 更新主题、字体与生成式 UI 三个现有自有条目；上游合并状态以 PR 页面为准。外部推理滑条已移出仓库，不发布、不启用。
+
+验收证据见 [install-matrix.md](install-matrix.md) 和 [release-verification-2026-10-24.md](release-verification-2026-10-24.md)。不带版本的 predict 仍可能被解析为依赖 rc.2 的 0.1.1，安装说明已改用验证过的 0.1.2 和官方 registry。
 
 ### 2026-10-22 发布记录
 

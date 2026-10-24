@@ -117,12 +117,12 @@ Settings, timing table and data flow: [`plugins/predict/README.md`](plugins/pred
 From a terminal:
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme
-dsh plugin --profile desktop add dsh-system-fonts
-dsh plugin --profile desktop add @hwfee/dsh-usage-stats
-dsh plugin --profile desktop add @hwfee/dsh-genui
-dsh plugin --profile desktop add @hwfee/dsh-predict
-dsh plugin --profile desktop add @hwfee/dsh-git-bash
+dsh plugin --profile desktop add dsh-cds-theme@0.1.8 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.4 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-predict@0.1.2 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-git-bash@0.1.2 --registry=https://registry.npmjs.org
 ```
 
 Or paste the same package name into **Settings → Plugins → Add Plugin**.
@@ -133,7 +133,7 @@ Or paste the same package name into **Settings → Plugins → Add Plugin**.
 dsh plugin --profile desktop remove dsh-cds-theme
 ```
 
-This page never pins a version: take the current one from the npm page or the Releases page.
+These versions were verified on 2026-10-24 with DSH 0.2.1-rc.3. An unpinned predict install still resolved to 0.1.1 and was rejected for requiring rc.2; use the pinned command above or the market index. See [the install matrix](market/install-matrix.md).
 
 ### Without an npm account: GitHub Releases
 

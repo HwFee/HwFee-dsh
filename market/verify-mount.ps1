@@ -56,7 +56,7 @@ $packages = @(Get-ReleasePackages -RepoRoot $RepoRoot | ForEach-Object {
     Write-Host "  FAIL  $($_.Name): cannot read the row id from $patch" -ForegroundColor Red
     $script:failures++
   }
-  @{ Dir = $_.Dir; Name = $_.Name; RowId = $rowId; DirPath = $_.DirPath }
+  @{ Dir = $_.Dir; Name = $_.Name; RowId = $rowId; DirPath = $_.DirPath; Version = $_.Version }
 })
 if ($Package) { $packages = @($packages | Where-Object { $_.Name -eq $Package -or $_.RowId -eq $Package }) }
 
@@ -76,7 +76,7 @@ foreach ($p in $packages) {
   if (Test-Path $dir) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
 
   # 1. install from npm, exactly the way a user would
-  $install = & dsh plugin --profile $profile add $p.Name 2>&1 | Out-String
+  $install = & dsh plugin --profile $profile add "$($p.Name)@$($p.Version)" --registry=https://registry.npmjs.org 2>&1 | Out-String
   $installedLine = ($install -split "`r?`n" | Where-Object { $_ -match '^\s*\+ ' } | Select-Object -First 1)
   if (-not $installedLine) {
     Write-Host '  FAIL  install produced no package line' -ForegroundColor Red

@@ -44,6 +44,7 @@ param(
   [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)),
   [string]$ProfilePrefix = '_mx',
   [string]$ReportPath,
+  [string]$Registry = 'https://registry.npmjs.org',
   [switch]$SkipMirror,
   [switch]$KeepProfiles
 )
@@ -123,7 +124,7 @@ function Test-Case {
   )
 
   $profile = New-TestProfile $Suffix
-  $out = & dsh plugin --profile $profile add $Spec 2>&1 | Out-String
+  $out = & dsh plugin --profile $profile add $Spec "--registry=$Registry" 2>&1 | Out-String
   $dir = Join-Path $env:USERPROFILE ".dsh\profiles\$profile"
   $pkgDir = Join-Path $dir "node_modules\$PackageName"
 
@@ -145,6 +146,10 @@ function Test-Case {
   # First meaningful error line — what the user would have seen.
   $err = ($out -split "`r?`n" | Where-Object { $_ -match 'ERR_|error|failed|Cannot|Refusing' } | Select-Object -First 1)
   $err = if ($err) { $err.Trim() } else { '' }
+  if ($ok -and $Id -ne 'npm-name' -and $localVersions[$PackageName] -and $installedVersion -ne $localVersions[$PackageName]) {
+    $ok = $false
+    $err = "Installed $installedVersion, expected manifest version $($localVersions[$PackageName])"
+  }
 
   if ($ok)                { $verdict = 'PASS' }
   elseif ($ExpectFailure) { $verdict = 'FAIL (expected)' }
@@ -271,8 +276,8 @@ foreach ($p in $packages) {
   # build with a broken bundle id.
   $unpinned = $results | Where-Object { $_.Case -eq 'npm-name' -and $_.Package -eq $name } | Select-Object -Last 1
   if ($unpinned -and $unpinned.Version -and $unpinned.Version -ne $version) {
-    Write-Host ("      note: unpinned install got {0}, not {1} - pnpm minimumReleaseAge" -f $unpinned.Version, $version) -ForegroundColor DarkYellow
-    $null = $notes.Add("$($name): an unpinned install got $($unpinned.Version), not $version - pnpm's minimumReleaseAge keeps versions younger than its cutoff out of range resolution. Pinned installs are unaffected; re-run after the cutoff before treating this as a publish failure.")
+    Write-Host ("      note: unpinned install got {0}, not {1} - cause not established" -f $unpinned.Version, $version) -ForegroundColor DarkYellow
+    $null = $notes.Add("$($name): an unpinned install got $($unpinned.Version), not $version; the cause is not established. Compare the pinned and Release results before calling this release delivered.")
   }
 }
 
@@ -291,8 +296,8 @@ $null = Test-Case -Id 'git-subdir' -Spec $gitSpec -PackageName 'dsh-system-fonts
 # (g) install twice - what happens when the GUI button is clicked twice
 $suffix++
 $profile = New-TestProfile "x$suffix"
-$null = & dsh plugin --profile $profile add dsh-system-fonts 2>&1
-$null = & dsh plugin --profile $profile add dsh-system-fonts 2>&1
+$null = & dsh plugin --profile $profile add dsh-system-fonts "--registry=$Registry" 2>&1
+$null = & dsh plugin --profile $profile add dsh-system-fonts "--registry=$Registry" 2>&1
 $dir = Join-Path $env:USERPROFILE ".dsh\profiles\$profile"
 $entries = @()
 try { $entries = (Get-Content (Join-Path $dir 'package.json') -Raw | ConvertFrom-Json).dsh.profile.bundles } catch { }
@@ -310,7 +315,7 @@ Remove-TestProfile $profile
 # (h) remove leaves nothing behind
 $suffix++
 $profile = New-TestProfile "x$suffix"
-$null = & dsh plugin --profile $profile add dsh-system-fonts 2>&1
+$null = & dsh plugin --profile $profile add dsh-system-fonts "--registry=$Registry" 2>&1
 $null = & dsh plugin --profile $profile remove dsh-system-fonts 2>&1
 $dir = Join-Path $env:USERPROFILE ".dsh\profiles\$profile"
 $gone = -not (Test-Path (Join-Path $dir 'node_modules\dsh-system-fonts'))
@@ -330,7 +335,7 @@ Remove-TestProfile $profile
 if (-not $SkipMirror) {
   $suffix++
   $profile = New-TestProfile "x$suffix"
-  $out = & dsh plugin --profile $profile add dsh-cds-theme 2>&1 | Out-String
+  $out = & dsh plugin --profile $profile add dsh-cds-theme --registry=https://registry.npmmirror.com 2>&1 | Out-String
   $dir = Join-Path $env:USERPROFILE ".dsh\profiles\$profile"
   $pkgDir = Join-Path $dir 'node_modules\dsh-cds-theme'
   $hasPatch = Test-Path (Join-Path $pkgDir 'cordis.patch.yml')

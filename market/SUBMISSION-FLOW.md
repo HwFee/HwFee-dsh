@@ -143,7 +143,7 @@ pwsh market/test-install-paths.ps1
 
 **验收**：报告写入 `market/install-matrix.md`；除 `git-subdir` 这一条预期失败外，不得有 FAIL。
 
-**读报告要看 Installed 列，不要假设它等于 `latest`。** pnpm 的 `minimumReleaseAge`（供应链策略）会把发布不满阈值（约 24 小时）的版本排除出**范围解析**，所以未锁定安装可能落后一版。锁定版本与 Release tarball 不受影响。报告会逐包注明这一点；看到落后先核对时间，别当成发布失败。**但如果被回落的那个版本本身有缺陷（例如 bundle id 还是旧包名），未锁定安装就是坏的**——这时要么等窗口过去，要么在安装说明里写死版本。
+**读报告要看 Installed 列，不要假设它等于 `latest`。** 曾实测未锁定安装落后一版，原因尚未定位；当时 npm/pnpm 的 `minimumReleaseAge` 配置均未设置，不能将其写成已确认原因。锁定版本与 Release tarball 是已验证的交付路径。**如果回落版本本身有缺陷（例如 bundle id 还是旧包名），未锁定安装就是坏的**，安装说明应指定已验证版本。
 
 ---
 
@@ -183,6 +183,7 @@ pwsh market/verify-mount.ps1
 ```sh
 pwsh market/submit-to-catalog.ps1            # 干跑：列出 pending、检查前置
 pwsh market/submit-to-catalog.ps1 -Apply     # 建分支、复制条目、开 PR
+pwsh -Command "& ./market/submit-to-catalog.ps1 -Apply -Update -Only @('cds-theme','system-fonts','genui')"  # 只更新指定的自有条目
 ```
 
 脚本**只提交上游还没有的条目**（按文件名判断），已收录的不会重写——市场规则要求 PR 不得改动与自己无关的条目。本地条目与上游不一致时它会报告但不会静默提交；确需更新自己那条时加 `-Update`。

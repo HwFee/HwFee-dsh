@@ -6,23 +6,25 @@
 
 ---
 
-## 0. 现状（2026-10-22 实测）
+## 0. 现状（2026-10-24 实测）
 
 六个包都已上线。下表是**核对用**的当日快照，不是权威数据；版本以 npm 页面为准，tag 以 Release 页面为准：
 
 | 包 | npm `latest` | 发布时间 | Release tag 规则 | 资产名 |
 |---|---|---|---|---|
-| `dsh-cds-theme` | `0.1.5` | 2026-10-21 | `cds-theme-v<version>` | `dsh-cds-theme-<version>.tgz` |
-| `dsh-system-fonts` | `0.1.2` | 2026-10-21 | `system-fonts-v<version>` | `dsh-system-fonts-<version>.tgz` |
-| `@hwfee/dsh-usage-stats` | `0.1.2` | 2026-10-20 | `usage-stats-v<version>` | `hwfee-dsh-usage-stats-<version>.tgz` |
-| `@hwfee/dsh-genui` | `0.1.0` | 2026-10-21 | `genui-v<version>` | `hwfee-dsh-genui-<version>.tgz` |
-| `@hwfee/dsh-git-bash` | `0.1.0` | 2026-10-21 | `git-bash-v<version>` | `hwfee-dsh-git-bash-<version>.tgz` |
-| `@hwfee/dsh-predict` | `0.1.0` | 2026-10-21 | `predict-v<version>` | `hwfee-dsh-predict-<version>.tgz` |
+| `dsh-cds-theme` | `0.1.8` | 2026-10-24 | `cds-theme-v<version>` | `dsh-cds-theme-<version>.tgz` |
+| `dsh-system-fonts` | `0.1.3` | 2026-10-22 | `system-fonts-v<version>` | `dsh-system-fonts-<version>.tgz` |
+| `@hwfee/dsh-usage-stats` | `0.1.4` | 2026-10-24 | `usage-stats-v<version>` | `hwfee-dsh-usage-stats-<version>.tgz` |
+| `@hwfee/dsh-genui` | `0.1.2` | 2026-10-24 | `genui-v<version>` | `hwfee-dsh-genui-<version>.tgz` |
+| `@hwfee/dsh-git-bash` | `0.1.2` | 2026-10-24 | `git-bash-v<version>` | `hwfee-dsh-git-bash-<version>.tgz` |
+| `@hwfee/dsh-predict` | `0.1.2` | 2026-10-24 | `predict-v<version>` | `hwfee-dsh-predict-<version>.tgz` |
 
 两个必须知道的现状：
 
 - **Releases 按包分 tag**，规则 `<plugin>-v<version>`；scoped 包的资产名要去掉 scope。旧的共享 tag `v0.1.0` 还在，但里面只有首发那三个包（主题是 `0.1.0`）；`v0.1.1` 没有 Release，那些地址是 404。
-- **已发布的 `dsh-cds-theme@0.1.5` 内含 6 个无再分发授权的 Anthropic 字体**（见第 5 节）。工作区里的构建已经修好，但那版 tarball 不会追溯修改，所以下一次发主题必须是新版本号。
+- **已发布的 `dsh-cds-theme@0.1.5` 内含 6 个无再分发授权的 Anthropic 字体**（见第 5 节）。当前发行已移除这些字节；旧 tarball 不会追溯修改。
+
+本次发布的哈希见 [publish-record.md](publish-record.md)，安装结果与已知的 predict 未锁定版本问题见 [install-matrix.md](install-matrix.md)。
 
 想自己复核，别信这张表，跑一遍：
 
@@ -192,7 +194,7 @@ foreach ($m in $map) {
 
 **事实。** `plugins/cds-theme/fonts/` 里曾有 6 个 **Anthropic** 网页可变字体（Sans / Serif / Mono × Roman / Italic）。它们是商业字体，**本项目没有拿到再分发授权**。修复前的构建把它们内联成 `data:font/woff2` 写进 `client/client.js`，所以 npm 上的 `dsh-cds-theme@0.1.5` tarball 里就带着它们——安装即分发。
 
-**现状（2026-10-22 已在工作区落地，未发布）。** 公开构建只内联 2 个自制思源子集（SIL OFL）；6 个 Anthropic 面改成 `local()` 引用，**并且已从 git 取消跟踪**：它们只作为开发者本机的工作副本存在，`.gitignore` 精确列了这 6 个文件名，fresh clone 里没有这些文件，发布包里也是零字节。
+**当前发行。** 公开构建只内联 2 个自制思源子集（SIL OFL）；6 个 Anthropic 面改成 `local()` 引用，**并且已从 git 取消跟踪**：它们只作为开发者本机的工作副本存在，`.gitignore` 精确列了这 6 个文件名，fresh clone 里没有这些文件，发布包里也是零字节。
 
 | | 修复前 | 现在 |
 |---|---|---|
