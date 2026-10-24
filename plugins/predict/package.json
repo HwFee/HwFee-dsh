@@ -1,6 +1,6 @@
 {
   "name": "@hwfee/dsh-predict",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "下一句：在回答后建议下一条输入，Tab 填入，不自动发送；支持选择预测模型。 / Next Prompt: next-message suggestions with Tab to fill, no auto-send, and a configurable model.",
   "type": "module",
   "main": "lib/index.js",

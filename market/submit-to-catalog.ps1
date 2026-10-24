@@ -37,6 +37,7 @@ param(
   [switch]$Apply,
   [switch]$Update,
   [switch]$Force,
+  [string[]]$Only,
   [string]$WorkDir = (Join-Path ([IO.Path]::GetTempPath()) 'dsh-catalog-submit'),
   [string]$Repo = 'HwFee/HwFee-dsh',
   [string]$Catalog = 'awesome-dsh-plugin/awesome-dsh-plugin'
@@ -128,6 +129,12 @@ Step 2 'Local entries, and which of them upstream does not have yet'
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'gh CLI not found' }
 
 $entries = @(Get-ChildItem $catalogEntries -Filter *.yml | ForEach-Object { Read-Entry $_ })
+if ($Only) {
+  $entries = @($entries | Where-Object { $Only -contains $_.Slug })
+  $missing = @($Only | Where-Object { $_ -notin $entries.Slug })
+  if ($missing.Count) { Die "Unknown catalog entries: $($missing -join ', ')" }
+}
+if (-not $entries.Count) { Die 'No catalog entries selected' }
 foreach ($e in $entries) {
   foreach ($needle in @('url: https://github.com/', 'name: ', 'category: ', '  en: ')) {
     if (-not (Get-Content $e.File.FullName -Raw).Contains($needle)) { Die "$($e.FileName) missing '$needle'" }

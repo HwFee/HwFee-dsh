@@ -1,6 +1,6 @@
 {
   "name": "@hwfee/dsh-genui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DeepSeek Harness 的生成式 UI 插件：模型用 render_ui 工具直接写一段 React 代码，回答里就地渲染成一张可交互卡片，而不是只给文字。附带一个内置 skill，教模型什么时候值得用界面、什么时候一段话就够。代码在独立的 sandboxed iframe 里执行：opaque origin，读不到宿主 DOM、存储和 cookie，CSP 阻断 fetch/XHR/WebSocket；卡片要发消息必须由用户点确认。 / Generative UI for DeepSeek Harness: the model calls render_ui with a snippet of React and the answer renders as an interactive card in the conversation. Ships one built-in skill that teaches when a UI is worth it. The snippet runs in a sandboxed iframe with an opaque origin (no host DOM, storage or cookies) under a CSP that blocks the network; a card's message is only sent after the user confirms it.",
   "type": "module",
   "main": "lib/index.js",

@@ -30,7 +30,7 @@ Each plugin is a separate package with its own manifest, prebuilt client bundle 
 319 design tokens through the host's `overrideTokens` path (173 colour, 133 typography, 13 radius/shadow/motion, light and dark), plus component rules layered on stable `data-*` hooks rather than the host's hashed class names.
 
 - **Component work**: serif display greeting on the blank page; framed Markdown tables with tinted headers and tabular numerals; white code blocks in light mode, `#1a1a19` in dark; a unified single-card layout for tool calls; theme-rendered diff and write cards with per-language syntax colour and word-level change highlighting.
-- **A "Theme" settings page** beside General: light/dark/system, four accents, surface warmth, radius scale, shadow intensity, component-polish toggle, CJK font priority, long-paste-to-file, and the blank-page ripple.
+- **A "Theme" settings page** beside General: light/dark/system, four accents, surface warmth, radius scale, shadow intensity, component-polish toggle, CJK font priority, long-paste-to-file, and an ASCII ocean on the blank page. Whale colours can be black, DeepSeek blue or changing; reduced motion freezes the scene.
 - **Code blocks wrap by default**, and the host's "no wrap" toggle is removed — no-wrap is not a state this theme offers.
 
 ![A Python code block under the theme, plus the reasoning text and command output around it](assets/screenshot-code.png)
@@ -227,10 +227,10 @@ HwFee-dsh/
 Each plugin directory has its own `npm test`: build-freshness check first, manifest contract second, then the suites. Totals change with every fix, so read the output instead of a number here.
 
 ```bash
-cd plugins/cds-theme
-npm test
-
-node tools/audit.mjs   # repo-wide: bundle budget, unsafe DOM, observer lifecycle, token pairs
+npm run build         # rebuild every plugin from the repository root
+npm test              # run every plugin's freshness, manifest and behaviour checks
+npm run audit         # unsafe DOM, observer lifecycle, token pairs and font assets
+npm run verify        # theme-specific checks
 ```
 
 Maintainer rules, including why a rebuilt bundle needs a full app restart rather than a refresh, are in [AGENTS.md](AGENTS.md).

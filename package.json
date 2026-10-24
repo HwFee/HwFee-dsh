@@ -1,4 +1,13 @@
 {
+  "private": true,
+  "scripts": {
+    "build": "node tools/run-plugins.mjs build",
+    "test": "node tools/run-plugins.mjs test",
+    "audit": "node tools/audit.mjs",
+    "verify": "node plugins/cds-theme/tools/verify.mjs",
+    "release:compare": "node market/compare-published.mjs --write",
+    "market:index": "node market/build-index.mjs"
+  },
   "dependencies": {
     "zod": "^4.4.3"
   }
