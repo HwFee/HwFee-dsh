@@ -26,7 +26,7 @@
 ## 1. 用户的全部要求（按提出顺序，一条不落）
 
 ### 1.1 最初任务
-1. 复制 `https://github.com/Microqian2th/dsh-codex-effort-slider`，保留视觉与交互，适配项目 token，只改严重不符之处。
+1. 外部推理滑条移植任务已取消（2026-10-24）：用户要求从仓库删除，不发布、不启用。
 2. 参考 `https://github.com/Nwflower/dsh-claude-style` 的 `docs/screenshots/claude-conversation-dark.png`：
    - usage-stats 增加「参考版」用量面板样式；
    - 输入框可做参考版分离布局：上方工作区/「添加文件夹」、独立文本框、工具栏移到框外下方；
@@ -56,15 +56,9 @@
 
 ## 2. 已完成并验证的部分
 
-### 2.1 滑块插件（全新，未安装）
-目录：`plugins/codex-effort-slider/`（`@hwfee/dsh-codex-effort-slider@0.1.0`，MIT）
+### 2.1 外部滑条移植已删除
 
-- 上游 v1.1.2 移植，`licenses/UPSTREAM-LICENSE.txt` + `licenses/NOTICE.md` 逐项记录差异。
-- 视觉：28px 轨道、白色同径旋钮、蓝→紫能量层、高档星尘粒子；Off 为官方灰。
-- **修复的真实 bug**：`resolveLevels` 分不清「切换中瞬时为空」与「模型本无 reasoning」，导致无档位模型复用上一模型档位（曾把组件测试拖进 OOM）。修法是新增 `reasoningSupport()` 三态判据。
-- 其他修复：`syncSeat` 用 `isConnected`+`contains`；桥接 MutationObserver 合并到一帧；队列写回绑定模型身份；目录实例重新解析；卸载完整清理。
-- **验证**：`npm test` **156/156**、`build --check` 0、仓库审计通过、离线真实产物截图 4 张（`.work/ces-final/fixture/`）。
-- **未验证**：真机安装与写回。
+2026-10-24 用户明确取消该项目：代码、构建产物、测试与市场条目均已移除；不发布、不启用。
 
 ### 2.2 usage-stats（双面板 + 长文本修复）
 目录：`plugins/usage-stats/`
@@ -158,8 +152,6 @@
 
 | 用途 | 路径 |
 |---|---|
-| 滑块插件 | `plugins/codex-effort-slider/` |
-| 滑块截图 | `.work/ces-final/fixture/01-all-presets.png` 等 4 张 |
 | 用量双样式截图 | `.work/usage-style/shots/01–20*.png`（25 张） |
 | 用量验证报告 | `.work/usage-style/report.md` |
 | 主题分离布局截图 | `.work/theme-wave/shots/01–05*.png`（含 480 回落） |
