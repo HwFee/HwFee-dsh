@@ -14,11 +14,16 @@ export const PANEL_STYLE_ID = 'dsh-usage-stats/panel'
  * surface/hairline recipe) and the 2px heatmap-cell radius the contract
  * fixes; every radius is a host radius token.
  *
- * DESIGN VOCABULARY. The panel borrows the Claude Desktop surface grammar:
- * one bordered shell (the panel itself), one pill track (the head row is a
- * single segmented control, not two button clusters), fill-based metric
- * tiles, and an inset hairline on the heatmap. Inside the shell nothing
- * carries a second closed border — the CDS "1-border rule".
+ * DESIGN VOCABULARY. The panel borrows the Claude Desktop surface grammar: one
+ * bordered shell (the panel itself), flat switch buttons in the head row,
+ * fill-based metric tiles, and an inset hairline on the heatmap.
+ *
+ * ONE-BORDER RULE, WITH ONE REQUESTED EXCEPTION. Inside the shell nothing
+ * carries a second closed border — except the six metric tiles. At this
+ * transparency a tint step alone was not readable as six separate cells, so
+ * each tile carries an INSET .5px `border-l2` hairline on top of its 6%
+ * tertiary tint. The exception is drawn as `inset` box-shadow so it adds no
+ * layout box, and it is never answered by raising a fill's opacity.
  */
 export const PANEL_CSS = [
   // The wrapper owns the width, not the panel. The dock renders its occupants
@@ -40,8 +45,25 @@ export const PANEL_CSS = [
   // composer card's OWN elevation recipe verbatim — `--dsw-elevation-soft`
   // with its stroke color set to the L2 border token — so the panel sits on
   // the same elevation plane as the input box and reads as a clear sibling
-  // object, not a flat fill. `--dsw-alias-bg-base` keeps it on the host canvas
-  // tone.
+  // object, not a flat fill.
+  //
+  // THE FILL IS TRANSLUCENT, 52%. On a blank session the hero's ASCII ocean runs
+  // behind both this panel and the composer card (cds-theme paints its canvas at
+  // `z-index: -1` under this conversation body), so an opaque fill cut the ocean
+  // off at the panel edge while the input box stayed see-through.
+  //
+  // Plain translucency, not `backdrop-filter`: a blur smears the 1–2px glyph
+  // strokes that are the whole effect and re-samples a 30fps canvas behind a
+  // full-panel filter.
+  //
+  // The fills COMPOSE and every one of them is translucent — tiles 6% over this
+  // shell plus an inset hairline, band 20%, heat cells 12–42% over the band.
+  // Text keeps its own alpha: labels are read directly off the composite tokens,
+  // never faded on top.
+  //
+  // `color-mix` against `transparent` (not an rgba literal) because the surface
+  // is a THEME token: the theme decides the hue, the panel only how much of it
+  // to keep.
   //
   // The CHROME is 8px, not 10px. The body height is the user's setting, so the
   // shell's own padding and the head↔body gap are the only air this plugin owns
@@ -52,7 +74,7 @@ export const PANEL_CSS = [
   '.dus-panel { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px;',
   '  position: relative;',
   '  padding: 8px 12px; border-radius: var(--dsw-radius-panel);',
-  '  background: var(--dsw-alias-bg-base);',
+  '  background: color-mix(in srgb, var(--dsw-alias-bg-base) 52%, transparent);',
   '  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);',
   '  box-shadow: var(--dsw-elevation-soft); }',
 
@@ -137,17 +159,28 @@ export const PANEL_CSS = [
   '.dus-overview { display: flex; flex-direction: column;',
   '  height: 100%; min-height: 0; overflow-y: hidden; }',
 
-  // Six tiles, three across (two across under the 560px breakpoint). They are
-  // fills, never outlined boxes: the tile boundary is the tint step between
-  // `--dsw-alias-bg-module-platform` and the panel surface behind it — CDS
-  // low-contrast surface layering. The type sizes carry floors: the packed tier
-  // stops at 10px/15px (label/value), never smaller.
+  // Six tiles, three across (two across under the 560px breakpoint). The type
+  // sizes carry floors: the packed tier stops at 10px/15px, never smaller.
+  //
+  // THE TILES MUST READ AS SIX SEPARATE CELLS at a fill this light, so the
+  // boundary is drawn TWICE: a 6% `label-tertiary` tint (a faint step toward
+  // the label colour, which is brighter than the surface in dark mode and
+  // darker in light) plus an inset .5px `border-l2` hairline. Either alone was
+  // too faint once the fill dropped this far; together they separate the cells
+  // without darkening the panel — a hairline covers a few hundred px² of edge,
+  // a fill bump would cover the whole tile and re-hide the backdrop.
+  //
+  // `inset` box-shadow, never `border`: a border would add to the box and
+  // shift the card's content by .5px, and the 6px gaps (`--dus-grid-gap`) plus
+  // every height in `layout.js` are calibrated without it.
   '.dus-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));',
   '  gap: var(--dus-grid-gap, 6px);',
   '  margin-bottom: var(--dus-overview-gap, 10px); }',
   '.dus-card { display: flex; flex-direction: column; gap: var(--dus-card-gap, 2px);',
   '  padding: var(--dus-card-pad, 8px) 10px;',
-  '  border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }',
+  '  border-radius: var(--dsw-radius-md);',
+  '  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 6%, transparent);',
+  '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2); }',
   '.dus-card-label { color: var(--dsw-alias-label-tertiary);',
   '  font-size: var(--dus-card-label-size, 11px); line-height: var(--dus-card-label-lh, 15px);',
   '  letter-spacing: .02em; }',
@@ -189,23 +222,28 @@ export const PANEL_CSS = [
   '.dus-heat { display: flex; align-items: stretch; gap: var(--dus-heat-gap, 4px);',
   '  flex: 0 0 auto; overflow-x: auto; padding: var(--dus-heat-pad, 8px);',
   '  border-radius: var(--dsw-radius-md);',
-  '  background: var(--dsw-alias-bg-module-platform);',
+  '  background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 20%, transparent);',
   '  justify-content: space-between;',
   '  overscroll-behavior-x: contain; scrollbar-width: none; }',
   '.dus-heat::-webkit-scrollbar { display: none; }',
   '.dus-heat-week { display: flex; flex-direction: column; gap: var(--dus-heat-gap, 4px);',
   '  flex: 1 0 9px; max-width: var(--dus-heat-cell-max, 22px); }',
-  // The quiet cell is a plain grey tile — visibly darker than the band, the
-  // way the design target draws its empty days — so the grid reads as a grid
-  // even when almost everything is empty. The accent only enters at level 1
-  // and climbs a stepped ramp, which is what makes the hot days pop against
-  // the field of quiet grey.
+  // The quiet cell is a plain tertiary-grey tile at 12% — enough to draw the
+  // grid, faint enough that the band carries no second surface. Every active
+  // level mixes that same accent against `transparent` at 12/22/32/42%, so the
+  // ramp is purely alpha: hue never shifts between levels, and level 4 is still
+  // translucent (a solid fill was the block the user objected to).
+  //
+  // Every mix here takes exactly TWO colours: a three-colour mix is invalid CSS,
+  // Chromium drops the declaration and the cell resolves to `rgba(0,0,0,0)`, so
+  // the whole calendar grid disappears while string-level tests stay green. The
+  // regression test walks this sheet and counts the commas for that reason.
   '.dus-heat-cell { display: block; width: 100%; aspect-ratio: 1; border-radius: 2px;',
-  '  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 18%, var(--dsw-alias-bg-module-platform)); }',
-  '.dus-heat-cell[data-level="1"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 30%, var(--dsw-alias-bg-base)); }',
-  '.dus-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-bg-base)); }',
-  '.dus-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 80%, transparent); }',
-  '.dus-heat-cell[data-level="4"] { background: var(--dsw-alias-state-business-primary); }',
+  '  background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent); }',
+  '.dus-heat-cell[data-level="1"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent); }',
+  '.dus-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, transparent); }',
+  '.dus-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 32%, transparent); }',
+  '.dus-heat-cell[data-level="4"] { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 42%, transparent); }',
 
   // Model list: one row per model, the share bar under its label row.
   //

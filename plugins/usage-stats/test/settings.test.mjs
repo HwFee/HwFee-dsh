@@ -470,6 +470,272 @@ test('nothing in the tab stack can stretch or shrink a tab away from the setting
   assert.match(ruleBody(PANEL_CSS, 'dus-overview'), /height:\s*100%/)
 })
 
+/**
+ * The declaration body of one heat cell level, or `null` when the sheet has no
+ * rule for that level. `.dus-heat-cell[data-level="N"]` cannot be reached with
+ * `ruleBody()` because its selector carries an attribute before the brace.
+ */
+function heatCellBody(css, level) {
+  const selector = level === 0
+    ? '\\.dus-heat-cell\\s*\\{'
+    : '\\.dus-heat-cell\\[data-level="' + level + '"\\]\\s*\\{'
+  const match = new RegExp(selector + '([^}]*)\\}').exec(css)
+  return match === null ? null : match[1]
+}
+
+/** The `background` declaration of a rule body, or the empty string. */
+function backgroundOf(body) {
+  const match = /background:\s*([^;]+);/.exec(body || '')
+  return match === null ? '' : match[1].trim()
+}
+
+/**
+ * The alpha a `mix N%, transparent` fill contributes, as a fraction.
+ *
+ * A fill with no `transparent` mix is OPAQUE, which is exactly the state the
+ * user rejected — so it reports 1 instead of throwing, and the assertions below
+ * name the consequence.
+ */
+function fillAlpha(declaration) {
+  const match = /(\d+)%\s*,\s*transparent\)/.exec(declaration)
+  return match === null ? 1 : Number(match[1]) / 100
+}
+
+/** A layer's contribution to what still reaches the backdrop. */
+function stack(alphas) {
+  return alphas.reduce(function (rest, alpha) { return rest * (1 - alpha) }, 1)
+}
+
+/** What fraction of the hero backdrop survives behind a heat cell of this level. */
+function heatTransmission(css, level) {
+  return stack([
+    fillAlpha(backgroundOf(heatCellBody(css, level))),
+    fillAlpha(backgroundOf(ruleBody(css, 'dus-heat'))),
+    fillAlpha(backgroundOf(ruleBody(css, 'dus-panel'))),
+  ])
+}
+
+/**
+ * Every way the sheet fails the transparency contract, as readable strings.
+ *
+ * Pure over the CSS string so the mutation test below can prove the rule
+ * actually rejects the OLD form instead of only accepting the new one.
+ */
+function transmissionProblems(css) {
+  const problems = []
+  const shell = fillAlpha(backgroundOf(ruleBody(css, 'dus-panel')))
+  const card = fillAlpha(backgroundOf(ruleBody(css, 'dus-card')))
+  const band = fillAlpha(backgroundOf(ruleBody(css, 'dus-heat')))
+
+  if (!(shell < 0.7)) problems.push('shell alpha ' + shell + ' is not visibly open (< 0.7)')
+  if (!(card < 0.2)) problems.push('card alpha ' + card + ' re-seals the shell (< 0.2)')
+  if (!(band < 0.5)) problems.push('band alpha ' + band + ' re-seals the shell (< 0.5)')
+
+  for (const name of ['dus-panel', 'dus-card', 'dus-heat']) {
+    const declaration = backgroundOf(ruleBody(css, name))
+    if (!/transparent\)/.test(declaration)) {
+      problems.push('.' + name + ' mixes against a token instead of transparent: ' + declaration)
+    }
+    if (/^var\(/.test(declaration)) problems.push('.' + name + ' is a bare token fill: ' + declaration)
+  }
+
+  // SIX CELLS MUST READ AS SIX. At a 6% tint the fill alone is nearly invisible,
+  // so the tile boundary is carried by an inset hairline as well. Both are
+  // required, and the hairline must be `inset` (a real border would add .5px to
+  // the box and shift the content the layout arithmetic is calibrated for).
+  const tile = ruleBody(css, 'dus-card')
+  if (!/box-shadow:\s*inset\s+0\s+0\s+0\s+\.5px\s+var\(--dsw-alias-border-l2\)/.test(tile)) {
+    problems.push('the metric tile lost its inset .5px border-l2 hairline: ' + tile.trim())
+  }
+  if (/(^|[;\s])border(?:-width|-top|-right|-bottom|-left)?\s*:/.test(tile)) {
+    problems.push('the tile uses a real border, which changes its box: ' + tile.trim())
+  }
+  if (!/(^|[;\s])border-radius:/.test(tile)) {
+    problems.push('the tile lost its radius; an outline needs the corners to match')
+  }
+
+  // ALL FIVE LEVELS, including the quiet one and the hottest one. Every one has
+  // to be a `mix N%, transparent` — a level that mixes against a solid token is
+  // opaque no matter how small its percentage looks.
+  const levels = [0, 1, 2, 3, 4]
+  const alphas = []
+  for (const level of levels) {
+    const body = heatCellBody(css, level)
+    if (body === null) { problems.push('no rule for heat level ' + level); continue }
+    const declaration = backgroundOf(body)
+    alphas.push(fillAlpha(declaration))
+    if (!/^color-mix\(in srgb, [^,]+, transparent\)$/.test(declaration)) {
+      problems.push('heat level ' + level + ' is not a two-colour transparent mix: ' + declaration)
+    }
+    const through = heatTransmission(css, level)
+    if (!(through < 0.85)) {
+      problems.push('heat level ' + level + ' transmits only ' + through.toFixed(3))
+    }
+  }
+
+  // The active ramp is alpha only, and strictly climbing: equal neighbours would
+  // collapse two densities into one shade.
+  for (let i = 1; i < 4; i += 1) {
+    if (!(alphas[i] < alphas[i + 1])) {
+      problems.push('heat ramp is not ascending at level ' + i + ': ' + alphas.slice(1).join('/'))
+    }
+  }
+  if (alphas[4] >= 1) problems.push('the hottest level is fully opaque')
+
+  // The quiet grid still has to be DRAWABLE: a zero-alpha "tile" is no tile.
+  if (!(alphas[0] > 0)) problems.push('the quiet cell has no fill at all')
+  return problems
+}
+
+test('every panel surface composes, so the hero backdrop reads behind all of it', function () {
+  // The user's report: on a blank session the ASCII ocean runs behind this panel
+  // and the card hid it. This is a SURFACE property, so it is asserted on the
+  // COMPOSITE of the fills that stack — shell, card, band, and each of the five
+  // heat levels — not on one declaration somewhere.
+  //
+  // The failure this catches is silent: every value can look "translucent" while
+  // the stack still ends up opaque (the shell was 78% under a 55% card), or a
+  // single level can be solid while the rest of the ramp is fine.
+  assert.deepEqual(transmissionProblems(PANEL_CSS), [],
+    'the sheet must keep every layer translucent and the ramp ascending')
+
+  // The specific numbers the user asked for, pinned so a future "small tweak"
+  // cannot quietly walk them back toward opaque.
+  assert.equal(fillAlpha(backgroundOf(ruleBody(PANEL_CSS, 'dus-panel'))), 0.52)
+  assert.equal(fillAlpha(backgroundOf(ruleBody(PANEL_CSS, 'dus-card'))), 0.06,
+    'tiles are a 6% tertiary tint; their boundary is the hairline, not a heavier fill')
+  assert.equal(fillAlpha(backgroundOf(ruleBody(PANEL_CSS, 'dus-heat'))), 0.20)
+  // The tint is the LABEL colour, not the surface token: on the panel the surface
+  // token is nearly the same colour as the shell, so a surface-on-surface tint
+  // could never separate the cells.
+  assert.match(backgroundOf(ruleBody(PANEL_CSS, 'dus-card')),
+    /color-mix\(in srgb, var\(--dsw-alias-label-tertiary\) 6%, transparent\)/)
+  assert.deepEqual([0, 1, 2, 3, 4].map(function (level) {
+    return Math.round(fillAlpha(backgroundOf(heatCellBody(PANEL_CSS, level))) * 100)
+  }), [12, 12, 22, 32, 42], 'quiet 12%, then an alpha-only ramp 12/22/32/42')
+
+  // A whale is still visible behind a tile AND behind the hottest day: the tile
+  // deliberately got lighter, so the transmission floor only got easier to meet —
+  // assert it anyway, because raising the tint or the hairline to a solid fill
+  // would be the tempting way to make six cells "obvious".
+  const throughTile = stack([0.06, 0.52])
+  assert.ok(throughTile > 0.4, 'the backdrop survives behind a tile, got ' + throughTile.toFixed(3))
+
+  // A whale behind a cell still differs from the water it swims in by a visible
+  // margin: the whole stack keeps ~22% of the backdrop even at the hottest day.
+  assert.ok(heatTransmission(PANEL_CSS, 4) > 0.2,
+    'the hottest day still passes the backdrop, got ' + heatTransmission(PANEL_CSS, 4).toFixed(3))
+
+  // TEXT KEEPS ITS OWN OPACITY. The surfacing is done entirely with background
+  // alphas; no label, value or foot may be faded to compensate, because that is
+  // what would make the composite readable at the cost of the numbers.
+  const withoutKeyframes = PANEL_CSS.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '')
+  assert.ok(!/(^|[;\s])opacity:/.test(withoutKeyframes),
+    'no rule fades text (or any element) to compensate for a translucent layer')
+  for (const name of ['dus-card-label', 'dus-card-value', 'dus-foot-line', 'dus-model-id']) {
+    assert.match(ruleBody(PANEL_CSS, name), /color:\s*var\(--dsw-alias-/,
+      '.' + name + ' keeps a full-opacity label token')
+  }
+
+  // NO BACKDROP FILTER. A blur would smear the 1-2px glyph strokes into a wash and
+  // re-sample an animating 30fps canvas behind a full-panel filter.
+  assert.ok(!/backdrop-filter/.test(PANEL_CSS),
+    'liquid glass would destroy the glyphs, which are the whole effect')
+  assert.ok(!/-webkit-backdrop-filter/.test(PANEL_CSS))
+})
+
+test('the transparency guard rejects the previous, opaque recipe', function () {
+  // A test that only accepts today's numbers proves nothing about tomorrow's
+  // mutation. Each case below is a controlled string mutation of the SAME sheet
+  // that `transmissionProblems` just passed — the shell/tiles/band restored to
+  // their pre-change form, and single heat levels restored to the opaque
+  // two-colour or solid fills. Restored and broken strings live here, so no
+  // source file has to be edited to prove the guard bites.
+  const mutated = function (from, to) {
+    assert.ok(PANEL_CSS.includes(from), 'the mutation target must exist: ' + from)
+    return PANEL_CSS.replace(from, to)
+  }
+  const cases = [
+    ['the opaque shell', mutated(
+      'background: color-mix(in srgb, var(--dsw-alias-bg-base) 52%, transparent);',
+      'background: var(--dsw-alias-bg-base);')],
+    ['the 30% card that merged six tiles into one block', mutated(
+      'background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 6%, transparent);',
+      'background: color-mix(in srgb, var(--dsw-alias-bg-module-platform) 30%, transparent);')],
+    ['a tile with its hairline removed', mutated(
+      '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2); }',
+      '  box-shadow: none; }')],
+    ['a tile outlined with a real border instead of an inset one', mutated(
+      '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l2); }',
+      '  border: .5px solid var(--dsw-alias-border-l2); }')],
+    ['the 55% band', mutated(
+      'var(--dsw-alias-bg-module-platform) 20%, transparent',
+      'var(--dsw-alias-bg-module-platform) 55%, transparent')],
+    ['the quiet cell mixed against a token', mutated(
+      'background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 12%, transparent);',
+      'background: color-mix(in srgb, var(--dsw-alias-label-tertiary) 18%, var(--dsw-alias-bg-module-platform));')],
+    ['the level-1 cell mixed against a token', mutated(
+      'var(--dsw-alias-state-business-primary) 12%, transparent',
+      'var(--dsw-alias-state-business-primary) 30%, var(--dsw-alias-bg-base)')],
+    ['the level-2 cell mixed against a token', mutated(
+      'var(--dsw-alias-state-business-primary) 22%, transparent',
+      'var(--dsw-alias-state-business-primary) 55%, var(--dsw-alias-bg-base)')],
+    ['the solid level-4 block', mutated(
+      'var(--dsw-alias-state-business-primary) 42%, transparent',
+      'var(--dsw-alias-state-business-primary)')],
+    ['a collapsed ramp', mutated(
+      'var(--dsw-alias-state-business-primary) 32%, transparent',
+      'var(--dsw-alias-state-business-primary) 22%, transparent')],
+  ]
+  for (const pair of cases) {
+    const problems = transmissionProblems(pair[1])
+    assert.ok(problems.length > 0, pair[0] + ' must be rejected, but the guard passed it')
+  }
+
+  // And the guard is not just "reject everything": the untouched sheet is clean.
+  assert.deepEqual(transmissionProblems(PANEL_CSS), [])
+})
+
+test('every color-mix in the sheet is legal, two-colour form', function () {
+  // THIS IS THE REGRESSION. `color-mix(in srgb, A 18%, B 60%, transparent)` looks
+  // reasonable and is INVALID: Chromium parses it as nothing, the declaration
+  // falls back to `rgba(0,0,0,0)` — and because the panel's quiet heat cells use
+  // it as their only background, the whole calendar grid disappeared while every
+  // string-level test stayed green. Verified in the app's own renderer: the
+  // three-colour form resolves to `rgba(0, 0, 0, 0)` and `CSS.supports()` says
+  // false for it, while two-colour and nested forms both resolve.
+  // Walk the sheet and collect each `color-mix(` call by balancing its parens.
+  // A regex cannot do this: `var(--dsw-alias-bg-base)` contains a `)` that ends a
+  // naive match inside the first argument, and the resulting "1 !== 2" failure
+  // says nothing about the real problem.
+  const mixes = []
+  for (let at = PANEL_CSS.indexOf('color-mix('); at >= 0; at = PANEL_CSS.indexOf('color-mix(', at + 1)) {
+    let depth = 0
+    let end = at
+    for (; end < PANEL_CSS.length; end += 1) {
+      if (PANEL_CSS[end] === '(') depth += 1
+      else if (PANEL_CSS[end] === ')') {
+        depth -= 1
+        if (depth === 0) break
+      }
+    }
+    mixes.push(PANEL_CSS.slice(at, end + 1))
+  }
+  assert.ok(mixes.length > 0, 'the sheet is expected to use color-mix for its fills')
+  for (const mix of mixes) {
+    const body = mix.slice('color-mix('.length, -1)
+    let depth = 0
+    let commas = 0
+    for (const ch of body) {
+      if (ch === '(') depth += 1
+      else if (ch === ')') depth -= 1
+      else if (ch === ',' && depth === 0) commas += 1
+    }
+    assert.equal(commas, 2,
+      'a color-mix takes exactly two colours; this one has ' + (commas + 1) + ': ' + mix)
+  }
+})
+
 test('the hover bubble cannot reach an ancestor scroll container', function () {
   // This is the jitter fix, and it is a LAYOUT contract, so it is asserted here
   // as well as computed in `layout.js`. The hero stack lives in a scroll
