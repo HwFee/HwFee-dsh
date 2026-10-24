@@ -13,6 +13,8 @@ import { join } from 'node:path'
 
 import { buildTokens } from '../client/src/tokens.js'
 import { sanitize, DEFAULT_STATE } from '../client/src/constants.js'
+import { WHALE_INKS } from '../client/src/constants.js'
+import { HUE_PERIOD_S, whaleInkColor } from '../client/src/whaleInk.js'
 import { buildCssFor, fontSheet } from '../client/src/styles.js'
 import { createThemeBridge } from '../client/src/theme.js'
 import { STYLE_ID, FONT_STYLE_ID } from '../client/src/constants.js'
@@ -815,11 +817,12 @@ const checks = [
     buildCssFor(sanitize({ refine: false }), { themeModeAvailable: true }).includes(CUBE_HIDER)],
   ['without the theme service the hide rules disappear',
     !buildCssFor(sanitize({}), { themeModeAvailable: false }).includes('settings.general.item"] > *:has(')],
-  ['the theme-mode row and the ten knobs live on the appearance page, only enabled in General',
+  ['the theme-mode row and the eleven knobs live on the appearance page, only enabled in General',
     // The view-tabs pill (46) and the split composer (47) were removed outright,
     // rows and rules together; Markdown styling stays without its row (45). The
-    // diff-preview switch (48) joined the appearance page later.
-    verifyPanel.appearanceSlots.length === 11
+    // diff-preview switch (48) joined the appearance page later, and the whale
+    // colour row (49) after it.
+    verifyPanel.appearanceSlots.length === 12
     && verifyPanel.generalSlots.length === 1
     && verifyPanel.generalSlots[0].id === 'dsh-cds-theme-enabled'],
   ['the removed reference-derived looks leave no row, key or rule behind',
@@ -974,7 +977,7 @@ const checks = [
         && on.includes('[data-conversation-content][data-content-phase="hero"] {\n  isolation: isolate;\n}')
         // The explicit 100% pair is load-bearing (a canvas is a replaced element
         // and would otherwise take its bitmap size as its layout size).
-        && on.includes('[data-cds-hero-ripple] {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  z-index: -1;')
+        && on.includes('[data-cds-hero-ocean] {\n  position: absolute;\n  inset: 0;\n  width: 100%;\n  height: 100%;\n  z-index: -1;')
         && on.includes('color-mix(in srgb, var(--dsw-specific-input-major) 82%, transparent)')
     })()],
   ['the backdrop never covers an active conversation and never eats a click',
@@ -1004,6 +1007,38 @@ const checks = [
     && Object.hasOwn(en, 'heroRipple.title') && Object.hasOwn(zh, 'heroRipple.title')
     && Object.hasOwn(en, 'heroRipple.desc') && Object.hasOwn(zh, 'heroRipple.desc')
     && JSON.stringify(buildTokens(sanitize({ heroRipple: false })))
+      === JSON.stringify(buildTokens(sanitize({})))],
+  ['the whale colour is a live choice row with three modes, black by default',
+    // Exactly three values: black (the shipped default), the DeepSeek brand blue,
+    // and the hue walk. A stored `deepseek` — a value this build no longer offers —
+    // lands on `blue`, which carries the exact pigment it used to have.
+    WHALE_INKS.length === 3
+    && WHALE_INKS.join(',') === 'black,blue,live'
+    && DEFAULT_STATE.whaleInk === 'black'
+    && sanitize({}).whaleInk === 'black'
+    && sanitize({ whaleInk: 'deepseek' }).whaleInk === 'blue'
+    && sanitize({ whaleInk: 'nonsense' }).whaleInk === 'black'
+    && sanitize({ whaleInk: 'blue' }).whaleInk === 'blue'
+    // The brand blue is a fixed pigment, pinned in both modes: #4176e6 / #7aaaff.
+    && JSON.stringify(whaleInkColor('blue', { dark: false })) === JSON.stringify({ r: 65, g: 118, b: 230 })
+    && JSON.stringify(whaleInkColor('blue', { dark: true })) === JSON.stringify({ r: 122, g: 170, b: 255 })
+    && JSON.stringify(whaleInkColor('black', { dark: false })) === JSON.stringify({ r: 0, g: 0, b: 0 })
+    // The animated mode is periodic and deterministic: one period is one turn.
+    && JSON.stringify(whaleInkColor('live', { time: 0 }))
+      === JSON.stringify(whaleInkColor('live', { time: HUE_PERIOD_S }))
+    && JSON.stringify(whaleInkColor('live', { time: HUE_PERIOD_S / 4 }))
+      !== JSON.stringify(whaleInkColor('live', { time: 0 }))
+    // It is a row on the theme page, it owns the never-used order 49, and its
+    // copy exists in both dictionaries.
+    && verifyPanel.slots.some(function (slot) {
+      return slot.id === 'dsh-cds-theme-whale-ink' && slot.order === 49
+    })
+    && verifyPanel.appearanceSlots.some(function (slot) { return slot.key === 'whaleInk' })
+    && WHALE_INKS.every(function (inkId) {
+      return Object.hasOwn(en, 'whaleInk.' + inkId) && Object.hasOwn(zh, 'whaleInk.' + inkId)
+    })
+    // It is a COLOUR of the backdrop, so it must not move a single token.
+    && JSON.stringify(buildTokens(sanitize({ whaleInk: 'live' })))
       === JSON.stringify(buildTokens(sanitize({})))],
 ]
 

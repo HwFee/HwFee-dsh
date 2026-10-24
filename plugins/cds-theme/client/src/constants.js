@@ -28,10 +28,16 @@ export const BUBBLE_RADIUS = 18
  *            paste, unchanged.
  * `preferThemeCjk` prefers the embedded, calibrated Chinese faces before system
  *            fallbacks in the default font stacks. Explicit font picks still win.
- * `heroRipple` the blank-session backdrop: a field of faint code glyphs behind
- *            the hero with a water ripple spreading from every click. On by
- *            default because it is a replication of the shipped look; off
- *            removes the canvas, the listener and the see-through composer card.
+ * `heroRipple` the blank-session backdrop: an ASCII ocean behind the hero — two
+ *            fish schools and three glyph whales. A click disturbs the water
+ *            (the fish scatter and a blue pulse spreads); it does NOT steer. On by default because it is a
+ *            replication of the shipped look; off removes the canvas, the
+ *            listener and the see-through composer card. The key predates the
+ *            ocean and is kept so saved preferences survive the upgrade.
+ * `whaleInk`  the colour of those whales: `black` (default), `blue`, or `live`
+ *            (walks the hue wheel slowly). A stored `deepseek` maps to `blue`.
+ *            See `whaleInk.js` — the palette is derived per light/dark mode so
+ *            the animals stay legible on both surfaces.
  * `enabled`  master switch; off means the plugin releases its token layer.
  *
  * THERE ARE NO PER-ITEM REPLICATION SWITCHES ANY MORE. Seven shipped during the
@@ -79,10 +85,35 @@ export const DEFAULT_STATE = {
   pasteAsFile: true,
   preferThemeCjk: true,
   heroRipple: true,
+  whaleInk: 'black',
   diffPreview: true,
 }
 
 export const ACCENT_IDS = ['clay', 'ochre', 'sand', 'graphite']
+
+/**
+ * The three whale colours, in row order. `black` is the shipped default: the
+ * ocean is a backdrop, and a silhouette in the page's own ink is the quietest
+ * thing it can be on a page full of text.
+ *
+ * `blue` is a calm mid blue; `live` walks the hue wheel, recomputed from the
+ * clock every frame (see `whaleInk.js`), so the school slowly changes colour as
+ * it swims.
+ *
+ * `deepseek` IS GONE and a stored value must not fall back to a hole: it maps
+ * to `blue` (the blue it used to be) rather than to `black`, so an existing
+ * preference keeps its colour instead of silently turning into a silhouette.
+ */
+export const WHALE_INKS = ['black', 'blue', 'live']
+
+/** Values this build no longer offers, mapped to the nearest surviving one. */
+const WHALE_INK_ALIASES = { deepseek: 'blue' }
+
+export function clampWhaleInk(value) {
+  if (WHALE_INKS.indexOf(value) >= 0) return value
+  const alias = WHALE_INK_ALIASES[value]
+  return alias === undefined ? DEFAULT_STATE.whaleInk : alias
+}
 
 // Panel copy lives in `locales.js`: pure Chinese or pure English per the host
 // language, registered with `ctx.locale` under LOCALE_NS and injected as `t`
@@ -132,6 +163,11 @@ export function sanitize(raw) {
     preferThemeCjk: input.preferThemeCjk === undefined ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
     // The blank-session backdrop defaults on; a stored false turns it off.
     heroRipple: input.heroRipple === undefined ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
+    // The whale colour defaults to blue. A payload from before this row existed
+    // has no field and must adopt blue rather than the old ink; an unknown value
+    // (a hand-edited localStorage, a preset from a future build) also lands on
+    // the default instead of painting an undefined colour.
+    whaleInk: clampWhaleInk(input.whaleInk === undefined ? DEFAULT_STATE.whaleInk : input.whaleInk),
     // The turn-changes hover preview defaults on. A stored false hides the
     // preview and leaves the edit card itself alone: the card is the record of
     // what changed, the preview is the convenience.

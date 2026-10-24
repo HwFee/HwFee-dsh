@@ -6,7 +6,7 @@ import {
 import { scaleShadow } from './tokens.js'
 import { fontCss, preferredCjkStackCss } from './fonts.js'
 import { GREETING_DISPLAY, WEIGHTS } from './typography.js'
-import { RIPPLE_ATTR } from './ripple.js'
+import { OCEAN_ATTR } from './ocean.js'
 import { markdownScopeRules } from './markdown-scope.js'
 import { toolChromeRules } from './tool-chrome-styles.js'
 import { sessionPreviewRules } from './session-preview-styles.js'
@@ -2655,7 +2655,7 @@ function newSessionInputRules() {
  *
  * THE CARD IS TRANSLUCENT, 82%, ONLY ON A BLANK SESSION. The original effect
  * shows its glyphs THROUGH the folder picker and the prompt bar
- * (anthropics/claude-code#102952); an opaque card would cut the ripple off at the
+ * (anthropics/claude-code#102952); an opaque card would cut the ocean off at the
  * card edge, which is the one place the user's cursor usually is. 82% keeps text
  * contrast intact — the card's own text is `label-primary` on `input-major`, and
  * at 82% the backdrop can shift that surface by at most a few percent of
@@ -2667,7 +2667,7 @@ function newSessionInputRules() {
  * the master switch only, and the module that mounts the canvas is gated on the
  * `heroRipple` setting — so the two never disagree about whether a layer exists.
  */
-function heroRippleRules() {
+function heroOceanRules() {
   return [
     '/* ---- blank-session backdrop: layer promotion + see-through card ---- */',
     '[data-conversation-content][data-content-phase="hero"] {',
@@ -2685,7 +2685,7 @@ function heroRippleRules() {
     // then covered a quarter of the screen with nothing drawable in the visible
     // part). The percentages pin the CSS box to the containing block so the
     // bitmap can never feed back into layout.
-    '[' + RIPPLE_ATTR + '] {',
+    '[' + OCEAN_ATTR + '] {',
     '  position: absolute;',
     '  inset: 0;',
     '  width: 100%;',
@@ -2820,7 +2820,7 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
   // `refine` — because the layer promotion here is what keeps a mounted canvas
   // from painting over the greeting; the canvas itself is mounted only while
   // this switch is on (lifecycle.js), so rule and layer travel together.
-  if (state.heroRipple !== false) parts.push(heroRippleRules())
+  if (state.heroRipple !== false) parts.push(heroOceanRules())
 
   // The reference's motion curves are TOKENS, not a look, so they are emitted
   // outside `refine` and outside the `buttonSpring` gate — see

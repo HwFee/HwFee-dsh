@@ -28,7 +28,8 @@
 | 29 | `dsh-cds-theme-thinking-blue` | `thinkingLabelBlue` | 深度思考提示用原版蓝（只切 2 个令牌） |
 | 39 | `dsh-cds-theme-paste-as-file` | `pasteAsFile` | 长文本粘贴存为文件引用 |
 | 43 | `dsh-cds-theme-prefer-theme-cjk` | `preferThemeCjk` | 中文优先用内嵌思源字体 |
-| 44 | `dsh-cds-theme-hero-ripple` | `heroRipple` | 首页背景点击波纹（空白会话的字形场 + 水波） |
+| 44 | `dsh-cds-theme-hero-ripple` | `heroRipple` | 首页背景 ASCII 海洋（空白会话的鱼群与鲸鱼，点击只激起水花与蓝色脉冲，不引导鲸鱼） |
+| 49 | `dsh-cds-theme-whale-ink` | `whaleInk` | 鲸鱼颜色（黑色 / DeepSeek 蓝 / 变色，默认黑色） |
 
 「通用」只留 `dsh-cds-theme-enabled`（order 30，`enabled` 主开关）。
 
@@ -40,7 +41,11 @@
 
 | 项 | order | 说明 |
 |---|---|---|
-| `heroRipple` 首页背景点击波纹 | 44 | **不是从参考仓库抄的** —— 参考仓库里没有这个效果的源码（只有静态环境光晕）。它还原的是 Claude Code 桌面版上线约一天的首页特性（[#102952](https://github.com/anthropics/claude-code/issues/102952)）：空白首页里问候语与输入框背后的发光代码字形，点击从光标处荡开圆圈。因为属于"按描述还原"而非"照着实现"，按本文件第 2 条它带着自己的对比开关。实现见 `plugins/cds-theme/client/src/ripple.js`，规则见 `heroRippleRules()` |
+| `heroRipple` 首页背景 ASCII 海洋 | 44 | **不是从参考仓库抄的** —— 参考仓库里没有这个效果的源码（只有静态环境光晕）。它还原的是 Claude Code 桌面版上线约一天的首页特性（[#102952](https://github.com/anthropics/claude-code/issues/102952)）：空白首页里问候语与输入框背后的发光字形，点击时做出反应。因为属于"按描述还原"而非"照着实现"，按本文件第 2 条它带着自己的对比开关。实现见 `plugins/cds-theme/client/src/ocean.js`，规则见 `heroOceanRules()`。视觉语言受 `stackedlol/ascii-sharks` 启发（字符网格、俯视鲸鱼轮廓、尾流），但该仓库没有 license，实现沿用上游几何与栅格化代码并加入本地补丁，分发限制见 `client/src/sharks/README.md`；点击只在水里激起一圈水花、把周围鱼群惊散，并让渲染层盖上一圈蓝色脉冲（splash / wake）；它不携带任何方向或速度，鲸鱼不跟随点击 |
+
+**鲸鱼的颜色是一个选择项，不是复刻开关**：`whaleInk`（order 49）是黑色 / DeepSeek 蓝 / 变色三选一，默认黑色（页面自身墨色，深色模式下自动转为浅墨）。它改的是画布上的颜料（`whaleInk.js`），不动任何令牌——`buildTokens()` 在三种取值下逐字节相同。DeepSeek 蓝是品牌蓝常量：浅色 `rgb(65,118,230)`（`#4176e6`）、深色 `rgb(122,170,255)`（`#7aaaff`）。旧版本保存的 `deepseek` 通过别名落到 `blue`，颜色与当初完全一致。三只鲸鱼共用一种颜料：上游按物种给的 `tint` 因此不参与混色，否则同一行设置会画出三种色相。
+
+**运动模型：每条鲸鱼沿自己的闭合椭圆泳道巡游**：三条泳道是同心的同轴等比椭圆（`radii` 一起乘同一个 `scale`），外圈贴近画面边缘（留下字形半宽与边距），越往里圈越小。等比缩放而不是每轴各减一个间距，是因为等比缩放有可证明的下界：外圈上一点处的切线到中心的距离是 `h = 1/sqrt(cos²t/a² + sin²t/b²) ≥ min(a,b)`，内圈整个落在 `n·x ≤ k·h` 的半平面里，所以两条泳道的法向间距至少是 `(1-k)·min(a,b)`；按轴各减一个数在扁长画面（1600×400）的两侧就没有这个保证。鲸鱼的头沿泳道按弧长以非负速度推进（`u += speed·dt`，`u` 从不回绕），20 个身体节点是同一个头上「若干弧长之前」的采样点，因此身体就是头刚游过的那条路线，没有关节求解器、没有整体平移或旋转，也不会切角。`speed` 是固定巡航速度乘一个平滑的正弦摆动（每只相位不同），所以三只鲸鱼的前进速度与相位互相独立；点击只激起水花并把鱼群惊散，不携带任何方向或速度。泳道只在外层尺寸真正改变时重建一次（同尺寸幂等、一像素变化不动），重建时每只鲸鱼保留自己在环上的进度比例与方向，长度按新的短边重新推导，所以缩小窗口不会挤掉转弯空间。
 
 **固化（规则常驻，开关删除）—— 5 项**
 

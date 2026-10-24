@@ -14,8 +14,9 @@ import assert from 'node:assert/strict'
 
 import {
   createDiffView, buildDiffModel, diffText, LINE_LIMIT, displayPath, baseName,
+  callPath, scanArgumentPath, rowTarget,
 } from '../client/src/diffview.js'
-import { makeT } from '../client/src/locales.js'
+import { makeT, makeTranslator, zh } from '../client/src/locales.js'
 
 // ---------------------------------------------------------------- harness
 
@@ -243,6 +244,117 @@ test('a start-phase block keeps the header without inventing rows', function () 
   assert.equal(findAll(tree, 'data-cds-diffrow')[0].props['data-state'], 'running')
 })
 
+// --------------------------------------------------- in-flight row titles
+//
+// REGRESSION, reported from a live conversation. While a call was still
+// streaming, the row read `Editing edit` / `Writing write`. Cause: `argsRaw` is
+// PARTIAL JSON during a stream, `JSON.parse` threw, the path came back empty,
+// and the title fell back to `props.toolName` — the wire tool name. These four
+// cases fail on that code and pass on the current one: partial raw text, the
+// host's streaming argument view, the preparing phase with no arguments at all,
+// and the localised (Chinese) form. The completed and failed sentences are
+// pinned too, so the fix cannot have traded one state for another.
+
+/** Argument text exactly as a stream hands it over: truncated mid-member. */
+const PARTIAL_EDIT_ARGS = '{"file_path":"C:\\\\work\\\\src\\\\a.js","old_string":"a","new_s'
+
+/** The host's streaming argument view (`block.args`), which answers early. */
+function argView(values) {
+  return {
+    text: function text(field) { return values[field] },
+    complete: function complete(field) { return Object.hasOwn(values, field) },
+    has: function has(field) { return Object.hasOwn(values, field) },
+    stringLength: function stringLength(field) {
+      return typeof values[field] === 'string' ? values[field].length : undefined
+    },
+  }
+}
+
+test('an in-flight edit names the workspace-relative file, never the tool', function () {
+  assert.throws(function () { JSON.parse(PARTIAL_EDIT_ARGS) }, 'the fixture really is unparseable')
+  const tree = render({ phase: 'start', name: 'edit', argsRaw: PARTIAL_EDIT_ARGS }, { cwd: 'C:\\work' })
+  const title = flat(findAll(tree, 'data-cds-diffrow-title')[0])
+  assert.equal(title, 'Editing src\\a.js')
+  // The bug's signature, stated as its own assertion: the wire name printed as
+  // the target.
+  assert.doesNotMatch(title, /\b(?:Editing|Writing)\s+(?:edit|write)\b/u)
+  assert.equal(findAll(tree, 'data-cds-diffrow')[0].props['data-state'], 'running')
+})
+
+test('an in-flight write names the file too, not "Writing write"', function () {
+  const tree = render({
+    phase: 'start',
+    name: 'write',
+    argsRaw: '{"file_path":"C:\\\\work\\\\src\\\\new.js","content":"one',
+  }, { cwd: 'C:\\work', toolName: 'write' })
+  const title = flat(findAll(tree, 'data-cds-diffrow-title')[0])
+  assert.equal(title, 'Writing src\\new.js')
+  assert.doesNotMatch(title, /Writing\s+write\b/u)
+})
+
+test('the streaming argument view supplies the path before the raw JSON parses', function () {
+  // `block.args` is the contract the host's own rows read; it resolves a field
+  // while the call is still arriving, which is the whole in-flight window.
+  const tree = render({
+    phase: 'start',
+    name: 'edit',
+    argsRaw: '',
+    args: argView({ file_path: 'C:\\work\\src\\b.js' }),
+  }, { cwd: 'C:\\work' })
+  assert.equal(flat(findAll(tree, 'data-cds-diffrow-title')[0]), 'Editing src\\b.js')
+})
+
+test('the preparing phase shows the operation alone, never a repeated tool name', function () {
+  for (const toolName of ['edit', 'write']) {
+    const tree = render({ phase: 'preparing', callId: 'c1' }, { toolName })
+    const title = flat(findAll(tree, 'data-cds-diffrow-title')[0])
+    assert.equal(title, toolName === 'write' ? 'Writing' : 'Editing')
+    assert.doesNotMatch(title, new RegExp('\\b' + toolName + '\\b', 'u'))
+    assert.equal(findAll(tree, 'data-cds-diffrow')[0].props['data-state'], 'preparing')
+  }
+})
+
+test('the in-flight title is localised: 正在编辑 / 正在写入 with the relative path', function () {
+  const zhT = makeT(makeTranslator(zh))
+  const edit = render({ phase: 'start', name: 'edit', argsRaw: PARTIAL_EDIT_ARGS },
+    { cwd: 'C:\\work', t: zhT })
+  assert.equal(flat(findAll(edit, 'data-cds-diffrow-title')[0]), '正在编辑 src\\a.js')
+  const write = render({
+    phase: 'start',
+    name: 'write',
+    argsRaw: '{"file_path":"C:\\\\work\\\\src\\\\new.js","content":"one',
+  }, { cwd: 'C:\\work', toolName: 'write', t: zhT })
+  assert.equal(flat(findAll(write, 'data-cds-diffrow-title')[0]), '正在写入 src\\new.js')
+  // The same dictionary, with no target to name: the placeholder gap collapses
+  // instead of leaving a dangling `正在编辑 ` or the wire name.
+  const bare = render({ phase: 'preparing', callId: 'c9' }, { t: zhT })
+  assert.equal(flat(findAll(bare, 'data-cds-diffrow-title')[0]), '正在编辑')
+})
+
+test('completed and failed sentences keep their own verb and target', function () {
+  // A settled edit: "Edited", a settled write: "Wrote", a rejected write:
+  // "Failed to write". None of them gains or loses a word from the fix above.
+  const cwd = { cwd: 'C:\\work' }
+  assert.equal(flat(findAll(render(editBlock(THREE_LINES), cwd), 'data-cds-diffrow-title')[0]),
+    'Edited src\\a.js')
+  const wrote = {
+    kind: 'tool-result',
+    call: { name: 'write', argsRaw: JSON.stringify({ file_path: 'C:\\work\\src\\new.js', content: 'one\n' }) },
+    content: [{ type: 'text', text: 'Wrote 1 line' }],
+    isError: false,
+    error: null,
+    meta: { diffs: [] },
+  }
+  assert.equal(flat(findAll(render(wrote, { toolName: 'write', cwd: 'C:\\work' }), 'data-cds-diffrow-title')[0]),
+    'Wrote src\\new.js')
+  const failed = render(Object.assign({}, wrote, {
+    isError: true,
+    content: [{ type: 'text', text: 'EACCES: permission denied' }],
+  }), { toolName: 'write', cwd: 'C:\\work' })
+  assert.equal(flat(findAll(failed, 'data-cds-diffrow-title')[0]), 'Failed to write src\\new.js')
+  assert.doesNotMatch(flat(findAll(failed, 'data-cds-diffrow-title')[0]), /Failed to write write/u)
+})
+
 // -------------------------------------------------------------- expander
 
 test('a long hunk collapses to the host limit and offers an expander', function () {
@@ -320,6 +432,54 @@ test('paths are shown relative to the session workspace when possible', function
   assert.equal(baseName('C:\\work\\src\\a.js'), 'a.js')
   assert.equal(baseName('/w/a.js'), 'a.js')
   assert.equal(baseName('noext'), 'noext')
+})
+
+test('a workspace prefix is matched on a directory boundary, not on characters', function () {
+  // `C:\work-other` STARTS WITH `C:\work` but is a sibling directory. The bare
+  // `startsWith` this replaces printed `-other\a.js` as if it were inside.
+  assert.equal(displayPath('C:\\work-other\\a.js', 'C:\\work'), 'C:\\work-other\\a.js')
+  assert.equal(displayPath('C:\\workshop\\a.js', 'C:\\work'), 'C:\\workshop\\a.js')
+  assert.equal(displayPath('/work-other/a.js', '/work'), '/work-other/a.js')
+  // A real child, in both separator spellings and both cases.
+  assert.equal(displayPath('C:\\work\\src\\a.js', 'C:\\work\\'), 'src\\a.js')
+  assert.equal(displayPath('C:/work/src/a.js', 'C:\\work'), 'src/a.js')
+  assert.equal(displayPath('c:\\Work\\src\\a.js', 'C:\\work'), 'src\\a.js')
+  assert.equal(displayPath('C:\\WORK', 'C:\\work'), 'C:\\WORK')
+  // No workspace root: nothing is shortened.
+  assert.equal(displayPath('C:\\work\\src\\a.js', undefined), 'C:\\work\\src\\a.js')
+  assert.equal(displayPath('C:\\work\\src\\a.js', ''), 'C:\\work\\src\\a.js')
+})
+
+test('a relative path keeps its directories in the row title', function () {
+  // THE TARGET IS THE PATH THE READER CAN ACT ON. A model-written relative
+  // `src/foo.js` must not collapse to `foo.js`: that names a file somewhere
+  // else in the workspace. Only an absolute path is ever shortened, and only to
+  // its bare name when it is not under the workspace root.
+  assert.equal(rowTarget('src/foo.js', 'C:\\work'), 'src/foo.js')
+  assert.equal(rowTarget('src\\foo.js', 'C:\\work'), 'src\\foo.js')
+  assert.equal(rowTarget('src/foo.js', undefined), 'src/foo.js')
+  assert.equal(rowTarget('C:\\work\\src\\foo.js', 'C:\\work'), 'src\\foo.js')
+  assert.equal(rowTarget('C:\\other\\deep\\foo.js', 'C:\\work'), 'foo.js')
+  assert.equal(rowTarget('', 'C:\\work'), '')
+  // And the title the component renders carries the directory through.
+  const tree = render({
+    phase: 'start',
+    name: 'edit',
+    argsRaw: JSON.stringify({ file_path: 'src/foo.js', old_string: 'a', new_string: 'b' }),
+  }, { cwd: 'C:\\work' })
+  assert.equal(flat(findAll(tree, 'data-cds-diffrow-title')[0]), 'Editing src/foo.js')
+})
+
+test('a partial argument string yields its completed path and nothing else', function () {  // The recovery read only claims a COMPLETE `"file_path": "…"` member; an
+  // unfinished value must stay silent rather than guess half a path.
+  assert.equal(scanArgumentPath(PARTIAL_EDIT_ARGS), 'C:\\work\\src\\a.js')
+  assert.equal(scanArgumentPath('{"file_path":"C:\\\\wo'), '')
+  assert.equal(scanArgumentPath('{"content":"x'), '')
+  assert.equal(scanArgumentPath('{"file_path":"C:\\\\a\\\\b.js\\"'), '')
+  assert.equal(scanArgumentPath(''), '')
+  assert.equal(scanArgumentPath(null), '')
+  assert.equal(callPath({ phase: 'start', name: 'edit', argsRaw: PARTIAL_EDIT_ARGS }), 'C:\\work\\src\\a.js')
+  assert.equal(callPath({ phase: 'preparing' }), '')
 })
 
 test('an unreadable block degrades to an empty card instead of throwing', function () {

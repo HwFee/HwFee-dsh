@@ -57,13 +57,17 @@
  *      the page scrolls from its top when the greeting + dock + composer still
  *      overflow. An active conversation is untouched.
  *
- *   6. BLANK-SESSION BACKDROP (`ripple.js`). A canvas mounted as the first child
+ *   6. BLANK-SESSION BACKDROP (`ocean.js`). A canvas mounted as the first child
  *      of `[data-conversation-content]`, painted at `z-index: -1` under a
- *      hero-scoped `isolation: isolate`: faint code glyphs glow behind the
- *      greeting and the composer, and every pointer click sends a ring of light
- *      outward. This is a RECONSTRUCTION — the reference repo has no source for
- *      it (see the module comment in `ripple.js` for the origin and the issue
- *      number) — so it lives behind its own `heroRipple` switch.
+ *      hero-scoped `isolation: isolate`: an ASCII ocean — two schools of dashes
+ *      and three whales made of glyphs — drifts behind the greeting and the
+ *      composer, each animal swimming freely and nose-first. A pointer click
+ *      only disturbs the water: the fish scatter and a blue pulse spreads;
+ *      nothing steers. This is a RECONSTRUCTION — the
+ *      reference repo has no source for it (see the module comment in
+ *      `ocean.js` for the origin and the issue number) — so it lives behind its
+ *      own `heroRipple` switch. Their colour is its own setting (`whaleInk`):
+ *      black by default, blue, or a slow hue walk.
  *
  * WHY IT IS SAFE TO UPGRADE. Component rules key on hooks the host renders on
  * purpose — `[data-composer-card]`, `[data-composer-input]`,
@@ -115,11 +119,9 @@ import {
   segmentsOf, findDiffBodies, numberBody, sweepDiffNumbers, createDiffNumberMarker,
 } from './diffnumbers.js'
 import {
-  RIPPLE_ATTR, GLYPH_TOKENS, TUNING, FALLBACK_PALETTE,
-  createRng, gridFor, layoutGlyphs, glyphCount, rippleProgress, rippleRadius,
-  easeOutCubic, waveStrength, totalWave, restingAlpha, readPalette,
-  findHeroHost, createHeroRipple,
-} from './ripple.js'
+  OCEAN_ATTR, SHARK_SPECS, TUNING, FALLBACK_PALETTE, parseInk, readPalette,
+  findHeroHost, createHeroOcean, createTestWorld, stepTestWorld, normalizedInk,
+} from './ocean.js'
 import { LOCALE_NS, en as EN_STRINGS, zh as ZH_STRINGS, makeT, makeTranslator } from './locales.js'
 import {
   LINE_LIMIT, MAX_TOKEN_DIFF_CHARS, createDiffView, buildDiffModel, buildHunk,
@@ -284,23 +286,19 @@ export const __internals = {
   numberBody,
   sweepDiffNumbers,
   createDiffNumberMarker,
-  RIPPLE_ATTR,
-  GLYPH_TOKENS,
+  OCEAN_ATTR,
+  SHARK_SPECS,
   TUNING,
   FALLBACK_PALETTE,
-  createRng,
-  gridFor,
-  layoutGlyphs,
-  glyphCount,
-  rippleProgress,
-  rippleRadius,
-  easeOutCubic,
-  waveStrength,
-  totalWave,
-  restingAlpha,
+  parseInk,
   readPalette,
   findHeroHost,
-  createHeroRipple,
+  createHeroOcean,
+  // Deterministic, canvas-free world builder for offline trajectory checks:
+  // same seed in, same nodes out, with a caller-owned clock.
+  createTestWorld,
+  stepTestWorld,
+  normalizedInk,
   LOCALE_NS,
   EN_STRINGS,
   ZH_STRINGS,

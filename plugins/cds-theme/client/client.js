@@ -57,13 +57,17 @@
  *      the page scrolls from its top when the greeting + dock + composer still
  *      overflow. An active conversation is untouched.
  *
- *   6. BLANK-SESSION BACKDROP (`ripple.js`). A canvas mounted as the first child
+ *   6. BLANK-SESSION BACKDROP (`ocean.js`). A canvas mounted as the first child
  *      of `[data-conversation-content]`, painted at `z-index: -1` under a
- *      hero-scoped `isolation: isolate`: faint code glyphs glow behind the
- *      greeting and the composer, and every pointer click sends a ring of light
- *      outward. This is a RECONSTRUCTION — the reference repo has no source for
- *      it (see the module comment in `ripple.js` for the origin and the issue
- *      number) — so it lives behind its own `heroRipple` switch.
+ *      hero-scoped `isolation: isolate`: an ASCII ocean — two schools of dashes
+ *      and three whales made of glyphs — drifts behind the greeting and the
+ *      composer, each animal swimming freely and nose-first. A pointer click
+ *      only disturbs the water: the fish scatter and a blue pulse spreads;
+ *      nothing steers. This is a RECONSTRUCTION — the
+ *      reference repo has no source for it (see the module comment in
+ *      `ocean.js` for the origin and the issue number) — so it lives behind its
+ *      own `heroRipple` switch. Their colour is its own setting (`whaleInk`):
+ *      black by default, blue, or a slow hue walk.
  *
  * WHY IT IS SAFE TO UPGRADE. Component rules key on hooks the host renders on
  * purpose — `[data-composer-card]`, `[data-composer-input]`,
@@ -172,9 +176,17 @@ window.__ModuleLoader__.load({
       pasteAsFile: true,
       preferThemeCjk: true,
       heroRipple: true,
+      whaleInk: "black",
       diffPreview: true
     };
     var ACCENT_IDS = ["clay", "ochre", "sand", "graphite"];
+    var WHALE_INKS = ["black", "blue", "live"];
+    var WHALE_INK_ALIASES = { deepseek: "blue" };
+    function clampWhaleInk(value) {
+      if (WHALE_INKS.indexOf(value) >= 0) return value;
+      const alias = WHALE_INK_ALIASES[value];
+      return alias === void 0 ? DEFAULT_STATE.whaleInk : alias;
+    }
     function clampWarmth(value) {
       const n = Math.round(Number(value));
       if (!isFinite(n)) return DEFAULT_STATE.warmth;
@@ -211,6 +223,11 @@ window.__ModuleLoader__.load({
         preferThemeCjk: input.preferThemeCjk === void 0 ? DEFAULT_STATE.preferThemeCjk : input.preferThemeCjk !== false,
         // The blank-session backdrop defaults on; a stored false turns it off.
         heroRipple: input.heroRipple === void 0 ? DEFAULT_STATE.heroRipple : input.heroRipple !== false,
+        // The whale colour defaults to blue. A payload from before this row existed
+        // has no field and must adopt blue rather than the old ink; an unknown value
+        // (a hand-edited localStorage, a preset from a future build) also lands on
+        // the default instead of painting an undefined colour.
+        whaleInk: clampWhaleInk(input.whaleInk === void 0 ? DEFAULT_STATE.whaleInk : input.whaleInk),
         // The turn-changes hover preview defaults on. A stored false hides the
         // preview and leaves the edit card itself alone: the card is the record of
         // what changed, the preview is the convenience.
@@ -1818,61 +1835,1659 @@ window.__ModuleLoader__.load({
       return fontFaceCss(options) + "\n\n" + fontStackCss();
     }
 
-    // client/src/ripple.js
-    var RIPPLE_ATTR = "data-cds-hero-ripple";
+    // client/src/sharks/math.js
+    var TAU = Math.PI * 2;
+    var clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+    var rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    var randInt = (lo, hi) => Math.floor(rand(lo, hi + 1));
+    function smoothstep(e0, e1, x) {
+      const t = clamp((x - e0) / (e1 - e0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+    function angleDiff(a, b) {
+      let d = (b - a) % TAU;
+      if (d > Math.PI) d -= TAU;
+      if (d < -Math.PI) d += TAU;
+      return d;
+    }
+    function hash3(x, y, z) {
+      let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1442695041);
+      h = Math.imul(h ^ h >>> 13, 1274126177);
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967296;
+    }
+    var K1 = 1 / 260;
+    var K2 = 1 / 310;
+    var K3 = 1 / 190;
+    var CURRENT_SCALE = 3400;
+    function current(x, y, t, out) {
+      const a = x * K1 + t * 0.07;
+      const b = y * K2 - t * 0.05;
+      const c = (x + y) * K3 + t * 0.11;
+      out.x = (-K2 * Math.sin(a) * Math.sin(b) + 0.5 * K3 * Math.cos(c)) * CURRENT_SCALE;
+      out.y = (-K1 * Math.cos(a) * Math.cos(b) - 0.5 * K3 * Math.cos(c)) * CURRENT_SCALE;
+      return out;
+    }
+
+    // client/src/sharks/species.js
+    var SPECIES = [
+      {
+        name: "sardine",
+        cruise: 36,
+        maxSpeed: 64,
+        minSpeed: 18,
+        weight: 3,
+        schoolSize: [18, 28],
+        spacing: [1.8, 1.1],
+        align: 1.6,
+        cohesion: 1.6,
+        jitter: 40,
+        mill: 70,
+        verticalDrag: 0.5
+      },
+      {
+        name: "anchovy",
+        cruise: 46,
+        maxSpeed: 78,
+        minSpeed: 22,
+        weight: 3,
+        schoolSize: [20, 32],
+        spacing: [1.5, 1],
+        align: 3.2,
+        cohesion: 0.45,
+        jitter: 30,
+        mill: 0,
+        verticalDrag: 1.4
+      },
+      {
+        name: "silverside",
+        cruise: 40,
+        maxSpeed: 70,
+        minSpeed: 20,
+        weight: 3,
+        schoolSize: [12, 20],
+        spacing: [2, 1.1],
+        align: 2.4,
+        cohesion: 1.1,
+        jitter: 35,
+        mill: 0,
+        verticalDrag: 1.6
+      },
+      {
+        name: "mackerel",
+        cruise: 32,
+        maxSpeed: 60,
+        minSpeed: 16,
+        weight: 2,
+        schoolSize: [5, 9],
+        spacing: [2.6, 1.3],
+        align: 2,
+        cohesion: 0.9,
+        jitter: 25,
+        mill: 0,
+        verticalDrag: 2
+      },
+      {
+        name: "goby",
+        cruise: 26,
+        maxSpeed: 56,
+        minSpeed: 10,
+        weight: 1,
+        schoolSize: [8, 12],
+        spacing: [1.4, 1.1],
+        align: 0.35,
+        cohesion: 1.4,
+        jitter: 110,
+        mill: 0,
+        verticalDrag: 0.3
+      }
+    ];
+    var TOTAL_WEIGHT = SPECIES.reduce((sum, s2) => sum + s2.weight, 0);
+    function pickSpecies() {
+      let r = Math.random() * TOTAL_WEIGHT;
+      for (let i = 0; i < SPECIES.length; i++) {
+        r -= SPECIES[i].weight;
+        if (r <= 0) return i;
+      }
+      return 0;
+    }
+
+    // client/src/sharks/world.js
+    var SHARK_NODES = 20;
+    var SHARK_CLEARANCE = 0.125;
+    var LANE_GAP_BODY = 0.1;
+    var LANE_PAD_BODY = 0.15;
+    var LANE_PAD_PX = 12;
+    var LANE_SEGMENTS = 1024;
+    var MIN_LANE_SCALE = 0.3;
+    var LANE_BODY_FIT = 1.25;
+    var RESIZE_HYSTERESIS = 0.04;
+    var SPEED_WOBBLE = 0.08;
+    var SPEED_WOBBLE_RATE = 0.23;
+    var FIELD_EDGE = 6;
+    var FISH_SEPARATION_K = 420;
+    var FISH_ALIGN_K = 1.4;
+    var FISH_COHESION_K = 1;
+    var FISH_FLEE_K = 1100;
+    var BLIND_COS = -0.6;
+    var LURE_LIFE = 2.5;
+    var MAX_LURES = 4;
+    var DEFAULT_SHARKS = [
+      { kind: "classic", size: 1 },
+      { kind: "classic", size: 0.7 },
+      { kind: "classic", size: 0.84 },
+      { kind: "classic", size: 0.77 }
+    ];
+    function makeLane(cx, cy, a, b, scale) {
+      const ra = a * scale;
+      const rb = b * scale;
+      const stepT = TAU / LANE_SEGMENTS;
+      const cum = new Float64Array(LANE_SEGMENTS + 1);
+      let x0 = ra;
+      let y0 = 0;
+      for (let k = 1; k <= LANE_SEGMENTS; k += 1) {
+        const t = k * stepT;
+        const x = ra * Math.cos(t);
+        const y = rb * Math.sin(t);
+        cum[k] = cum[k - 1] + Math.hypot(x - x0, y - y0);
+        x0 = x;
+        y0 = y;
+      }
+      return {
+        cx,
+        cy,
+        a: ra,
+        b: rb,
+        scale,
+        cum,
+        stepT,
+        segments: LANE_SEGMENTS,
+        perimeter: cum[LANE_SEGMENTS]
+      };
+    }
+    function buildLanes(width, height, lengths) {
+      const count = lengths.length;
+      let bodyScale = 1;
+      let plan = null;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const lens = lengths.map((length) => length * bodyScale);
+        const longest = lens[count - 1] || 0;
+        const shortest = lens[0] || 0;
+        const pad = Math.min(
+          FIELD_EDGE + longest * LANE_PAD_BODY + LANE_PAD_PX,
+          Math.min(width, height) * 0.35
+        );
+        const a = Math.max(1, width / 2 - pad);
+        const b = Math.max(1, height / 2 - pad);
+        const minRadius = Math.min(a, b);
+        let gap = 0;
+        if (count > 1) {
+          gap = (longest + lens[count - 2]) * (SHARK_CLEARANCE + LANE_GAP_BODY);
+        }
+        const fitStep = count > 1 ? (1 - MIN_LANE_SCALE) / (count - 1) : 1;
+        const step = Math.min(fitStep, gap > 0 ? gap / minRadius : 1);
+        const lanes = [];
+        for (let i = 0; i < count; i += 1) {
+          lanes.push(makeLane(width / 2, height / 2, a, b, 1 - i * step));
+        }
+        plan = { lanes, lengths: lens };
+        const inner = lanes[count - 1];
+        if (count < 2 || inner.perimeter >= shortest * LANE_BODY_FIT) break;
+        bodyScale *= 0.9;
+      }
+      return plan;
+    }
+    function sampleLane(lane, arc, out) {
+      const perimeter = lane.perimeter;
+      let d = arc % perimeter;
+      if (d < 0) d += perimeter;
+      const cum = lane.cum;
+      let lo = 0;
+      let hi = lane.segments;
+      while (lo + 1 < hi) {
+        const mid = lo + hi >> 1;
+        if (cum[mid] <= d) lo = mid;
+        else hi = mid;
+      }
+      const span = cum[lo + 1] - cum[lo];
+      const frac = span > 1e-9 ? (d - cum[lo]) / span : 0;
+      const t = (lo + frac) * lane.stepT;
+      out.x = lane.cx + lane.a * Math.cos(t);
+      out.y = lane.cy + lane.b * Math.sin(t);
+      return out;
+    }
+    function placeBody(world, sh) {
+      const lane = sh.lane;
+      const perimeter = lane.perimeter;
+      const dir = sh.dir;
+      const seg = sh.segment;
+      const out = world.samplePoint;
+      const nodes = sh.nodes;
+      for (let k = 0; k < SHARK_NODES; k += 1) {
+        sampleLane(lane, dir * sh.u - dir * seg * k, out);
+        nodes[k * 2] = out.x;
+        nodes[k * 2 + 1] = out.y;
+      }
+      const hx = nodes[0] - nodes[2];
+      const hy = nodes[1] - nodes[3];
+      if (hx !== 0 || hy !== 0) sh.heading = Math.atan2(hy, hx);
+    }
+    var World = class {
+      /** fishCount overrides the area-based population (the sidebar wants a single small school). */
+      constructor(sharkSpecs = DEFAULT_SHARKS, fishCount) {
+        this.sharkSpecs = sharkSpecs;
+        this.fishCount = fishCount;
+      }
+      width = 0;
+      height = 0;
+      time = 0;
+      fish = [];
+      sharks = [];
+      events = [];
+      pointer = { x: 0, y: 0, active: false };
+      /** Recent direction hints; only the newest influences swimming. */
+      lures = [];
+      lureSeq = 0;
+      /** Fish neighbourhood radius; the spatial hash bucket size matches it. */
+      perception = 60;
+      /** Per-species personal space in px (x, y). */
+      sepX = [];
+      sepY = [];
+      foreignSep = 40;
+      bucketCols = 0;
+      bucketRows = 0;
+      bucketHead = new Int32Array(0);
+      bucketCount = new Uint16Array(0);
+      bucketNext = new Int32Array(0);
+      lastSpawn = 0;
+      tmp = { x: 0, y: 0 };
+      /** Scratch for lane sampling; one allocation per world, never per node. */
+      samplePoint = { x: 0, y: 0 };
+      /** The field size the lanes were planned for (resize hysteresis). */
+      fieldWidth = 0;
+      fieldHeight = 0;
+      waterBounds() {
+        const pad = FIELD_EDGE;
+        return { left: pad, right: this.width - pad, top: pad, bottom: this.height - pad };
+      }
+      resize(width, height, cellW, cellH) {
+        if (!(width > 0 && height > 0)) return;
+        const first = this.width === 0;
+        this.width = width;
+        this.height = height;
+        this.sepX = SPECIES.map((sp) => sp.spacing[0] * cellW);
+        this.sepY = SPECIES.map((sp) => sp.spacing[1] * cellH);
+        this.perception = Math.max(cellH * 3, cellW * 5.5);
+        this.foreignSep = cellW * 3;
+        if (first) {
+          this.fieldWidth = width;
+          this.fieldHeight = height;
+          this.seed();
+          return;
+        }
+        const scale = Math.min(width / this.fieldWidth, height / this.fieldHeight);
+        const aspect = width / height / (this.fieldWidth / this.fieldHeight);
+        if (Math.abs(scale - 1) > RESIZE_HYSTERESIS || Math.abs(aspect - 1) > RESIZE_HYSTERESIS) {
+          this.relayout(width, height);
+          this.fieldWidth = width;
+          this.fieldHeight = height;
+        }
+        this.lures.length = 0;
+        for (const f of this.fish) {
+          f.x = clamp(f.x, 0, width);
+          f.y = clamp(f.y, 0, height);
+        }
+      }
+      /**
+       * Re-plan the lanes for a new field, keeping each whale's progress.
+       *
+       * The mapping is proportional: each animal keeps its fraction along its
+       * direction of travel (`u / perimeter`) and its direction, and its length is
+       * re-derived from the new short side (so a smaller window has smaller whales
+       * and the same turning room). Nothing accumulates: returning to a size
+       * reproduces the previous bodies exactly.
+       */
+      relayout(width, height) {
+        const count = this.sharks.length;
+        if (count === 0) return;
+        const baseLength = Math.min(Math.min(width, height) * 0.28, 300);
+        const plan = buildLanes(width, height, this.sharks.map((sh) => baseLength * sh.size));
+        this.sharks.forEach((sh, i) => {
+          const frac = sh.lane ? sh.u % sh.lane.perimeter / sh.lane.perimeter : (i + 0.5) / count;
+          sh.lane = plan.lanes[count - 1 - i];
+          sh.length = plan.lengths[i];
+          sh.segment = sh.length / (SHARK_NODES - 1);
+          sh.baseSpeed = 30 + sh.length * 0.04;
+          sh.speed = sh.baseSpeed;
+          sh.u = frac * sh.lane.perimeter;
+          placeBody(this, sh);
+        });
+      }
+      seed() {
+        const { width: W, height: H } = this;
+        const minSide = Math.min(W, H);
+        const baseLength = Math.min(minSide * 0.28, 300);
+        const entries = this.sharkSpecs.map((spec, index) => ({
+          kind: spec.kind,
+          size: spec.size,
+          length: baseLength * spec.size,
+          index
+        })).sort((a, b) => a.length - b.length);
+        const count = entries.length;
+        const plan = buildLanes(W, H, entries.map((entry) => entry.length));
+        this.sharks = entries.map((entry, i) => {
+          const lane = plan.lanes[count - 1 - i];
+          const dir = i % 2 === 0 ? 1 : -1;
+          const phase = rand(0, TAU);
+          const frac = ((i + 0.5) / count + phase / TAU * 0.18) % 1;
+          const length = plan.lengths[i];
+          const sh = {
+            id: entry.index + 1,
+            kind: entry.kind,
+            size: entry.size,
+            length,
+            nodes: new Float32Array(SHARK_NODES * 2),
+            heading: 0,
+            baseSpeed: 30 + length * 0.04,
+            speed: 30 + length * 0.04,
+            /** Spine segment length; equal ARC spacing between the sampled nodes. */
+            segment: length / (SHARK_NODES - 1),
+            phase,
+            turn: 0,
+            depth: entry.size,
+            lane,
+            dir,
+            u: frac * lane.perimeter
+          };
+          placeBody(this, sh);
+          return sh;
+        });
+        const total = this.fishCount ?? clamp(Math.round(W * H / 4400), 85, 340);
+        this.fish = [];
+        while (this.fish.length < total) {
+          const species = pickSpecies();
+          const sp = SPECIES[species];
+          const size = Math.min(randInt(sp.schoolSize[0], sp.schoolSize[1]), total - this.fish.length);
+          const millDir = Math.random() < 0.5 ? 1 : -1;
+          const cx = rand(W * 0.06, W * 0.94);
+          const cy = rand(H * 0.08, H * 0.92);
+          const dir = (Math.random() < 0.5 ? 0 : Math.PI) + rand(-0.5, 0.5);
+          for (let k = 0; k < size; k++) {
+            this.fish.push({
+              x: cx + rand(-1, 1) * this.sepX[species] * Math.sqrt(size),
+              y: cy + rand(-1, 1) * this.sepY[species] * Math.sqrt(size) * 0.6,
+              vx: Math.cos(dir) * sp.cruise,
+              vy: Math.sin(dir) * sp.cruise,
+              species,
+              alarm: 0,
+              alive: true,
+              respawnAt: 0,
+              phase: rand(0, TAU),
+              turn: 0,
+              depth: rand(0.55, 1),
+              millDir
+            });
+          }
+        }
+        this.bucketNext = new Int32Array(this.fish.length);
+      }
+      splash(x, y) {
+        this.events.push({ kind: "splash", x, y });
+        const r = 240;
+        for (const f of this.fish) {
+          if (!f.alive) continue;
+          const dx = f.x - x;
+          const dy = f.y - y;
+          const d = Math.hypot(dx, dy);
+          if (d > r || d < 1e-3) continue;
+          const k = (1 - d / r) * 260;
+          f.vx += dx / d * k;
+          f.vy += dy / d * k;
+          f.alarm = 1;
+        }
+      }
+      step(dt) {
+        this.time += dt;
+        if (this.lures.length > 0) {
+          for (let i = this.lures.length - 1; i >= 0; i -= 1) {
+            if (this.time - this.lures[i].born > LURE_LIFE) this.lures.splice(i, 1);
+          }
+        }
+        this.rebuildHash();
+        this.stepFish(dt);
+        this.stepSharks(dt);
+        this.respawn();
+      }
+      /**
+       * Register a click: a disturbance in the water, nothing more.
+       *
+       * PATCHED. This used to freeze a bearing from the group centre and hand every
+       * whale that direction for 2.5 s, which is the "whales follow the pointer"
+       * behaviour that was asked to go. The only effect now is `splash()`: the
+       * school around the point scatters, and the renderer stamps the blue pulse
+       * (`energy`/`heat`) that the user asked to keep. No heading, speed or position
+       * of a whale is touched.
+       */
+      lure(x, y) {
+        this.lureSeq += 1;
+        const click = { x, y, born: this.time, seq: this.lureSeq };
+        this.lures.push(click);
+        if (this.lures.length > MAX_LURES) this.lures.shift();
+        this.splash(x, y);
+        return click;
+      }
+      /** The newest click, or null. Kept for the host's probes. */
+      liveLure() {
+        return this.lures.length > 0 ? this.lures[this.lures.length - 1] : null;
+      }
+      rebuildHash() {
+        const size = this.perception;
+        const pad = 2;
+        this.bucketCols = Math.ceil(this.width / size) + pad * 2;
+        this.bucketRows = Math.ceil(this.height / size) + pad * 2;
+        const n = this.bucketCols * this.bucketRows;
+        if (this.bucketHead.length !== n) {
+          this.bucketHead = new Int32Array(n);
+          this.bucketCount = new Uint16Array(n);
+        }
+        this.bucketHead.fill(-1);
+        this.bucketCount.fill(0);
+        if (this.bucketNext.length !== this.fish.length) {
+          this.bucketNext = new Int32Array(this.fish.length);
+        }
+        for (let i = 0; i < this.fish.length; i++) {
+          const f = this.fish[i];
+          if (!f.alive) continue;
+          const b = this.bucketOf(f.x, f.y);
+          this.bucketNext[i] = this.bucketHead[b];
+          this.bucketHead[b] = i;
+          this.bucketCount[b]++;
+        }
+      }
+      bucketOf(x, y) {
+        const size = this.perception;
+        const c = clamp(Math.floor(x / size) + 2, 0, this.bucketCols - 1);
+        const r = clamp(Math.floor(y / size) + 2, 0, this.bucketRows - 1);
+        return r * this.bucketCols + c;
+      }
+      stepFish(dt) {
+        const { fish, sharks, pointer, width: W, height: H, time } = this;
+        const R = this.perception;
+        const R2 = R * R;
+        const foreignSep = this.foreignSep;
+        const size = this.perception;
+        const cols = this.bucketCols;
+        const rows = this.bucketRows;
+        const head = this.bucketHead;
+        const next = this.bucketNext;
+        const cur = this.tmp;
+        const calmDecay = Math.exp(-dt * 0.7);
+        const contagion = Math.min(1, dt * 6);
+        for (let i = 0; i < fish.length; i++) {
+          const f = fish[i];
+          if (!f.alive) continue;
+          const sp = SPECIES[f.species];
+          const spread = 1 + 1.8 * f.alarm;
+          const sepX = this.sepX[f.species] * spread;
+          const sepY = this.sepY[f.species] * spread;
+          const speed = Math.hypot(f.vx, f.vy) || 1;
+          const hx = f.vx / speed;
+          const hy = f.vy / speed;
+          let ax = 0;
+          let ay = 0;
+          let sx = 0;
+          let sy = 0;
+          let avx = 0;
+          let avy = 0;
+          let cx = 0;
+          let cy = 0;
+          let n = 0;
+          let neighbourAlarm = 0;
+          const bc = clamp(Math.floor(f.x / size) + 2, 0, cols - 1);
+          const br = clamp(Math.floor(f.y / size) + 2, 0, rows - 1);
+          for (let r = Math.max(0, br - 1); r <= Math.min(rows - 1, br + 1); r++) {
+            for (let c = Math.max(0, bc - 1); c <= Math.min(cols - 1, bc + 1); c++) {
+              let j = head[r * cols + c];
+              while (j !== -1) {
+                if (j !== i) {
+                  const o = fish[j];
+                  const dx = o.x - f.x;
+                  const dy = o.y - f.y;
+                  const d2 = dx * dx + dy * dy;
+                  if (d2 < R2 && d2 > 1e-6) {
+                    const d = Math.sqrt(d2);
+                    if ((dx * hx + dy * hy) / d > BLIND_COS) {
+                      const qx = dx / sepX;
+                      const qy = dy / sepY;
+                      const q2 = qx * qx + qy * qy;
+                      if (q2 < 1) {
+                        const q = Math.sqrt(q2) || 1e-3;
+                        const k = (1 - q) / q;
+                        sx -= qx * k;
+                        sy -= qy * k;
+                      }
+                      if (o.species === f.species) {
+                        avx += o.vx;
+                        avy += o.vy;
+                        cx += dx;
+                        cy += dy;
+                        n++;
+                      } else if (d < foreignSep) {
+                        const k = (1 - d / foreignSep) / d * 0.6;
+                        sx -= dx * k;
+                        sy -= dy * k;
+                      }
+                      if (o.alarm > neighbourAlarm) neighbourAlarm = o.alarm;
+                    }
+                  }
+                }
+                j = next[j];
+              }
+            }
+          }
+          ax += sx * FISH_SEPARATION_K;
+          ay += sy * FISH_SEPARATION_K;
+          if (n > 0) {
+            const alignK = FISH_ALIGN_K * sp.align;
+            const cohesionK = FISH_COHESION_K * sp.cohesion * (1 - 0.8 * f.alarm);
+            ax += (avx / n - f.vx) * alignK + cx / n * cohesionK;
+            ay += (avy / n - f.vy) * alignK + cy / n * cohesionK;
+            if (sp.mill > 0) {
+              const cl = Math.hypot(cx, cy) || 1;
+              ax += -cy / cl * f.millDir * sp.mill * (1 - f.alarm);
+              ay += cx / cl * f.millDir * sp.mill * (1 - f.alarm);
+            }
+          }
+          let fear = 0;
+          for (const sh of sharks) {
+            const fearR = sh.length * 0.6 + 60;
+            let best = Infinity;
+            let bx = 0;
+            let by = 0;
+            for (let k = 0; k <= 12; k += 3) {
+              const nx = sh.nodes[k * 2];
+              const ny = sh.nodes[k * 2 + 1];
+              const d2 = (f.x - nx) ** 2 + (f.y - ny) ** 2;
+              if (d2 < best) {
+                best = d2;
+                bx = nx;
+                by = ny;
+              }
+            }
+            const d = Math.sqrt(best);
+            if (d >= fearR || d < 1e-3) continue;
+            let w = 1 - d / fearR;
+            w *= w;
+            const awayX = (f.x - bx) / d;
+            const awayY = (f.y - by) / d;
+            const shx = Math.cos(sh.heading);
+            const shy = Math.sin(sh.heading);
+            const side = shx * (f.y - sh.nodes[1]) - shy * (f.x - sh.nodes[0]) >= 0 ? 1 : -1;
+            ax += (awayX * 0.7 - shy * side * 0.9) * FISH_FLEE_K * w;
+            ay += (awayY * 0.7 + shx * side * 0.9) * FISH_FLEE_K * w;
+            fear = Math.max(fear, Math.sqrt(w));
+          }
+          if (pointer.active) {
+            const pr = 130;
+            const dx = f.x - pointer.x;
+            const dy = f.y - pointer.y;
+            const d = Math.hypot(dx, dy);
+            if (d < pr && d > 1e-3) {
+              const w = (1 - d / pr) ** 2;
+              ax += dx / d * FISH_FLEE_K * w;
+              ay += dy / d * FISH_FLEE_K * w;
+              fear = Math.max(fear, Math.sqrt(w) * 0.8);
+            }
+          }
+          let alarm = Math.max(f.alarm * calmDecay, fear);
+          const relayed = neighbourAlarm * 0.86;
+          if (relayed > alarm) alarm += (relayed - alarm) * contagion;
+          f.alarm = alarm;
+          const m = 36;
+          if (f.x < m) ax += (m - f.x) * 7;
+          else if (f.x > W - m) ax -= (f.x - (W - m)) * 7;
+          if (f.y < m) ay += (m - f.y) * 7;
+          else if (f.y > H - m) ay -= (f.y - (H - m)) * 7;
+          current(f.x, f.y, time, cur);
+          ax += cur.x * 0.5 + (Math.random() - 0.5) * sp.jitter;
+          ay += cur.y * 0.5 + (Math.random() - 0.5) * sp.jitter;
+          ay -= f.vy * sp.verticalDrag * (1 - 0.7 * f.alarm);
+          const preferred = sp.cruise * (1 + 1.3 * f.alarm);
+          ax += (preferred - speed) * hx * 1.6;
+          ay += (preferred - speed) * hy * 1.6;
+          const before = Math.atan2(f.vy, f.vx);
+          f.vx += ax * dt;
+          f.vy += ay * dt;
+          const maxSpeed = sp.maxSpeed * (1 + 1.8 * f.alarm);
+          const s2 = Math.hypot(f.vx, f.vy);
+          if (s2 > maxSpeed) {
+            f.vx *= maxSpeed / s2;
+            f.vy *= maxSpeed / s2;
+          } else if (s2 < sp.minSpeed && s2 > 1e-3) {
+            f.vx *= sp.minSpeed / s2;
+            f.vy *= sp.minSpeed / s2;
+          }
+          f.turn += (angleDiff(before, Math.atan2(f.vy, f.vx)) / dt - f.turn) * Math.min(1, dt * 8);
+          f.phase += dt * (7 + Math.hypot(f.vx, f.vy) * 0.12);
+          f.x = clamp(f.x + f.vx * dt, -60, W + 60);
+          f.y = clamp(f.y + f.vy * dt, -60, H + 60);
+        }
+      }
+      /**
+       * Advance every whale along its own lane.
+       *
+       * `u` is the ARC LENGTH travelled and only ever grows; the head is the lane
+       * point at `dir * u`, and each of the twenty nodes is a fixed arc offset
+       * behind it (`placeBody`). Nothing here searches, steers, or repositions: the
+       * per-frame cost is twenty table lookups per animal.
+       *
+       * The speed wobble is smooth (a sine of the simulation clock) and phase-shifted
+       * per animal, so two whales never share a pace. The distance is never
+       * negative, which is the "head always moves forward" invariant, and the
+       * lattice of lanes is what guarantees the bodies never meet.
+       */
+      stepSharks(dt) {
+        const { sharks, time } = this;
+        for (const sh of sharks) {
+          const wobble = 1 + SPEED_WOBBLE * Math.sin(time * SPEED_WOBBLE_RATE + sh.phase * 1.3);
+          sh.speed = sh.baseSpeed * wobble;
+          sh.phase += dt * (2 + sh.speed / 24);
+          sh.u += sh.speed * dt;
+          const previous = sh.heading;
+          placeBody(this, sh);
+          const rate = angleDiff(previous, sh.heading) / Math.max(1e-6, dt);
+          sh.turn += (rate - sh.turn) * Math.min(1, dt * 6);
+          const mouthR = sh.length * 0.05 + 8;
+          const mx = sh.nodes[0];
+          const my = sh.nodes[1];
+          for (const f of this.fish) {
+            if (!f.alive) continue;
+            if ((f.x - mx) ** 2 + (f.y - my) ** 2 < mouthR * mouthR) {
+              f.alive = false;
+              f.respawnAt = time + rand(3, 8);
+              this.events.push({ kind: "eat", x: f.x, y: f.y });
+            }
+          }
+        }
+      }
+      respawn() {
+        const { time, width: W, height: H } = this;
+        const due = [];
+        for (const f of this.fish) if (!f.alive && f.respawnAt <= time) due.push(f);
+        if (due.length === 0) return;
+        if (due.length < 6 && time - this.lastSpawn < 9) return;
+        this.lastSpawn = time;
+        const side = randInt(0, 3);
+        const along = rand(0.15, 0.85);
+        const x = side === 0 ? -20 : side === 1 ? W + 20 : along * W;
+        const y = side === 2 ? -20 : side === 3 ? H + 20 : along * H;
+        const inward = Math.atan2(H / 2 - y, W / 2 - x) + rand(-0.5, 0.5);
+        const species = pickSpecies();
+        const sp = SPECIES[species];
+        const millDir = Math.random() < 0.5 ? 1 : -1;
+        for (const f of due.slice(0, sp.schoolSize[1])) {
+          f.alive = true;
+          f.species = species;
+          f.alarm = 0;
+          f.turn = 0;
+          f.millDir = millDir;
+          f.x = x + rand(-1, 1) * this.perception;
+          f.y = y + rand(-1, 1) * this.perception;
+          f.vx = Math.cos(inward) * sp.cruise * 1.4;
+          f.vy = Math.sin(inward) * sp.cruise * 1.4;
+        }
+      }
+    };
+
+    // client/src/sharks/renderer.js
+    var ALPHA_LEVELS = 6;
+    var FISH_ALPHAS = [0.28, 0.42, 0.58, 0.74, 0.9];
+    var DOT_RGB = [
+      [48, 52, 235],
+      [52, 205, 60],
+      [228, 50, 44],
+      [190, 212, 255],
+      [110, 230, 255]
+    ];
+    var DOT_BASE_ALPHA = [1, 1, 1, 1, 1];
+    var WAKE = DOT_RGB.length - 1;
+    var SKIN_RAMP = ":;t%SX8#@";
+    var FIN_GLYPHS = "%;tS:";
+    var RIDGE_GLYPHS = "@8%";
+    var EDGE_HEAVY = ":;";
+    var EDGE_LIGHT = ".',`";
+    var FLAG_BODY = 1;
+    var FLAG_EDGE = 2;
+    var FLAG_FIN = 3;
+    var FLAG_RIDGE = 4;
+    var FLAG_EYE = 5;
+    var FLAG_MARK = 6;
+    var MARK_GLYPHS = "#%@";
+    var SUBSAMPLES = [0.25, 0.3, 0.75, 0.3, 0.25, 0.72, 0.75, 0.72];
+    function classicHalfWidth(s2) {
+      if (s2 < 0.13) return 0.09 * Math.pow(Math.sin(s2 / 0.13 * Math.PI / 2), 0.95);
+      if (s2 < 0.3) return 0.09 + 0.016 * smoothstep(0.13, 0.3, s2);
+      if (s2 < 0.84) return 0.019 + 0.087 * Math.pow(1 - (s2 - 0.3) / 0.54, 1.25);
+      const k = (s2 - 0.84) / 0.16;
+      return 0.019 * (1 - k) + 0.012 * Math.sin(k * Math.PI);
+    }
+    var SHAPES = {
+      classic: {
+        halfWidth: classicHalfWidth,
+        pectoral: [0.15, 0.43, 0.55, 0.26],
+        falcate: true,
+        pelvic: [0.57, 0.65, 0.69, 0.085],
+        caudal: 0.085,
+        dorsal: [0.33, 0.47],
+        secondDorsal: [0.71, 0.76],
+        eye: [0.1, 0.14],
+        gills: [0.19, 0.29],
+        tint: [0.92, 0.97, 1.05]
+      },
+      // Slim neck under a wide, swept-back cephalofoil (drawn in sampleShark),
+      // tall first dorsal, long upper tail lobe. Bronze-olive grey.
+      hammerhead: {
+        halfWidth: (s2) => {
+          if (s2 < 0.06) return 0.045;
+          if (s2 < 0.3) return 0.045 + 0.061 * smoothstep(0.06, 0.3, s2);
+          return classicHalfWidth(s2) * 0.92;
+        },
+        head: { span: 0.17, sweep: 0.035, depth: 0.09, notch: 0 },
+        pectoral: [0.17, 0.4, 0.5, 0.22],
+        falcate: true,
+        pelvic: [0.56, 0.63, 0.67, 0.075],
+        caudal: 0.11,
+        dorsal: [0.28, 0.44],
+        secondDorsal: [0.7, 0.74],
+        eye: null,
+        gills: [0.16, 0.26],
+        tint: [0.96, 0.98, 0.9]
+      },
+      // Blunt, square snout on a heavy body; barred back. Warm grey-brown.
+      tiger: {
+        halfWidth: (s2) => {
+          if (s2 < 0.13) return 0.1 * Math.pow(Math.sin(s2 / 0.13 * Math.PI / 2), 0.45);
+          if (s2 < 0.3) return 0.1 + 0.014 * smoothstep(0.13, 0.3, s2);
+          if (s2 < 0.84) return 0.019 + 0.095 * Math.pow(1 - (s2 - 0.3) / 0.54, 1.2);
+          const k = (s2 - 0.84) / 0.16;
+          return 0.019 * (1 - k) + 0.012 * Math.sin(k * Math.PI);
+        },
+        pectoral: [0.15, 0.42, 0.53, 0.25],
+        falcate: true,
+        pelvic: [0.57, 0.65, 0.69, 0.085],
+        caudal: 0.095,
+        dorsal: [0.33, 0.46],
+        secondDorsal: [0.71, 0.75],
+        eye: [0.08, 0.12],
+        gills: [0.19, 0.28],
+        tint: [1.02, 0.95, 0.84]
+      },
+      // Short rounded head, body done by half-length, then a long ribbon of a
+      // tail fin. Broad rounded pectorals, spotted sandy skin.
+      zebra: {
+        halfWidth: (s2) => {
+          if (s2 < 0.1) return 0.075 * Math.pow(Math.sin(s2 / 0.1 * Math.PI / 2), 0.7);
+          if (s2 < 0.28) return 0.075 + 0.025 * smoothstep(0.1, 0.28, s2);
+          if (s2 < 0.55) return 0.022 + 0.078 * Math.pow(1 - (s2 - 0.28) / 0.27, 1.1);
+          const k = (s2 - 0.55) / 0.45;
+          return 0.022 * (1 - k * k) + 0.012 * Math.sin(k * Math.PI);
+        },
+        pectoral: [0.12, 0.3, 0.36, 0.19],
+        falcate: false,
+        pelvic: [0.42, 0.48, 0.51, 0.065],
+        caudal: 0,
+        dorsal: [0.36, 0.44],
+        secondDorsal: [0.49, 0.53],
+        eye: [0.06, 0.09],
+        gills: [0.13, 0.2],
+        tint: [1.08, 0.97, 0.74]
+      },
+      // Great hammerhead: a broader, nearly straight-edged cephalofoil with a notch at the centre,
+      // a towering sickle first dorsal (drawn long and bright from above), and a cooler slate skin.
+      greathammer: {
+        halfWidth: (s2) => {
+          if (s2 < 0.05) return 0.04;
+          if (s2 < 0.3) return 0.04 + 0.07 * smoothstep(0.05, 0.3, s2);
+          return classicHalfWidth(s2) * 0.95;
+        },
+        head: { span: 0.21, sweep: 6e-3, depth: 0.085, notch: 0.014 },
+        pectoral: [0.16, 0.38, 0.49, 0.24],
+        falcate: true,
+        pelvic: [0.55, 0.62, 0.67, 0.085],
+        caudal: 0.13,
+        dorsal: [0.24, 0.45],
+        secondDorsal: [0.68, 0.74],
+        eye: null,
+        gills: [0.15, 0.25],
+        tint: [0.86, 0.93, 1.02]
+      },
+      // Shortfin mako: a long conical snout, a torpedo body that narrows hard to the tail stalk,
+      // and a tall crescent tail. Metallic indigo back.
+      mako: {
+        halfWidth: (s2) => {
+          if (s2 < 0.17) return 0.088 * Math.pow(Math.sin(s2 / 0.17 * Math.PI / 2), 1.5);
+          if (s2 < 0.32) return 0.088 + 0.012 * smoothstep(0.17, 0.32, s2);
+          if (s2 < 0.86) return 0.014 + 0.086 * Math.pow(1 - (s2 - 0.32) / 0.54, 1.45);
+          const k = (s2 - 0.86) / 0.14;
+          return 0.014 * (1 - k) + 0.01 * Math.sin(k * Math.PI);
+        },
+        pectoral: [0.18, 0.4, 0.5, 0.21],
+        falcate: true,
+        pelvic: [0.58, 0.64, 0.68, 0.06],
+        caudal: 0.13,
+        dorsal: [0.34, 0.45],
+        secondDorsal: [0.76, 0.79],
+        eye: [0.11, 0.15],
+        gills: [0.2, 0.3],
+        tint: [0.78, 0.9, 1.2]
+      },
+      // Thresher: a compact body over the front half, then the upper tail lobe as a long whip
+      // that's as long as the shark itself. Big eyes, long sickle pectorals, bronze-violet skin.
+      thresher: {
+        halfWidth: (s2) => {
+          if (s2 < 0.08) return 0.07 * Math.pow(Math.sin(s2 / 0.08 * Math.PI / 2), 0.75);
+          if (s2 < 0.2) return 0.07 + 0.02 * smoothstep(0.08, 0.2, s2);
+          if (s2 < 0.48) return 0.012 + 0.078 * Math.pow(1 - (s2 - 0.2) / 0.28, 1.3);
+          const k = (s2 - 0.48) / 0.52;
+          return 0.012 * (1 - k) + 6e-3 * Math.sin(k * Math.PI * 0.9) + 2e-3;
+        },
+        pectoral: [0.12, 0.27, 0.36, 0.2],
+        falcate: true,
+        pelvic: [0.37, 0.41, 0.44, 0.045],
+        caudal: 0,
+        dorsal: [0.24, 0.32],
+        secondDorsal: [0.45, 0.47],
+        eye: [0.05, 0.1],
+        gills: [0.11, 0.18],
+        tint: [1, 0.9, 1.08]
+      },
+      // Nurse shark: a blunt, broad head, a heavy flattened body with both dorsals set far back,
+      // rounded paddle pectorals, and a long low tail with no lower lobe. Tawny brown.
+      nurse: {
+        halfWidth: (s2) => {
+          if (s2 < 0.08) return 0.085 * Math.pow(Math.sin(s2 / 0.08 * Math.PI / 2), 0.4);
+          if (s2 < 0.3) return 0.085 + 0.02 * smoothstep(0.08, 0.3, s2);
+          if (s2 < 0.72) return 0.022 + 0.083 * Math.pow(1 - (s2 - 0.3) / 0.42, 1.1);
+          const k = (s2 - 0.72) / 0.28;
+          return 0.022 * (1 - k * k) + 0.014 * Math.sin(k * Math.PI);
+        },
+        pectoral: [0.16, 0.34, 0.4, 0.17],
+        falcate: false,
+        pelvic: [0.45, 0.52, 0.55, 0.075],
+        caudal: 0,
+        dorsal: [0.5, 0.58],
+        secondDorsal: [0.63, 0.69],
+        eye: [0.05, 0.075],
+        gills: [0.14, 0.22],
+        tint: [1.1, 0.96, 0.76]
+      }
+    };
+    var KINDS = Object.keys(SHAPES);
+    function inTriangle(px, py, ax, ay, bx, by, cx, cy) {
+      const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+      const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+      const d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+      const neg = d1 < 0 || d2 < 0 || d3 < 0;
+      const pos = d1 > 0 || d2 > 0 || d3 > 0;
+      return !(neg && pos);
+    }
+    var AsciiRenderer = class {
+      constructor(canvas, doc) {
+        this.canvas = canvas;
+        const ctx = canvas.getContext("2d", { alpha: true });
+        if (!ctx) throw new Error("2D canvas unavailable");
+        this.ctx = ctx;
+        const owner = doc || (typeof document !== "undefined" ? document : null);
+        this.bg = owner && typeof owner.createElement === "function" ? owner.createElement("canvas") : null;
+        this.buildDotStyles();
+      }
+      ctx;
+      bg;
+      dpr = 1;
+      width = 0;
+      height = 0;
+      cw = 12;
+      ch = 18;
+      cols = 0;
+      rows = 0;
+      fontFamily = "ui-monospace, Menlo, monospace";
+      dotKind = new Uint8Array(0);
+      // 0 none, 1 blue, 2 green, 3 red, 4 pale
+      dotPhase = new Float32Array(0);
+      dotFreq = new Float32Array(0);
+      energy = new Float32Array(0);
+      energyTmp = new Float32Array(0);
+      heat = new Float32Array(0);
+      bucketOf = new Uint8Array(0);
+      bucketOrder = new Int32Array(0);
+      bucketCounts = new Int32Array(DOT_RGB.length * ALPHA_LEVELS + 1);
+      dotStyles = [];
+      /**
+       * Theme ink. Upstream paints grey-on-black; here the ink is the page's own
+       * label colour and the glyphs are punched out in the page's surface colour, so
+       * the same raster reads as a printed silhouette on a light page and as a lit
+       * one on a dark page. `inkDark` only retunes the alphas and the dot strength.
+       */
+      ink = { r: 34, g: 34, b: 34 };
+      surface = { r: 250, g: 249, b: 245 };
+      accent = { r: 198, g: 97, b: 63 };
+      inkDark = false;
+      /**
+       * PATCHED: the whales' own pigment, independent of the page ink.
+       *
+       * Upstream paints one colour. Here the animals carry `whaleColor` (defaulting
+       * to the shipped blue through the same `whaleInk.js` policy the setting uses),
+       * so the backdrop can be blue on a theme whose label ink is warm graphite —
+       * and the animated mode can hand a new colour every frame without touching
+       * `setTheme` or re-deriving the whole palette.
+       */
+      whaleColor = { r: 32, g: 74, b: 168 };
+      sharkFlag = new Uint8Array(0);
+      sharkShade = new Float32Array(0);
+      sharkKey = new Uint32Array(0);
+      sharkDepth = new Float32Array(0);
+      sharkKind = new Uint8Array(0);
+      /** Cells darkened by a shark's shadow on the seabed. */
+      sharkShadow = new Uint8Array(0);
+      spine = new Float32Array(SHARK_NODES * 2);
+      arc = new Float32Array(SHARK_NODES);
+      arcTotal = 1;
+      shape = SHAPES.classic;
+      sharkId = 0;
+      finTipLeft = 0;
+      finTipRight = 0;
+      // Scratch outputs of sampleShark(), to avoid allocating per sample.
+      hitFlag = 0;
+      hitShade = 0;
+      hitS = 0;
+      hitV = 0;
+      hitDist = 0;
+      /** Cells holding a fish this frame (frame stamp); dots skip them. */
+      fishStamp = new Uint32Array(0);
+      frameId = 0;
+      /** Fish cells bucketed by brightness, so each bucket is one fillStyle. */
+      fishBuckets = FISH_ALPHAS.map(() => []);
+      fishStyles = FISH_ALPHAS.map((a) => `rgba(230,238,255,${a})`);
+      /** Rebuild the bucketed dot colours for the current theme. */
+      buildDotStyles() {
+        this.dotStyles = [];
+        const scale = this.inkDark ? 1 : 0.85;
+        for (let c = 0; c < DOT_RGB.length; c++) {
+          const [r, g, b] = DOT_RGB[c];
+          for (let l = 0; l < ALPHA_LEVELS; l++) {
+            const a = DOT_BASE_ALPHA[c] * (l + 1) / ALPHA_LEVELS * scale;
+            this.dotStyles.push(`rgba(${r},${g},${b},${a.toFixed(3)})`);
+          }
+        }
+      }
+      /** Adopt the host theme's ink, surface and accent. Safe to call any time. */
+      setTheme(theme) {
+        const t = theme || {};
+        this.ink = t.ink || this.ink;
+        this.surface = t.bg || this.surface;
+        this.accent = t.accent || this.accent;
+        this.inkDark = !!t.dark;
+        this.buildDotStyles();
+        this.fishStyles = FISH_ALPHAS.map((a) => `rgba(${this.ink.r},${this.ink.g},${this.ink.b},${(a * (this.inkDark ? 0.9 : 0.85)).toFixed(3)})`);
+        this.paintBackground();
+      }
+      inkCss(alpha) {
+        return `rgba(${this.ink.r},${this.ink.g},${this.ink.b},${alpha.toFixed(3)})`;
+      }
+      /**
+       * PATCHED: the whales' fill string, built from `whaleColor`.
+       *
+       * A method rather than an inline template so every whale call site — glyph,
+       * edge, eye, mark, cell wash — formats the same way, and so a test can read the
+       * colour back without a canvas.
+       */
+      whaleCss(alpha) {
+        const color = this.whaleColor || this.ink;
+        return `rgba(${Math.round(color.r)},${Math.round(color.g)},${Math.round(color.b)},${alpha.toFixed(3)})`;
+      }
+      /**
+       * PATCHED: set the whale pigment. `{ r, g, b }`; anything else is ignored so a
+       * host/theme hand-off can never paint `rgba(undefined,…)`.
+       */
+      setWhaleColor(color) {
+        if (!color || typeof color !== "object") return;
+        const r = Number(color.r);
+        const g = Number(color.g);
+        const b = Number(color.b);
+        if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return;
+        this.whaleColor = { r, g, b };
+      }
+      bgCss(alpha) {
+        return `rgba(${this.surface.r},${this.surface.g},${this.surface.b},${alpha.toFixed(3)})`;
+      }
+      get cellWidth() {
+        return this.cw;
+      }
+      get cellHeight() {
+        return this.ch;
+      }
+      setFontFamily(family) {
+        if (family) this.fontFamily = family;
+      }
+      resize(width, height, dpr) {
+        this.width = width;
+        this.height = height;
+        this.dpr = dpr;
+        this.cw = clamp(Math.round(width / 124), 8, 13);
+        this.ch = Math.round(this.cw * 1.45);
+        this.cols = Math.ceil(width / this.cw);
+        this.rows = Math.ceil(height / this.ch);
+        this.canvas.width = Math.round(width * dpr);
+        this.canvas.height = Math.round(height * dpr);
+        if (this.bg) {
+          this.bg.width = this.canvas.width;
+          this.bg.height = this.canvas.height;
+        }
+        const n = this.cols * this.rows;
+        this.dotKind = new Uint8Array(n);
+        this.dotPhase = new Float32Array(n);
+        this.dotFreq = new Float32Array(n);
+        this.energy = new Float32Array(n);
+        this.energyTmp = new Float32Array(n);
+        this.heat = new Float32Array(n);
+        this.bucketOf = new Uint8Array(n);
+        this.bucketOrder = new Int32Array(n);
+        this.sharkFlag = new Uint8Array(n);
+        this.sharkShade = new Float32Array(n);
+        this.sharkKey = new Uint32Array(n);
+        this.sharkDepth = new Float32Array(n);
+        this.sharkKind = new Uint8Array(n);
+        this.sharkShadow = new Uint8Array(n);
+        this.fishStamp = new Uint32Array(n);
+        for (let i = 0; i < n; i++) {
+          const col = i % this.cols;
+          const row = i / this.cols | 0;
+          this.dotKind[i] = 0;
+          this.dotPhase[i] = hash3(col, row, 23) * Math.PI * 2;
+          this.dotFreq[i] = 0.3 + hash3(col, row, 37) * 1.1;
+        }
+        this.paintBackground();
+      }
+      paintBackground() {
+        if (!this.bg || typeof this.bg.getContext !== "function") return;
+        const g = this.bg.getContext("2d");
+        if (!g) return;
+        const { width: W, height: H, dpr, cw, ch } = this;
+        if (W <= 0 || H <= 0) return;
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (typeof g.clearRect === "function") g.clearRect(0, 0, W, H);
+      }
+      render(world, dt) {
+        const { ctx, dpr, cols, ch } = this;
+        if (cols === 0) return;
+        const t = world.time;
+        this.consumeEvents(world);
+        this.rasterizeSharks(world.sharks, t);
+        this.depositWake(world);
+        this.diffuse(dt);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (typeof ctx.clearRect === "function") ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this.bg) ctx.drawImage(this.bg, 0, 0);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.markFish(world);
+        this.drawDots(t);
+        ctx.font = `600 ${Math.round(ch * 0.74)}px ${this.fontFamily}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        this.drawHeat();
+        this.drawFish();
+        this.drawSharks(t);
+      }
+      // ── simulation → field ──────────────────────────────────────────────
+      cellIndex(x, y) {
+        const c = Math.floor(x / this.cw);
+        const r = Math.floor(y / this.ch);
+        if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) return -1;
+        return r * this.cols + c;
+      }
+      stamp(field, x, y, radius, amount) {
+        const c0 = Math.floor(x / this.cw);
+        const r0 = Math.floor(y / this.ch);
+        for (let r = r0 - radius; r <= r0 + radius; r++) {
+          for (let c = c0 - radius; c <= c0 + radius; c++) {
+            if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) continue;
+            const d = Math.hypot(c - c0, (r - r0) * 1.4);
+            if (d > radius + 0.5) continue;
+            const i = r * this.cols + c;
+            field[i] = Math.min(1.6, field[i] + amount * (1 - d / (radius + 1)));
+          }
+        }
+      }
+      consumeEvents(world) {
+        for (const e of world.events) {
+          if (e.kind === "eat") {
+            this.stamp(this.heat, e.x, e.y, 2, 1);
+            this.stamp(this.energy, e.x, e.y, 3, 0.9);
+          } else {
+            this.stamp(this.energy, e.x, e.y, 6, 1.4);
+          }
+        }
+        world.events.length = 0;
+      }
+      depositWake(world) {
+        const { energy } = this;
+        for (const f of world.fish) {
+          if (!f.alive) continue;
+          const i = this.cellIndex(f.x, f.y);
+          if (i >= 0) energy[i] = Math.min(1.6, energy[i] + 0.012 + f.alarm * 0.03);
+        }
+        for (const sh of world.sharks) {
+          for (let k = SHARK_NODES - 6; k < SHARK_NODES; k++) {
+            const i = this.cellIndex(sh.nodes[k * 2], sh.nodes[k * 2 + 1]);
+            if (i >= 0) energy[i] = Math.min(1.6, energy[i] + 0.05 + sh.speed * 12e-4);
+          }
+        }
+        if (world.pointer.active) {
+          this.stamp(energy, world.pointer.x, world.pointer.y, 1, 0.08);
+        }
+      }
+      /** Blur + decay so wakes spread out like ripples and fade. */
+      diffuse(dt) {
+        const { cols, rows, energy, energyTmp: tmp, heat } = this;
+        const decay = Math.exp(-dt * 1.5);
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = r * cols + c;
+            const l = c > 0 ? energy[i - 1] : energy[i];
+            const rt = c < cols - 1 ? energy[i + 1] : energy[i];
+            const u = r > 0 ? energy[i - cols] : energy[i];
+            const d = r < rows - 1 ? energy[i + cols] : energy[i];
+            tmp[i] = (energy[i] * 4 + l + rt + u + d) * 0.125 * decay;
+          }
+        }
+        this.energy = tmp;
+        this.energyTmp = energy;
+        const heatDecay = Math.exp(-dt * 2.2);
+        for (let i = 0; i < heat.length; i++) heat[i] *= heatDecay;
+      }
+      // ── sharks ──────────────────────────────────────────────────────────
+      /**
+       * Classify one point against the current shark (spine/arc already built).
+       * Body coordinates: s along the spine (0 snout → 1 tail), v across it.
+       * Writes hit* fields and returns whether the point is on the shark.
+       */
+      sampleShark(px, py, L) {
+        const { spine, arc } = this;
+        const N = SHARK_NODES;
+        let best = Infinity;
+        let bestS = 0;
+        let bestSign = 1;
+        let bestNx = 0;
+        let bestNy = 0;
+        for (let k = 0; k < N - 1; k++) {
+          const ax = spine[k * 2];
+          const ay = spine[k * 2 + 1];
+          const sx = spine[(k + 1) * 2] - ax;
+          const sy = spine[(k + 1) * 2 + 1] - ay;
+          const len2 = sx * sx + sy * sy || 1;
+          const u2 = clamp(((px - ax) * sx + (py - ay) * sy) / len2, 0, 1);
+          const qx = ax + sx * u2;
+          const qy = ay + sy * u2;
+          const d2 = (px - qx) ** 2 + (py - qy) ** 2;
+          if (d2 < best) {
+            best = d2;
+            const len = Math.sqrt(len2);
+            bestS = (arc[k] + u2 * len) / this.arcTotal;
+            bestSign = sx * (py - ay) - sy * (px - ax) >= 0 ? 1 : -1;
+            bestNx = -sy / len * bestSign;
+            bestNy = sx / len * bestSign;
+          }
+        }
+        const a = Math.sqrt(best);
+        const s2 = bestS;
+        const u = s2 * L;
+        const shape = this.shape;
+        const w = shape.halfWidth(s2) * L;
+        this.hitDist = a;
+        this.hitS = s2;
+        this.hitV = a * bestSign;
+        const head = this.shape.head;
+        if (head && u < L * (head.sweep + head.depth + head.notch)) {
+          const span = L * head.span;
+          const r = a / span;
+          const front = L * head.sweep * r * r + L * head.notch * Math.max(0, 1 - r / 0.14);
+          const depth = L * head.depth * (1 - 0.2 * r * r * r * r);
+          if (r <= 1 && u >= front && u <= front + depth) {
+            this.hitFlag = r > 0.84 ? FLAG_EYE : FLAG_BODY;
+            this.hitShade = r > 0.84 ? 0 : 0.62 - 0.2 * r + (u < front + L * 0.012 ? 0.1 : 0);
+            return true;
+          }
+        }
+        if (a <= w) {
+          const across = a / (w || 1);
+          const facing = (bestNx * -0.6 + bestNy * -0.8) * across;
+          let shade = 0.58 - across * across * 0.42 + facing * 0.26;
+          let flag = FLAG_BODY;
+          if (s2 > shape.dorsal[0] && s2 < shape.dorsal[1] && across < 0.3) {
+            flag = FLAG_RIDGE;
+            shade = 1;
+          } else if (s2 > shape.secondDorsal[0] && s2 < shape.secondDorsal[1] && across < 0.4) {
+            shade = Math.max(shade, 0.82);
+          } else if (shape.eye && s2 > shape.eye[0] && s2 < shape.eye[1] && across > 0.6) {
+            flag = FLAG_EYE;
+            shade = 0;
+          } else if (s2 > shape.gills[0] && s2 < shape.gills[1] && across > 0.58) {
+            if (Math.floor((s2 - shape.gills[0]) / (shape.gills[1] - shape.gills[0]) * 5) % 2 === 0) shade *= 0.45;
+          } else if (s2 < 0.05) {
+            shade = Math.max(shade, 0.7);
+          } else if (shape === SHAPES.zebra && s2 > 0.08 && s2 < 0.55 && (across < 0.1 || Math.abs(across - 0.6) < 0.08)) {
+            shade = Math.max(shade, 0.8);
+          } else if (this.marked(s2, a * bestSign, L, across)) {
+            flag = FLAG_MARK;
+          }
+          this.hitFlag = flag;
+          this.hitShade = shade;
+          return true;
+        }
+        const tip = bestSign > 0 ? this.finTipRight : this.finTipLeft;
+        const [p0, p1, p2] = shape.pectoral;
+        if (inTriangle(u, a, L * p0, 0, L * p1, 0, L * p2, tip) && // Falcate (sickle) fins get a concave trailing edge.
+        !(shape.falcate && inTriangle(u, a, L * p1, 0, L * (p1 + (p2 - p1) * 0.33), tip * 0.55, L * p2, tip))) {
+          this.hitFlag = this.marked(s2, a * bestSign, L, 0) ? FLAG_MARK : FLAG_FIN;
+          this.hitShade = 0.38 + 0.22 * (1 - clamp(a / tip, 0, 1));
+          return true;
+        }
+        const [v0, v1, v2, vr] = shape.pelvic;
+        if (inTriangle(u, a, L * v0, 0, L * v1, 0, L * v2, L * vr) || // Forked caudal fin.
+        shape.caudal > 0 && inTriangle(u, a, L * 0.86, 0, L * 0.95, 0, L, L * shape.caudal)) {
+          this.hitFlag = FLAG_FIN;
+          this.hitShade = 0.36;
+          return true;
+        }
+        return false;
+      }
+      /** Whether a body point (s along, v across) falls on a dark marking. */
+      marked(s2, v, L, across) {
+        if (this.shape === SHAPES.tiger) {
+          if (s2 < 0.2 || s2 > 0.9 || across > 0.85) return false;
+          const wobble = 0.35 * Math.sin(v / L * 25 + s2 * 5);
+          const bar = Math.sin(s2 * Math.PI * 2 * 9 + wobble);
+          return bar > 0.65 - 0.5 * smoothstep(0.2, 0.42, s2) + 0.4 * smoothstep(0.8, 0.9, s2);
+        }
+        if (this.shape === SHAPES.zebra) {
+          if (s2 < 0.07) return false;
+          const gu = s2 * L / (L * 0.06);
+          const gv = v / (L * 0.045);
+          const cu = Math.floor(gu);
+          const cv = Math.floor(gv);
+          const jx = hash3(cu, cv, this.sharkId) * 0.5 + 0.25;
+          const jy = hash3(cu, cv, this.sharkId + 11) * 0.5 + 0.25;
+          return (gu - cu - jx) ** 2 + (gv - cv - jy) ** 2 < 0.08;
+        }
+        return false;
+      }
+      /**
+       * Build a smooth, undulating render spine from the sim spine, then
+       * supersample every cell in the shark's bounding box against the shape.
+       * Fully covered cells become solid skin; partial cells become edge glyphs.
+       */
+      rasterizeSharks(sharks, t) {
+        const { sharkFlag, sharkShade, sharkKey, sharkDepth, sharkKind, sharkShadow, spine, arc, cw, ch, cols, rows } = this;
+        sharkFlag.fill(0);
+        sharkShadow.fill(0);
+        for (const sh of sharks) {
+          const L = sh.length;
+          const N = SHARK_NODES;
+          const n = sh.nodes;
+          const swim = clamp(sh.speed / 60, 0.4, 1.4);
+          this.shape = SHAPES[sh.kind];
+          this.sharkId = sh.id;
+          const kindIndex = KINDS.indexOf(sh.kind);
+          for (let k = 0; k < N; k++) {
+            const s2 = k / (N - 1);
+            const a = Math.max(0, k - 1);
+            const b = Math.min(N - 1, k + 1);
+            let tx = n[a * 2] - n[b * 2];
+            let ty = n[a * 2 + 1] - n[b * 2 + 1];
+            const tl = Math.hypot(tx, ty) || 1;
+            tx /= tl;
+            ty /= tl;
+            const amp = L * 0.05 * (0.1 + 0.9 * Math.pow(s2, 1.8)) * swim;
+            const off = amp * Math.sin(sh.phase - s2 * 5.2);
+            spine[k * 2] = n[k * 2] - ty * off;
+            spine[k * 2 + 1] = n[k * 2 + 1] + tx * off;
+          }
+          arc[0] = 0;
+          for (let k = 1; k < N; k++) {
+            arc[k] = arc[k - 1] + Math.hypot(spine[k * 2] - spine[(k - 1) * 2], spine[k * 2 + 1] - spine[(k - 1) * 2 + 1]);
+          }
+          this.arcTotal = arc[N - 1] || 1;
+          const bank = clamp(sh.turn * 0.45, -0.35, 0.35);
+          const flex = 1 + 0.06 * Math.sin(sh.phase * 0.5);
+          const reachFin = this.shape.pectoral[3];
+          this.finTipRight = L * reachFin * flex * (1 - bank);
+          this.finTipLeft = L * reachFin * flex * (1 + bank);
+          let minX = Infinity;
+          let minY = Infinity;
+          let maxX = -Infinity;
+          let maxY = -Infinity;
+          for (let k = 0; k < N; k++) {
+            minX = Math.min(minX, spine[k * 2]);
+            maxX = Math.max(maxX, spine[k * 2]);
+            minY = Math.min(minY, spine[k * 2 + 1]);
+            maxY = Math.max(maxY, spine[k * 2 + 1]);
+          }
+          const reach = L * 0.36;
+          const c0 = Math.max(0, Math.floor((minX - reach) / cw));
+          const c1 = Math.min(cols - 1, Math.floor((maxX + reach) / cw));
+          const r0 = Math.max(0, Math.floor((minY - reach) / ch));
+          const r1 = Math.min(rows - 1, Math.floor((maxY + reach) / ch));
+          if (c0 > c1 || r0 > r1) continue;
+          const skipBeyond = reach + Math.hypot(cw, ch);
+          const shadowDc = Math.round(L * 0.035 / cw) + 1;
+          const shadowDr = Math.round(L * 0.02 / ch) + 1;
+          for (let r = r0; r <= r1; r++) {
+            for (let c = c0; c <= c1; c++) {
+              const x = c * cw;
+              const y = r * ch;
+              const centerHit = this.sampleShark(x + cw / 2, y + ch / 2, L);
+              if (!centerHit && this.hitDist > skipBeyond) continue;
+              const flag = this.hitFlag;
+              const shade = this.hitShade;
+              const s2 = this.hitS;
+              const v = this.hitV;
+              let hits = centerHit ? 1 : 0;
+              for (let k = 0; k < SUBSAMPLES.length; k += 2) {
+                if (this.sampleShark(x + SUBSAMPLES[k] * cw, y + SUBSAMPLES[k + 1] * ch, L)) hits++;
+              }
+              if (hits === 0) continue;
+              const coverage = hits / 5;
+              const i = r * cols + c;
+              const key = hash3(Math.round(s2 * 52), Math.round(v / (cw * 0.9)), sh.id) * 4294967295 >>> 0;
+              sharkKey[i] = key;
+              sharkDepth[i] = sh.depth;
+              sharkKind[i] = kindIndex;
+              if (centerHit && coverage >= 0.6) {
+                sharkFlag[i] = flag;
+                sharkShade[i] = clamp(shade, 0, 1);
+                const sc = c + shadowDc;
+                const sr = r + shadowDr;
+                if (sc < cols && sr < rows) sharkShadow[sr * cols + sc] = 1;
+              } else {
+                sharkFlag[i] = FLAG_EDGE;
+                sharkShade[i] = coverage;
+              }
+            }
+          }
+        }
+      }
+      drawSharks(t) {
+        const { ctx, cols, rows, cw, ch, sharkFlag, sharkShade, sharkKey, sharkDepth, sharkKind } = this;
+        const whaleCss = (alpha) => this.whaleCss(alpha);
+        const n = cols * rows;
+        for (let i = 0; i < n; i++) {
+          const flag = sharkFlag[i];
+          if (!flag) continue;
+          const col = i % cols;
+          const row = i / cols | 0;
+          const x = col * cw;
+          const y = row * ch;
+          const key = sharkKey[i];
+          const shade = sharkShade[i];
+          const dim = 0.7 + 0.3 * sharkDepth[i];
+          const [tr, tg, tb] = SHAPES[KINDS[sharkKind[i]]].tint;
+          void tr;
+          void tg;
+          void tb;
+          if (flag === FLAG_EDGE) {
+            const set = shade >= 0.5 ? EDGE_HEAVY : EDGE_LIGHT;
+            ctx.fillStyle = whaleCss(0.4 + shade * 0.28);
+            ctx.fillText(set[(key >>> 8) % set.length], x + cw / 2, y + ch / 2 + 1);
+            continue;
+          }
+          let level;
+          let glyph;
+          if (flag === FLAG_RIDGE) {
+            level = 226;
+            glyph = RIDGE_GLYPHS[(key >>> 8) % RIDGE_GLYPHS.length];
+          } else if (flag === FLAG_EYE) {
+            level = 12;
+            glyph = "o";
+          } else if (flag === FLAG_MARK) {
+            level = 24 + shade * 22;
+            glyph = MARK_GLYPHS[(key >>> 8) % MARK_GLYPHS.length];
+          } else if (flag === FLAG_FIN) {
+            level = 40 + shade * 120;
+            glyph = FIN_GLYPHS[(key >>> 8) % FIN_GLYPHS.length];
+          } else {
+            level = 46 + shade * 160;
+            const jitter = (key >>> 4) % 3 - 1;
+            glyph = SKIN_RAMP[clamp(Math.floor((1 - shade) * 8.99) + jitter, 0, SKIN_RAMP.length - 1)];
+          }
+          level *= dim;
+          if (this.inkDark) {
+            const cellAlpha = 0.12 + level / 255 * 0.18;
+            ctx.fillStyle = whaleCss(cellAlpha * 0.55);
+            ctx.fillRect(x + 1, y + 1, cw - 1, ch - 1);
+          }
+          const glyphAlpha = this.inkDark ? 0.7 + level / 255 * 0.3 : 0.5 + level / 255 * 0.43;
+          let color;
+          if (flag === FLAG_EYE) color = whaleCss(0.95);
+          else if (flag === FLAG_MARK) color = whaleCss(0.8);
+          else color = whaleCss(glyphAlpha);
+          ctx.fillStyle = color;
+          ctx.fillText(glyph, x + cw / 2, y + ch / 2 + 1);
+        }
+      }
+      // ── fish, dots, heat ────────────────────────────────────────────────
+      /**
+       * Snap each fish to a cell and bucket it by brightness: far fish are dim,
+       * near fish brighter, and turning or panicking fish glint. Nearer fish
+       * claim a cell first when two land in the same one.
+       */
+      markFish(world) {
+        const { fishStamp, fishBuckets, sharkFlag } = this;
+        const frame = ++this.frameId;
+        for (const bucket of fishBuckets) bucket.length = 0;
+        for (let pass = 0; pass < 2; pass++) {
+          for (const f of world.fish) {
+            if (!f.alive || (f.depth > 0.78 ? 0 : 1) !== pass) continue;
+            const i = this.cellIndex(f.x, f.y);
+            if (i < 0 || fishStamp[i] === frame || sharkFlag[i]) continue;
+            fishStamp[i] = frame;
+            const glint = clamp(Math.abs(f.turn) / 3.5, 0, 1);
+            const v = 0.3 + 0.4 * (f.depth - 0.55) / 0.45 + 0.3 * Math.max(glint, f.alarm);
+            fishBuckets[clamp(Math.floor(v * FISH_ALPHAS.length), 0, FISH_ALPHAS.length - 1)].push(i);
+          }
+        }
+      }
+      drawFish() {
+        const { ctx, cw, ch, cols, fishBuckets } = this;
+        for (let b = 0; b < fishBuckets.length; b++) {
+          const bucket = fishBuckets[b];
+          if (!bucket.length) continue;
+          ctx.fillStyle = this.fishStyles[b];
+          for (const i of bucket) {
+            ctx.fillText("-", i % cols * cw + cw / 2, (i / cols | 0) * ch + ch / 2 + 1);
+          }
+        }
+      }
+      drawHeat() {
+        const { ctx, heat, cols, cw, ch } = this;
+        for (let i = 0; i < heat.length; i++) {
+          const h = heat[i];
+          if (h < 0.08) continue;
+          const col = i % cols;
+          const row = i / cols | 0;
+          ctx.fillStyle = `rgba(${this.accent.r},${this.accent.g},${this.accent.b},${h > 0.5 ? Math.min(1, h).toFixed(2) : (h * 0.7).toFixed(2)})`;
+          ctx.fillText(h > 0.6 ? "*" : "\xB7", col * cw + cw / 2, row * ch + ch / 2 + 1);
+        }
+      }
+      /**
+       * Every cell's dot twinkles on its own clock, is modulated by slow
+       * caustic light bands, and flares cyan where the wake field is strong.
+       * Dots are bucketed by colour/alpha so each bucket is one fillStyle.
+       */
+      drawDots(t) {
+        const { ctx, cols, rows, cw, ch, dotKind, dotPhase, dotFreq, energy, sharkFlag, sharkShadow, fishStamp, frameId } = this;
+        const { bucketOf, bucketOrder, bucketCounts } = this;
+        const n = cols * rows;
+        const SKIP = bucketCounts.length - 1;
+        bucketCounts.fill(0);
+        for (let i = 0; i < n; i++) {
+          const e = energy[i];
+          const kind = dotKind[i];
+          if (sharkFlag[i] || fishStamp[i] === frameId || kind === 0 && e < 0.45) {
+            bucketOf[i] = SKIP;
+            continue;
+          }
+          let bucket;
+          if (e > 0.45) {
+            const level = clamp(Math.floor((e - 0.45) * 5), 0, ALPHA_LEVELS - 1);
+            bucket = WAKE * ALPHA_LEVELS + level;
+          } else {
+            const col = i % cols;
+            const row = i / cols | 0;
+            const twinkle = 0.5 + 0.5 * Math.sin(t * dotFreq[i] + dotPhase[i]);
+            const caustic = 0.85 + 0.15 * Math.sin(col * 0.11 + t * 0.35) * Math.sin(row * 0.17 - t * 0.27);
+            let v = clamp((0.55 + 0.45 * twinkle) * caustic + e * 2, 0, 1);
+            if (sharkShadow[i]) v *= 0.2;
+            bucket = (kind - 1) * ALPHA_LEVELS + clamp(Math.floor(v * ALPHA_LEVELS), 0, ALPHA_LEVELS - 1);
+          }
+          bucketOf[i] = bucket;
+          bucketCounts[bucket]++;
+        }
+        const starts = new Int32Array(bucketCounts.length);
+        for (let b = 1; b < bucketCounts.length; b++) starts[b] = starts[b - 1] + bucketCounts[b - 1];
+        const cursor = starts.slice();
+        for (let i = 0; i < n; i++) {
+          const b = bucketOf[i];
+          if (b !== SKIP) bucketOrder[cursor[b]++] = i;
+        }
+        const small = Math.max(2, Math.round(cw * 0.19));
+        const large = small + 1;
+        for (let b = 0; b < SKIP; b++) {
+          const count = bucketCounts[b];
+          if (!count) continue;
+          ctx.fillStyle = this.dotStyles[b];
+          const size = b >= WAKE * ALPHA_LEVELS ? large : small;
+          const start = starts[b];
+          for (let k = start; k < start + count; k++) {
+            const i = bucketOrder[k];
+            const col = i % cols;
+            const row = i / cols | 0;
+            ctx.fillRect(Math.round(col * cw + cw * 0.66 - size / 2), Math.round(row * ch + ch * 0.64 - size / 2), size, size);
+          }
+        }
+      }
+    };
+
+    // client/src/whaleInk.js
+    var HUE_PERIOD_S = 42;
+    var WHALE_BASE = {
+      black: {
+        light: { r: 0, g: 0, b: 0 },
+        dark: { r: 238, g: 237, b: 232 }
+      },
+      blue: {
+        light: { r: 65, g: 118, b: 230 },
+        dark: { r: 122, g: 170, b: 255 }
+      }
+    };
+    function hsv(h, s2, v) {
+      const c = v * s2;
+      const hh = (h % 360 + 360) % 360 / 60;
+      const x = c * (1 - Math.abs(hh % 2 - 1));
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      if (hh < 1) {
+        r = c;
+        g = x;
+      } else if (hh < 2) {
+        r = x;
+        g = c;
+      } else if (hh < 3) {
+        g = c;
+        b = x;
+      } else if (hh < 4) {
+        g = x;
+        b = c;
+      } else if (hh < 5) {
+        r = x;
+        b = c;
+      } else {
+        r = c;
+        b = x;
+      }
+      const m = v - c;
+      return {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255)
+      };
+    }
+    function whaleInkColor(ink, options) {
+      const opts = options || {};
+      const dark = opts.dark === true;
+      const fixed = WHALE_BASE[ink] || WHALE_BASE.black;
+      if (ink !== "live") {
+        const base = dark ? fixed.dark : fixed.light;
+        return { r: base.r, g: base.g, b: base.b };
+      }
+      const raw = Number(opts.time);
+      const time = Number.isFinite(raw) ? raw : 0;
+      const hue = time / HUE_PERIOD_S * 360;
+      return dark ? hsv(hue, 0.52, 0.95) : hsv(hue, 0.78, 0.62);
+    }
+
+    // client/src/ocean.js
+    function createTestWorld(options) {
+      const opts = options || {};
+      const width = Number(opts.width) > 0 ? Number(opts.width) : 703;
+      const height = Number(opts.height) > 0 ? Number(opts.height) : 837;
+      const cellW = Number(opts.cellW) > 0 ? Number(opts.cellW) : 12;
+      const cellH = Number(opts.cellH) > 0 ? Number(opts.cellH) : 18;
+      const previous = Math.random;
+      const state = { value: Number.isFinite(opts.seed) ? Math.floor(opts.seed) : 1 };
+      Math.random = function() {
+        state.value = Math.imul(state.value, 1664525) + 1013904223 >>> 0;
+        return state.value / 4294967296;
+      };
+      try {
+        const world = new World(
+          opts.specs || SHARK_SPECS,
+          opts.fish === void 0 ? 0 : Math.max(0, Math.floor(opts.fish))
+        );
+        world.resize(width, height, cellW, cellH);
+        return world;
+      } finally {
+        Math.random = previous;
+      }
+    }
+    function stepTestWorld(world, seconds, dt, onFrame) {
+      if (!world) return 0;
+      const step = Number(dt) > 0 && Number.isFinite(Number(dt)) ? Number(dt) : 1 / 60;
+      const frames = Math.max(0, Math.round((Number(seconds) || 0) / step));
+      for (let frame = 0; frame < frames; frame += 1) {
+        world.step(step);
+        if (typeof onFrame === "function") onFrame(world, frame, step);
+      }
+      return frames;
+    }
+    var OCEAN_ATTR = "data-cds-hero-ocean";
     var CONTENT_ANCHOR = "[data-conversation-content]";
     var SCROLL_ANCHOR = "[data-conversation-scroll]";
     var PHASE_ATTR = "data-content-phase";
     var HERO_PHASE = "hero";
-    var GLYPH_TOKENS = [
-      "{",
-      "}",
-      "<",
-      ">",
-      "/",
-      "\\",
-      "=",
-      ";",
-      ":",
-      "(",
-      ")",
-      "[",
-      "]",
-      "#",
-      "$",
-      "*",
-      "+",
-      "-",
-      "&",
-      "|",
-      "!",
-      "?",
-      "~",
-      "^",
-      "%",
-      "_",
-      "@",
-      '"'
+    var SHARK_SPECS = [
+      { kind: "classic", size: 0.9 },
+      { kind: "hammerhead", size: 0.8 },
+      { kind: "mako", size: 0.7 }
     ];
+    var FISH_COUNT = 110;
     var FALLBACK_PALETTE = {
       accent: "#d97757",
       text: "#1f1e1d",
+      bg: "#faf9f5",
       dark: false
     };
     var TUNING = {
-      cell: 118,
-      maxGlyphs: 110,
-      baseAlpha: 0.055,
-      darkBaseAlpha: 0.075,
-      glow: 2.6,
-      waveGain: 0.52,
-      waveSigma: 150,
-      ringLife: 1700,
-      maxRadius: 0.58,
-      maxRipples: 4,
-      ringAlpha: 0.1,
-      frameMs: 33,
-      idleMs: 160,
       maxDpr: 2,
       /**
        * Refuse a measured backdrop larger than this, in CSS px.
@@ -1882,91 +3497,40 @@ window.__ModuleLoader__.load({
        * loop between the bitmap attributes and the measurement grows without bound.
        * 16384 is the ceiling of a single canvas dimension in Chromium anyway.
        */
-      maxField: 16384
+      maxField: 16384,
+      frameMs: 33,
+      step: 1 / 60,
+      maxSubsteps: 3,
+      /** Reduced motion: how many fixed steps to settle before the single paint. */
+      settleSteps: 240
     };
-    function createRng(seed2) {
-      let state = (Number(seed2) || 1) >>> 0;
-      return function next() {
-        state = state + 1831565813 >>> 0;
-        let t = state;
-        t = Math.imul(t ^ t >>> 15, t | 1);
-        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-      };
-    }
-    function gridFor(width, height, tuning) {
-      const opts = tuning === void 0 ? TUNING : tuning;
-      const w = Number(width) || 0;
-      const h = Number(height) || 0;
-      if (w <= 0 || h <= 0) return { cols: 0, rows: 0, cell: opts.cell, count: 0 };
-      const cols = Math.max(1, Math.ceil(w / opts.cell));
-      const rows = Math.max(1, Math.ceil(h / opts.cell));
-      return { cols, rows, cell: opts.cell, count: cols * rows };
-    }
-    function glyphCount(width, height) {
-      const grid = gridFor(width, height);
-      return Math.min(TUNING.maxGlyphs, grid.count);
-    }
-    function layoutGlyphs(width, height, seed2) {
-      const grid = gridFor(width, height);
-      if (grid.count === 0) return [];
-      const rng = createRng(seed2 === void 0 ? 1 : seed2);
-      const glyphs = [];
-      for (let row = 0; row < grid.rows; row += 1) {
-        for (let col = 0; col < grid.cols; col += 1) {
-          if (glyphs.length >= TUNING.maxGlyphs) return glyphs;
-          const token = GLYPH_TOKENS[Math.floor(rng() * GLYPH_TOKENS.length) % GLYPH_TOKENS.length];
-          glyphs.push({
-            text: token,
-            x: Math.min(width, (col + 0.16 + rng() * 0.68) * grid.cell),
-            y: Math.min(height, (row + 0.2 + rng() * 0.62) * grid.cell),
-            size: 9 + rng() * 16,
-            // A per-glyph resting weight so the field has depth without animation.
-            weight: 0.3 + rng() * 0.7,
-            // A small tilt: enough to break the lattice, small enough that punctuation
-            // still reads as punctuation.
-            rotate: (rng() - 0.5) * 0.7,
-            phase: rng() * Math.PI * 2,
-            drift: 0.4 + rng() * 0.9
-          });
+    function parseInk(value, fallback) {
+      const text = String(value === void 0 || value === null ? "" : value).trim();
+      const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text);
+      if (hex !== null) {
+        const digits = hex[1];
+        if (digits.length === 3) {
+          return {
+            r: parseInt(digits[0] + digits[0], 16),
+            g: parseInt(digits[1] + digits[1], 16),
+            b: parseInt(digits[2] + digits[2], 16)
+          };
         }
+        return {
+          r: parseInt(digits.slice(0, 2), 16),
+          g: parseInt(digits.slice(2, 4), 16),
+          b: parseInt(digits.slice(4, 6), 16)
+        };
       }
-      return glyphs;
-    }
-    function rippleProgress(ageMs, lifeMs) {
-      const life = lifeMs === void 0 ? TUNING.ringLife : lifeMs;
-      if (!(life > 0)) return 1;
-      return Math.max(0, Math.min(1, (Number(ageMs) || 0) / life));
-    }
-    function easeOutCubic(p) {
-      const t = Math.max(0, Math.min(1, Number(p) || 0));
-      return 1 - Math.pow(1 - t, 3);
-    }
-    function rippleRadius(ageMs, maxRadius, lifeMs) {
-      const p = rippleProgress(ageMs, lifeMs);
-      return easeOutCubic(p) * (Number(maxRadius) || 0);
-    }
-    function waveStrength(distance, ageMs, maxRadius, tuning) {
-      const opts = tuning === void 0 ? TUNING : tuning;
-      const age = Number(ageMs) || 0;
-      if (age < 0 || age > opts.ringLife) return 0;
-      const radius = rippleRadius(age, maxRadius, opts.ringLife);
-      const offset = (Number(distance) || 0) - radius;
-      const sigma = opts.waveSigma;
-      const band = Math.exp(-(offset * offset) / (2 * sigma * sigma));
-      const life = 1 - rippleProgress(age, opts.ringLife);
-      return band * Math.pow(life, 1.6) * opts.waveGain;
-    }
-    function totalWave(distance, ageMsList, maxRadius, tuning) {
-      let sum = 0;
-      for (const age of ageMsList) sum += waveStrength(distance, age, maxRadius, tuning);
-      return sum;
-    }
-    function restingAlpha(glyph, seconds, tuning) {
-      const opts = tuning === void 0 ? TUNING : tuning;
-      const base = opts.baseAlpha;
-      const breath = 0.72 + 0.28 * Math.sin(seconds * glyph.drift + glyph.phase);
-      return base * glyph.weight * breath;
+      const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(text);
+      if (rgb !== null) {
+        return {
+          r: Math.round(Number(rgb[1])),
+          g: Math.round(Number(rgb[2])),
+          b: Math.round(Number(rgb[3]))
+        };
+      }
+      return fallback ? { r: fallback.r, g: fallback.g, b: fallback.b } : { r: 34, g: 34, b: 34 };
     }
     function readPalette(doc, node) {
       const target = node || doc && doc.body;
@@ -1984,12 +3548,28 @@ window.__ModuleLoader__.load({
       }
       const accent = String(computed.getPropertyValue("--dsw-alias-brand-primary") || "").trim();
       const text = String(computed.getPropertyValue("--dsw-alias-label-primary") || "").trim();
+      const bg = String(computed.getPropertyValue("--dsw-alias-bg-base") || "").trim();
       const dark = !!(doc.body && typeof doc.body.hasAttribute === "function" && doc.body.hasAttribute("data-ds-dark-theme"));
       return {
         accent: accent === "" ? FALLBACK_PALETTE.accent : accent,
         text: text === "" ? dark ? "#eeede8" : FALLBACK_PALETTE.text : text,
+        bg: bg === "" ? dark ? "#1a1a18" : FALLBACK_PALETTE.bg : bg,
         dark
       };
+    }
+    function themeFor(palette) {
+      const dark = !!palette.dark;
+      return {
+        ink: parseInk(palette.text, dark ? { r: 238, g: 237, b: 232 } : { r: 31, g: 30, b: 29 }),
+        bg: parseInk(palette.bg, dark ? { r: 26, g: 26, b: 24 } : { r: 250, g: 249, b: 245 }),
+        accent: parseInk(palette.accent, { r: 217, g: 119, b: 87 }),
+        dark
+      };
+    }
+    function normalizedInk(value) {
+      if (value === "blue" || value === "live") return value;
+      if (value === "deepseek") return "blue";
+      return "black";
     }
     function prefersReducedMotion(view) {
       if (!view || typeof view.matchMedia !== "function") return false;
@@ -2012,9 +3592,9 @@ window.__ModuleLoader__.load({
     }
     function markedCanvas(root) {
       if (!root || typeof root.querySelector !== "function") return null;
-      return root.querySelector("[" + RIPPLE_ATTR + "]");
+      return root.querySelector("[" + OCEAN_ATTR + "]");
     }
-    function createHeroRipple(options) {
+    function createHeroOcean(options) {
       const opts = options || {};
       const doc = opts.doc;
       const view = opts.view !== void 0 ? opts.view : doc && doc.defaultView ? doc.defaultView : null;
@@ -2028,21 +3608,23 @@ window.__ModuleLoader__.load({
       let host = null;
       let canvas = null;
       let ctx = null;
-      let glyphs = [];
-      let ripples = [];
+      let world = null;
+      let renderer = null;
       let palette = Object.assign({}, FALLBACK_PALETTE);
       let paletteDirty = true;
+      let whaleInk = opts.whaleInk === void 0 ? "black" : normalizedInk(opts.whaleInk);
       let observer = null;
       let sizeObserver = null;
       let reduceMotion = false;
+      let motionQuery = null;
       let rafId = null;
       let lastFrame = -Infinity;
+      let acc = 0;
       let sizeDirty = true;
       let fieldW = 0;
       let fieldH = 0;
       let dpr = 1;
       let painted = 0;
-      const seed2 = 24301;
       function requestFrame(fn) {
         if (view && typeof view.requestAnimationFrame === "function") {
           return view.requestAnimationFrame(fn);
@@ -2069,24 +3651,29 @@ window.__ModuleLoader__.load({
         if (width > TUNING.maxField || height > TUNING.maxField) return null;
         return { width, height };
       }
-      function resize(force) {
-        if (!canvas) return false;
-        const size = measure();
-        if (size === null) return false;
-        const width = size.width;
-        const height = size.height;
+      function applySize(width, height) {
         const ratio = Math.min(
           TUNING.maxDpr,
           Math.max(1, Number(view && view.devicePixelRatio) || 1)
         );
-        if (!force && width === fieldW && height === fieldH && ratio === dpr) return true;
         fieldW = width;
         fieldH = height;
         dpr = ratio;
-        canvas.width = Math.round(width * ratio);
-        canvas.height = Math.round(height * ratio);
-        glyphs = layoutGlyphs(width, height, seed2);
+        renderer.resize(width, height, ratio);
+        if (!world) world = new World(SHARK_SPECS, FISH_COUNT);
+        world.resize(width, height, renderer.cellWidth, renderer.cellHeight);
         if (ctx && typeof ctx.setTransform === "function") ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+      function resize(force) {
+        if (!canvas || !renderer) return false;
+        const size = measure();
+        if (size === null) return false;
+        const ratio = Math.min(
+          TUNING.maxDpr,
+          Math.max(1, Number(view && view.devicePixelRatio) || 1)
+        );
+        if (!force && size.width === fieldW && size.height === fieldH && ratio === dpr) return true;
+        applySize(size.width, size.height);
         return true;
       }
       function clear() {
@@ -2100,61 +3687,19 @@ window.__ModuleLoader__.load({
         if (paletteDirty) {
           palette = readPalette(doc, canvas);
           paletteDirty = false;
+          if (renderer) renderer.setTheme(themeFor(palette));
         }
         return palette;
       }
-      function draw(timeMs) {
-        if (!ctx || fieldW === 0 || fieldH === 0) {
+      function draw() {
+        if (!ctx || !renderer || !world || fieldW === 0 || fieldH === 0) {
           painted = 0;
           return;
         }
-        const colors = currentPalette();
-        const seconds = timeMs / 1e3;
-        const tuning = colors.dark ? Object.assign({}, TUNING, { baseAlpha: TUNING.darkBaseAlpha }) : TUNING;
-        const maxRadius = Math.max(fieldW, fieldH) * TUNING.maxRadius;
-        const live = [];
-        for (const ripple of ripples) {
-          const age = timeMs - ripple.born;
-          if (age < 0 || age > TUNING.ringLife) continue;
-          live.push({ ripple, age });
-        }
-        ripples = live.map(function(entry) {
-          return entry.ripple;
-        });
-        if (typeof ctx.clearRect === "function") ctx.clearRect(0, 0, fieldW, fieldH);
-        let drawn = 0;
-        if (typeof ctx.fillText === "function") {
-          if ("shadowColor" in ctx) {
-            ctx.shadowColor = colors.accent;
-            ctx.shadowBlur = TUNING.glow * 4;
-          }
-          ctx.fillStyle = colors.accent;
-          for (const glyph of glyphs) {
-            let wave = 0;
-            for (const entry of live) {
-              const dx = glyph.x - entry.ripple.x;
-              const dy = glyph.y - entry.ripple.y;
-              wave += waveStrength(Math.sqrt(dx * dx + dy * dy), entry.age, maxRadius);
-            }
-            const alpha = Math.min(1, restingAlpha(glyph, seconds, tuning) + wave);
-            if (alpha <= 4e-3) continue;
-            ctx.globalAlpha = alpha;
-            ctx.font = String(Math.round(glyph.size)) + "px " + (opts.fontFamily || "ui-monospace, monospace");
-            if (glyph.rotate !== 0 && typeof ctx.save === "function" && typeof ctx.rotate === "function") {
-              ctx.save();
-              ctx.translate(glyph.x, glyph.y);
-              ctx.rotate(glyph.rotate);
-              ctx.fillText(glyph.text, 0, 0);
-              ctx.restore();
-            } else {
-              ctx.fillText(glyph.text, glyph.x, glyph.y);
-            }
-            drawn += 1;
-          }
-        }
-        ctx.globalAlpha = 1;
-        if ("shadowBlur" in ctx) ctx.shadowBlur = 0;
-        painted = drawn;
+        currentPalette();
+        renderer.setWhaleColor(whaleInkColor(whaleInk, { dark: palette.dark, time: world.time }));
+        renderer.render(world, TUNING.step);
+        painted = 1;
       }
       function frame(timestamp) {
         rafId = null;
@@ -2163,39 +3708,42 @@ window.__ModuleLoader__.load({
           return;
         }
         const time = typeof timestamp === "number" && isFinite(timestamp) ? timestamp : nowImpl();
-        const budget = ripples.length > 0 ? TUNING.frameMs : TUNING.idleMs;
-        if (time - lastFrame < budget - 1) {
+        if (lastFrame === -Infinity) lastFrame = time - TUNING.frameMs;
+        if (time - lastFrame < TUNING.frameMs - 1) {
           rafId = requestFrame(frame);
           return;
         }
+        let dt = (time - lastFrame) / 1e3;
+        if (!(dt > 0)) dt = TUNING.step;
         lastFrame = time;
-        if (!sizeDirty && fieldW > 0 && fieldH > 0) {
-          drawAfterBudget(time);
-          rafId = requestFrame(frame);
-          return;
-        }
-        sizeDirty = false;
-        if (!resize(false)) {
-          rafId = requestFrame(frame);
-          return;
-        }
-        drawAfterBudget(time);
-        rafId = requestFrame(frame);
-      }
-      function drawAfterBudget(time) {
-        if (ripples.length > 0) {
-          const keep = [];
-          for (const ripple of ripples) {
-            if (time - ripple.born <= TUNING.ringLife) keep.push(ripple);
+        dt = Math.min(0.1, dt);
+        if (sizeDirty) {
+          sizeDirty = false;
+          if (!resize(false)) {
+            rafId = requestFrame(frame);
+            return;
           }
-          ripples = keep;
         }
-        draw(time);
+        if (world && renderer && fieldW > 0 && fieldH > 0) {
+          acc += dt;
+          let steps = 0;
+          while (acc >= TUNING.step && steps < TUNING.maxSubsteps) {
+            world.step(TUNING.step);
+            acc -= TUNING.step;
+            steps += 1;
+          }
+          if (steps === TUNING.maxSubsteps) acc = 0;
+          draw();
+        }
+        rafId = requestFrame(frame);
       }
       function startLoop() {
         if (rafId !== null) return;
         if (reduceMotion) {
-          if (resize(true)) draw(nowImpl());
+          if (resize(true)) {
+            for (let i = 0; i < TUNING.settleSteps; i += 1) world.step(TUNING.step);
+            draw();
+          }
           return;
         }
         rafId = requestFrame(frame);
@@ -2204,27 +3752,55 @@ window.__ModuleLoader__.load({
         cancelFrame(rafId);
         rafId = null;
       }
-      function pushRipple(x, y) {
-        if (reduceMotion) return false;
-        const px = Number(x);
-        const py = Number(y);
-        if (!isFinite(px) || !isFinite(py)) return false;
-        ripples.push({ x: px, y: py, born: nowImpl() });
-        if (ripples.length > TUNING.maxRipples) ripples.splice(0, ripples.length - TUNING.maxRipples);
+      function pushLureAt(x, y) {
+        if (reduceMotion || !world) return false;
+        if (!isFinite(Number(x)) || !isFinite(Number(y))) return false;
+        world.lure(Number(x), Number(y));
         startLoop();
         return true;
       }
+      function localPoint(event) {
+        if (!canvas) return null;
+        if (!event || typeof event.clientX !== "number" || typeof event.clientY !== "number") return null;
+        const origin = canvas.parentElement;
+        if (!origin || typeof origin.getBoundingClientRect !== "function") return null;
+        const rect = origin.getBoundingClientRect();
+        const x = event.clientX - (rect.left || 0);
+        const y = event.clientY - (rect.top || 0);
+        return {
+          x,
+          y,
+          inside: x >= 0 && y >= 0 && x <= (rect.width || 0) && y <= (rect.height || 0)
+        };
+      }
       function onPointerDown(event) {
         if (!started || !isHero() || !canvas) return;
-        if (!event || typeof event.clientX !== "number" || typeof event.clientY !== "number") return;
-        const origin = canvas.parentElement;
-        if (!origin || typeof origin.getBoundingClientRect !== "function") return;
-        const rect = origin.getBoundingClientRect();
-        pushRipple(event.clientX - (rect.left || 0), event.clientY - (rect.top || 0));
+        const point = localPoint(event);
+        if (point === null || !point.inside || event.button > 0) return;
+        pushLureAt(point.x, point.y);
+      }
+      function onPointerMove(event) {
+        if (!started || !world) return;
+        if (event && event.pointerType === "touch") {
+          world.pointer.active = false;
+          return;
+        }
+        const point = localPoint(event);
+        if (point === null || !point.inside) {
+          world.pointer.active = false;
+          return;
+        }
+        world.pointer.x = point.x;
+        world.pointer.y = point.y;
+        world.pointer.active = true;
+      }
+      function onPointerLeave() {
+        if (world) world.pointer.active = false;
       }
       function attachLayer(target) {
         const node = doc.createElement("canvas");
-        node.setAttribute(RIPPLE_ATTR, "");
+        node.setAttribute(OCEAN_ATTR, "");
+        node.setAttribute("data-cds-ocean-motion", "head-trail-v1");
         node.setAttribute("aria-hidden", "true");
         target.insertBefore(node, target.firstChild);
         return node;
@@ -2240,8 +3816,11 @@ window.__ModuleLoader__.load({
         }
         canvas = null;
         ctx = null;
+        renderer = null;
+        world = null;
         fieldW = 0;
         fieldH = 0;
+        acc = 0;
       }
       function onResize() {
         if (!started) return;
@@ -2262,25 +3841,48 @@ window.__ModuleLoader__.load({
         }
         if (sizeObserver === null) sizeDirty = true;
       }
+      function bindCanvas() {
+        if (!canvas) return;
+        if (typeof canvas.getContext === "function") ctx = canvas.getContext("2d");
+        renderer = new AsciiRenderer(canvas, doc);
+        if (view && typeof view.getComputedStyle === "function") {
+          const computed = view.getComputedStyle(canvas);
+          if (computed && computed.fontFamily) renderer.setFontFamily(computed.fontFamily);
+        }
+        world = null;
+        paletteDirty = true;
+      }
+      function unbindCanvas() {
+        if (ctx && typeof ctx.setTransform === "function") {
+        }
+        ctx = null;
+        renderer = null;
+        world = null;
+      }
       function sweep() {
         if (!started) return null;
         const found = findHeroHost(doc);
         if (!found) {
           if (host && typeof host.content.removeEventListener === "function") {
             host.content.removeEventListener("pointerdown", onPointerDown);
+            host.content.removeEventListener("pointermove", onPointerMove);
+            host.content.removeEventListener("pointerleave", onPointerLeave);
           }
           detachLayer();
           host = null;
-          glyphs = [];
           clear();
           return null;
         }
         if (host === null || host.content !== found.content) {
           if (host && typeof host.content.removeEventListener === "function") {
             host.content.removeEventListener("pointerdown", onPointerDown);
+            host.content.removeEventListener("pointermove", onPointerMove);
+            host.content.removeEventListener("pointerleave", onPointerLeave);
           }
           if (typeof found.content.addEventListener === "function") {
             found.content.addEventListener("pointerdown", onPointerDown);
+            found.content.addEventListener("pointermove", onPointerMove);
+            found.content.addEventListener("pointerleave", onPointerLeave);
           }
         }
         host = found;
@@ -2288,11 +3890,11 @@ window.__ModuleLoader__.load({
         if (existing === null) {
           detachLayer();
           canvas = attachLayer(host.content);
-          if (canvas && typeof canvas.getContext === "function") ctx = canvas.getContext("2d");
+          bindCanvas();
           watchSize(canvas);
         } else if (existing !== canvas) {
           canvas = existing;
-          if (typeof canvas.getContext === "function") ctx = canvas.getContext("2d");
+          bindCanvas();
           watchSize(canvas);
         }
         paletteDirty = true;
@@ -2366,9 +3968,18 @@ window.__ModuleLoader__.load({
           startLoop();
         } else {
           stopLoop();
-          ripples = [];
+          if (world) world.lures.length = 0;
           clear();
         }
+      }
+      function onMotionChange(event) {
+        const next = event.matches === true;
+        if (!started || next === reduceMotion) return;
+        reduceMotion = next;
+        stopLoop();
+        lastFrame = -Infinity;
+        acc = 0;
+        if (isHero()) startLoop();
       }
       function onVisibility() {
         if (!started) return;
@@ -2383,6 +3994,16 @@ window.__ModuleLoader__.load({
           if (started || !doc) return;
           started = true;
           reduceMotion = prefersReducedMotion(view);
+          if (view && typeof view.matchMedia === "function") {
+            try {
+              motionQuery = view.matchMedia("(prefers-reduced-motion: reduce)");
+            } catch {
+              motionQuery = null;
+            }
+            if (motionQuery && typeof motionQuery.addEventListener === "function") {
+              motionQuery.addEventListener("change", onMotionChange);
+            }
+          }
           sweep();
           const Obs = ObserverImpl;
           if (Obs && doc.body && typeof Obs === "function") {
@@ -2398,30 +4019,59 @@ window.__ModuleLoader__.load({
             doc.addEventListener("visibilitychange", onVisibility);
           }
         },
-        /** Remove the layer, the listener and the loop. Safe to call twice. */
+        /** Remove the layer, the listeners and the loop. Safe to call twice. */
         stop() {
           if (!started) return;
           started = false;
           stopLoop();
+          if (motionQuery && typeof motionQuery.removeEventListener === "function") {
+            motionQuery.removeEventListener("change", onMotionChange);
+          }
+          motionQuery = null;
           if (observer) {
             observer.disconnect();
             observer = null;
           }
           if (host && host.content && typeof host.content.removeEventListener === "function") {
             host.content.removeEventListener("pointerdown", onPointerDown);
+            host.content.removeEventListener("pointermove", onPointerMove);
+            host.content.removeEventListener("pointerleave", onPointerLeave);
           }
           if (doc && typeof doc.removeEventListener === "function") {
             doc.removeEventListener("visibilitychange", onVisibility);
           }
-          ripples = [];
           detachLayer();
           host = null;
-          glyphs = [];
+          acc = 0;
         },
         sweep,
         syncPhase,
         refresh: refreshPalette,
-        pushRipple,
+        pushLure: pushLureAt,
+        /**
+         * Change the whale pigment while the layer is up.
+         *
+         * Applied on the NEXT paint rather than immediately: `draw()` resolves it per
+         * frame (which is what makes the animated mode free), so a colour set here is
+         * picked up on the next tick with no remount and no palette re-read. Under
+         * reduced motion there is no loop, so the single settled frame is repainted
+         * here — otherwise a colour change would silently do nothing on a machine
+         * that asked for less motion, which is the one case a user cannot diagnose.
+         */
+        setWhaleInk(value) {
+          const next = normalizedInk(value);
+          if (next === whaleInk) return next;
+          whaleInk = next;
+          if (reduceMotion && started) draw();
+          return next;
+        },
+        get whaleInk() {
+          return whaleInk;
+        },
+        /** The colour the LAST painted frame used (tests and console probes). */
+        get whaleColor() {
+          return renderer ? Object.assign({}, renderer.whaleColor) : null;
+        },
         get started() {
           return started;
         },
@@ -2431,17 +4081,21 @@ window.__ModuleLoader__.load({
         get canvas() {
           return canvas;
         },
-        get ripples() {
-          return ripples.slice();
+        /** The vendored simulation, exposed for tests and console probes. */
+        get world() {
+          return world;
         },
-        get glyphs() {
-          return glyphs.slice();
+        get lures() {
+          return world ? world.lures.slice() : [];
         },
         get painted() {
           return painted;
         },
         get reducedMotion() {
           return reduceMotion;
+        },
+        get field() {
+          return { width: fieldW, height: fieldH, dpr };
         },
         /** The palette last read from the live document (tests and verify read it). */
         get palette() {
@@ -4857,7 +6511,7 @@ window.__ModuleLoader__.load({
         "}"
       ].join("\n");
     }
-    function heroRippleRules() {
+    function heroOceanRules() {
       return [
         "/* ---- blank-session backdrop: layer promotion + see-through card ---- */",
         '[data-conversation-content][data-content-phase="hero"] {',
@@ -4875,7 +6529,7 @@ window.__ModuleLoader__.load({
         // then covered a quarter of the screen with nothing drawable in the visible
         // part). The percentages pin the CSS box to the containing block so the
         // bitmap can never feed back into layout.
-        "[" + RIPPLE_ATTR + "] {",
+        "[" + OCEAN_ATTR + "] {",
         "  position: absolute;",
         "  inset: 0;",
         "  width: 100%;",
@@ -4936,7 +6590,7 @@ window.__ModuleLoader__.load({
       const themeMode2 = themeModeRules(themeModeAvailable !== false);
       if (themeMode2 !== null) parts.push(themeMode2);
       parts.push(newSessionInputRules());
-      if (state.heroRipple !== false) parts.push(heroRippleRules());
+      if (state.heroRipple !== false) parts.push(heroOceanRules());
       parts.push(motionTokenRules());
       parts.push(uiFontRules());
       if (state.refine) {
@@ -5079,8 +6733,13 @@ window.__ModuleLoader__.load({
       "pasteFile.fileName": "pasted-text-{stamp}.txt",
       "preferThemeCjk.title": "Prefer calibrated Chinese fonts",
       "preferThemeCjk.desc": "Use the embedded Noto Sans SC before system fallbacks in body text and code; the home greeting keeps Noto Serif SC. Off restores the previous order. Explicit font choices take priority.",
-      "heroRipple.title": "Home backdrop with click ripples",
-      "heroRipple.desc": "On a new session, faint code glyphs glow behind the greeting and the composer, and a ripple spreads from every click. The composer turns slightly see-through so the wave passes under it. Off removes the layer entirely.",
+      "heroRipple.title": "Home backdrop: an ASCII ocean",
+      "heroRipple.desc": "On a new session, an ASCII ocean drifts behind the greeting and the composer: two schools of dashes and three whales that swim freely. Clicking disturbs the water where you click: the fish scatter and a blue pulse spreads out. Clicking does not steer the whales. The composer turns slightly see-through so the ocean passes under it. Off removes the layer entirely.",
+      "whaleInk.title": "Whale colour",
+      "whaleInk.desc": "The colour of the three whales in the home backdrop. Black is the shipped default; DeepSeek blue is the product\u2019s own brand blue; Live drifts the hue around the wheel so the school slowly changes colour as it swims.",
+      "whaleInk.black": "Black",
+      "whaleInk.blue": "DeepSeek blue",
+      "whaleInk.live": "Live",
       "diffPreview.title": "Diff preview on hover",
       "diffPreview.desc": 'Hovering a file row in the end-of-turn "Edited N files" card opens a comparison. Off hides that hover panel; the card and its per-file counts stay, and the edit card still shows the full diff.',
       "enabled.title": "Enable CDS theme",
@@ -5135,8 +6794,13 @@ window.__ModuleLoader__.load({
       "pasteFile.fileName": "\u7C98\u8D34\u6587\u672C-{stamp}.txt",
       "preferThemeCjk.title": "\u4E2D\u6587\u4F18\u5148\u4F7F\u7528\u4E3B\u9898\u5B57\u4F53",
       "preferThemeCjk.desc": "\u6B63\u6587\u4E0E\u4EE3\u7801\u4E2D\u7684\u4E2D\u6587\u4F18\u5148\u4F7F\u7528\u5185\u5D4C\u3001\u6821\u51C6\u5B57\u91CD\u7684\u601D\u6E90\u9ED1\u4F53\uFF0C\u9996\u9875\u95EE\u5019\u8BED\u4ECD\u7528\u601D\u6E90\u5B8B\u4F53\uFF1B\u5173\u95ED\u6062\u590D\u539F\u56DE\u9000\u987A\u5E8F\u3002\u624B\u52A8\u9009\u62E9\u7684\u5B57\u4F53\u59CB\u7EC8\u4F18\u5148\u3002",
-      "heroRipple.title": "\u9996\u9875\u80CC\u666F\u70B9\u51FB\u6CE2\u7EB9",
-      "heroRipple.desc": "\u65B0\u4F1A\u8BDD\u65F6\uFF0C\u95EE\u5019\u8BED\u4E0E\u8F93\u5165\u6846\u80CC\u540E\u6D6E\u51FA\u4E00\u5C42\u6DE1\u7684\u4EE3\u7801\u5B57\u5F62\uFF0C\u6BCF\u6B21\u70B9\u51FB\u4ECE\u5149\u6807\u5904\u8361\u5F00\u6C34\u6CE2\u3002\u8F93\u5165\u6846\u4F1A\u7565\u900F\uFF0C\u8BA9\u6CE2\u7EB9\u4ECE\u5E95\u4E0B\u900F\u51FA\u6765\u3002\u5173\u95ED\u5373\u6574\u5C42\u79FB\u9664\u3002",
+      "heroRipple.title": "\u9996\u9875\u80CC\u666F\uFF1AASCII \u6D77\u6D0B",
+      "heroRipple.desc": "\u65B0\u4F1A\u8BDD\u65F6\uFF0C\u95EE\u5019\u8BED\u4E0E\u8F93\u5165\u6846\u80CC\u540E\u6E38\u52A8\u7740\u4E00\u7247 ASCII \u6D77\u6D0B\uFF1A\u4E24\u7FA4\u9C7C\u548C\u4E09\u6761\u81EA\u7531\u6E38\u52A8\u7684\u9CB8\u9C7C\u3002\u70B9\u51FB\u53EA\u6270\u52A8\u90A3\u5904\u6C34\u9762\uFF1A\u9C7C\u7FA4\u6563\u5F00\u3001\u4E00\u5708\u84DD\u8272\u8109\u51B2\u6269\u6563\u5F00\uFF1B\u70B9\u51FB\u4E0D\u4F1A\u6539\u53D8\u9CB8\u9C7C\u7684\u6E38\u52A8\u65B9\u5411\u3002\u8F93\u5165\u6846\u4F1A\u7565\u900F\uFF0C\u8BA9\u6D77\u6D0B\u4ECE\u5E95\u4E0B\u900F\u51FA\u6765\u3002\u5173\u95ED\u5373\u6574\u5C42\u79FB\u9664\u3002",
+      "whaleInk.title": "\u9CB8\u9C7C\u989C\u8272",
+      "whaleInk.desc": "\u9996\u9875\u80CC\u666F\u91CC\u4E09\u6761\u9CB8\u9C7C\u7684\u989C\u8272\u3002\u9ED1\u8272\u662F\u9ED8\u8BA4\u503C\uFF1BDeepSeek \u84DD\u7528\u4EA7\u54C1\u81EA\u5DF1\u7684\u54C1\u724C\u84DD\uFF1B\u53D8\u8272\u4F1A\u8BA9\u9CB8\u9C7C\u6CBF\u7740\u8272\u73AF\u7F13\u6162\u6362\u8272\uFF0C\u770B\u4E45\u4E86\u4E5F\u4E0D\u817B\u3002",
+      "whaleInk.black": "\u9ED1\u8272",
+      "whaleInk.blue": "DeepSeek \u84DD",
+      "whaleInk.live": "\u53D8\u8272",
       "diffPreview.title": "\u60AC\u505C\u663E\u793A\u5DEE\u5F02\u9884\u89C8",
       "diffPreview.desc": "\u9F20\u6807\u505C\u5728\u56DE\u5408\u7ED3\u675F\u300C\u6539\u52A8 N \u4E2A\u6587\u4EF6\u300D\u5361\u7247\u91CC\u7684\u6587\u4EF6\u884C\u4E0A\u65F6\uFF0C\u4F1A\u5F39\u51FA\u8BE5\u6587\u4EF6\u7684\u5DEE\u5F02\u5BF9\u6BD4\u3002\u5173\u95ED\u53EA\u662F\u4E0D\u518D\u5F39\u8FD9\u4E2A\u9884\u89C8\uFF1A\u5361\u7247\u4E0E\u6BCF\u884C\u589E\u5220\u6570\u7167\u5E38\u663E\u793A\uFF0C\u7F16\u8F91\u5361\u7247\u91CC\u7684\u5B8C\u6574\u5DEE\u5F02\u4E5F\u4ECD\u5728\u3002",
       "enabled.title": "\u542F\u7528 CDS \u4E3B\u9898",
@@ -5332,6 +6996,22 @@ window.__ModuleLoader__.load({
       "  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color); }",
       ".dct-mode-cube svg { flex: none; }",
       ".dct-mode-label { font-size: 13px; line-height: 20px; white-space: nowrap; }",
+      // The whale-colour swatch: one dot per option, the same 8px radius and 1px
+      // inset hairline as `.dct-swatch` so the two colour rows on this page read as
+      // one family. The fill comes from the two custom properties the row writes, so
+      // the dot shows the colour THAT THEME MODE will actually paint — the accent
+      // swatches below use the same technique and for the same reason.
+      //
+      // `live` is a conic gradient instead of a fill: it is the only option that has
+      // no single colour, and a flat dot would claim it does.
+      ".dct-ink-dot { flex: none; width: 14px; height: 14px; border-radius: 50%;",
+      "  background: var(--dct-whale-light);",
+      "  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }",
+      "body[data-ds-dark-theme] .dct-ink-dot { background: var(--dct-whale-dark); }",
+      ".dct-ink-dot-live { background: conic-gradient(from 0deg, #2050b8, #26b6a8, #b8a020, #b83074, #2050b8);",
+      "  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }",
+      "body[data-ds-dark-theme] .dct-ink-dot-live {",
+      "  background: conic-gradient(from 0deg, #7aaaff, #7ae0d2, #ffe082, #ff9ec4, #7aaaff); }",
       // The settings page frame for 「主题定制 / Theme」: one intro line above the
       // rows. The host's own sections are a plain column, so this matches them.
       ".dct-section { display: flex; flex-direction: column; width: 100%; }",
@@ -5528,6 +7208,61 @@ window.__ModuleLoader__.load({
           )
         );
       }
+      function WhaleInkRow(props) {
+        const t = makeT(props.t);
+        const state = useStoreValue(settings2, settings2.getState);
+        const cubes = WHALE_INKS.map(function(inkId) {
+          const selected = state.whaleInk === inkId;
+          const label = t("whaleInk." + inkId);
+          const swatch = inkId === "live" ? void 0 : {
+            // Both mode colours ride as custom properties; the stylesheet picks by
+            // theme mode, exactly like the accent swatches do.
+            "--dct-whale-light": "rgb(" + WHALE_BASE[inkId].light.r + " " + WHALE_BASE[inkId].light.g + " " + WHALE_BASE[inkId].light.b + ")",
+            "--dct-whale-dark": "rgb(" + WHALE_BASE[inkId].dark.r + " " + WHALE_BASE[inkId].dark.g + " " + WHALE_BASE[inkId].dark.b + ")"
+          };
+          return React2.createElement(
+            "button",
+            {
+              key: inkId,
+              type: "button",
+              className: "dct-mode-cube",
+              "data-ink": inkId,
+              "data-selected": selected ? "true" : "false",
+              "aria-pressed": selected,
+              title: label,
+              "aria-label": label,
+              onClick: function() {
+                settings2.setState({ whaleInk: inkId });
+              }
+            },
+            React2.createElement("span", {
+              className: "dct-ink-dot" + (inkId === "live" ? " dct-ink-dot-live" : ""),
+              "aria-hidden": "true",
+              style: swatch
+            }),
+            React2.createElement("span", { className: "dct-mode-label" }, label)
+          );
+        });
+        return React2.createElement(
+          "div",
+          { className: "dct-row" },
+          React2.createElement(
+            "div",
+            { className: "dct-row-text" },
+            React2.createElement("div", { className: "dct-title" }, t("whaleInk.title")),
+            React2.createElement("div", { className: "dct-desc" }, t("whaleInk.desc"))
+          ),
+          React2.createElement(
+            "div",
+            { className: "dct-control" },
+            React2.createElement(
+              "div",
+              { className: "dct-mode-cubes", role: "group", "aria-label": t("whaleInk.title") },
+              ...cubes
+            )
+          )
+        );
+      }
       function SliderRow(props) {
         const slot = props.slot;
         const t = makeT(props.t);
@@ -5703,6 +7438,10 @@ window.__ModuleLoader__.load({
           // retires into this seat: 42 was the hero-compaction switch and stays
           // vacant, and every other order below 40 belongs to a row that exists or
           // that the section test asserts vacant.
+          //
+          // The id, the key and the order are unchanged from the glyph-field era on
+          // purpose: the id is a DOM contract and the key is user data. Only the copy
+          // and what the layer draws changed.
           id: "dsh-cds-theme-hero-ripple",
           order: 44,
           key: "heroRipple",
@@ -5720,6 +7459,27 @@ window.__ModuleLoader__.load({
           }
         },
         {
+          // The whale pigment. Its own row because it is a CHOICE, not a switch: a
+          // toggle has exactly one off state and this has three (blue / DeepSeek /
+          // live).
+          //
+          // ORDER 49, NOT 45/46/47. Those three were vacated by rows that were deleted
+          // and, by the rule this file states below, a vacated number may never be
+          // reused — taking one would silently reorder the page against the layout the
+          // user reviewed. So the whale row takes the first number that nothing ever
+          // held, and the vacancy assertions keep their whole list. The cost is that
+          // it does not sit directly under the ocean switch (44); the copy carries the
+          // link instead, naming the backdrop as the thing being coloured.
+          id: "dsh-cds-theme-whale-ink",
+          order: 49,
+          key: "whaleInk",
+          titleKey: "whaleInk.title",
+          descKey: "whaleInk.desc",
+          component: function BoundWhaleInk(props) {
+            return React2.createElement(WhaleInkRow, { t: props.t });
+          }
+        },
+        {
           // The turn-changes hover preview is a CONVENIENCE, not a replication
           // item: it exists to show a comparison without opening the sidebar. Its
           // switch therefore only removes the preview, never the "Edited N files"
@@ -5730,7 +7490,7 @@ window.__ModuleLoader__.load({
           // row ever held. 45 is vacated with the markdown switch, 46/47 with the
           // removed reference-derived looks, and 40/41 belong to usage-stats on this
           // same page — reusing any of them would make a vacancy assertion read as a
-          // reordering of the settings page.
+          // reordering of the settings page. The whale-colour row takes 49.
           id: "dsh-cds-theme-diff-preview",
           order: 48,
           key: "diffPreview",
@@ -6646,8 +8406,8 @@ window.__ModuleLoader__.load({
       function dispatchMention(target, mention) {
         const live = liveInput(target);
         if (!live) return false;
-        const current = readComposerText(live);
-        const lead = current === "" || /\s$/.test(current) ? "" : " ";
+        const current2 = readComposerText(live);
+        const lead = current2 === "" || /\s$/.test(current2) ? "" : " ";
         const transfer = textTransfer(lead + mention + " ");
         if (!transfer) return false;
         return dispatchPaste(live, transfer);
@@ -6869,7 +8629,7 @@ window.__ModuleLoader__.load({
     function segmentsOf(body) {
       const children = body && body.children ? Array.prototype.slice.call(body.children) : [];
       const segments = [];
-      let current = null;
+      let current2 = null;
       let pendingBoundary = true;
       for (const child of children) {
         if (isSeparatorRow(child)) {
@@ -6878,11 +8638,11 @@ window.__ModuleLoader__.load({
         }
         if (!isCodeRow(child)) continue;
         if (pendingBoundary) {
-          current = { rows: [], startRow: child };
-          segments.push(current);
+          current2 = { rows: [], startRow: child };
+          segments.push(current2);
           pendingBoundary = false;
         }
-        current.rows.push(child);
+        current2.rows.push(child);
       }
       return segments;
     }
@@ -7739,6 +9499,41 @@ window.__ModuleLoader__.load({
         return null;
       }
     }
+    function argumentViewText(block, field) {
+      const views = [];
+      if (block !== null && typeof block === "object") views.push(block.args);
+      const call = callOf(block);
+      if (call !== null && typeof call === "object") views.push(call.args);
+      for (const view of views) {
+        if (view === null || typeof view !== "object" || typeof view.text !== "function") continue;
+        let value;
+        try {
+          value = view.text(field);
+        } catch (error) {
+          value = void 0;
+        }
+        if (typeof value === "string" && value !== "") return value;
+      }
+      return "";
+    }
+    function scanArgumentPath(raw) {
+      if (typeof raw !== "string" || raw === "") return "";
+      const match = /"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(raw);
+      if (match === null) return "";
+      try {
+        const value = JSON.parse('"' + match[1] + '"');
+        return typeof value === "string" ? value : "";
+      } catch (error) {
+        return "";
+      }
+    }
+    function callPath(block) {
+      const args = argsOf(block);
+      if (typeof args?.file_path === "string" && args.file_path !== "") return args.file_path;
+      const viewed = argumentViewText(block, "file_path");
+      if (viewed !== "") return viewed;
+      return scanArgumentPath(callOf(block)?.argsRaw);
+    }
     function argumentDiff(block) {
       const call = callOf(block);
       const args = argsOf(block);
@@ -7756,17 +9551,41 @@ window.__ModuleLoader__.load({
       if (typeof path !== "string" || path === "") return "";
       return path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
     }
+    function isAbsolutePath(path) {
+      if (typeof path !== "string" || path === "") return false;
+      return path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(path) || /^[A-Za-z]:$/.test(path);
+    }
     function displayPath(path, cwd) {
       if (typeof path !== "string" || path === "") return "";
-      if (typeof cwd !== "string" || cwd === "" || path.startsWith(cwd) === false) return path;
-      const rest = path.slice(cwd.length).replace(/^[\\/]+/, "");
+      if (typeof cwd !== "string" || cwd === "") return path;
+      const root = cwd.replace(/[\\/]+$/, "");
+      if (root === "") return path;
+      const windows = root.includes("\\") || root.includes("/") && /^[A-Za-z]:/.test(root) || path.includes("\\");
+      const fold = windows ? function windowsForm(text) {
+        return text.replace(/\\/g, "/").toLowerCase();
+      } : function verbatim(text) {
+        return text;
+      };
+      const foldedPath = fold(path);
+      const foldedRoot = fold(root);
+      if (foldedPath === foldedRoot) return path;
+      if (foldedPath.startsWith(foldedRoot) === false) return path;
+      const boundary = foldedPath.charAt(foldedRoot.length);
+      if (boundary !== "/" && boundary !== "\\") return path;
+      const rest = path.slice(root.length).replace(/^[\\/]+/, "");
       return rest === "" ? path : rest;
+    }
+    function rowTarget(path, cwd) {
+      if (typeof path !== "string" || path === "") return "";
+      if (isAbsolutePath(path) === false) return path;
+      const relative = displayPath(path, cwd);
+      if (relative !== "" && relative !== path) return relative;
+      return baseName(path);
     }
     function buildDiffModel(block) {
       const done = block !== null && typeof block === "object" && "kind" in block;
       const call = callOf(block);
-      const args = argsOf(block);
-      const argPath = typeof args?.file_path === "string" ? args.file_path : "";
+      const argPath = callPath(block);
       let raw = [];
       const recorded = done && block.meta !== null && typeof block.meta === "object" ? block.meta.diffs : null;
       for (const hunk of Array.isArray(recorded) ? recorded : []) {
@@ -7876,6 +9695,13 @@ window.__ModuleLoader__.load({
       }
       return { tokens, marks };
     }
+    function rowTitle(t, kind, state, model, name2) {
+      const key = model.failed ? "diff." + kind + ".failed" : model.stopped ? "diff.stopped" : "diff." + kind + (state === "ok" ? ".done" : ".running");
+      if (typeof t !== "function") return key;
+      const target = typeof name2 === "string" ? name2 : "";
+      const text = String(t(key, { name: target }));
+      return target === "" ? text.replace(/\s+/g, " ").trim() : text;
+    }
     function createDiffView({ React: React2 }) {
       const h = React2.createElement;
       function rowNode(key, row, tokens, mark) {
@@ -7934,9 +9760,10 @@ window.__ModuleLoader__.load({
           };
         }, [copied]);
         const state = model.done === false ? block?.phase === "preparing" ? "preparing" : "running" : model.stopped ? "stopped" : model.failed ? "error" : "ok";
-        const kind = props.toolName === "write" ? "write" : "edit";
-        const name2 = baseName(model.path) || props.toolName;
-        const title = model.failed ? t("diff." + kind + ".failed", { name: name2 }) : model.stopped ? t("diff.stopped", { name: name2 }) : t("diff." + kind + (state === "ok" ? ".done" : ".running"), { name: name2 });
+        const tool = typeof props.toolName === "string" && props.toolName !== "" ? props.toolName : model.tool;
+        const kind = tool === "write" ? "write" : "edit";
+        const name2 = rowTarget(model.path, props.cwd);
+        const title = rowTitle(t, kind, state, model, name2);
         const stats = [];
         const settledWithCue = state === "error" || state === "stopped";
         if (!settledWithCue && model.totals.add > 0) {
@@ -8016,7 +9843,11 @@ window.__ModuleLoader__.load({
           "div",
           {
             "data-cds-diffrow": "",
-            "data-tool": props.toolName,
+            // The row's OWN hook keeps the wire tool name: the theme's stat cell is
+            // scoped through `[data-tool]` in `styles.js`, and the title no longer
+            // reads this attribute at all — one is CSS structure, the other is
+            // language, and only the second one was wrong.
+            "data-tool": tool,
             "data-state": state,
             "data-expanded": expanded ? "true" : "false",
             "data-inspect": expanded && body.length > 0 && typeof props.inspect === "function" ? "" : void 0
@@ -8496,28 +10327,30 @@ window.__ModuleLoader__.load({
         ctx.effect(function() {
           if (typeof document === "undefined") return function() {
           };
-          const ripple = createHeroRipple({ doc: document });
+          const ocean = createHeroOcean({ doc: document });
           const wanted = function() {
             const state = settings2.getState();
             return state.enabled !== false && state.heroRipple !== false;
           };
           const sync = function() {
+            const state = settings2.getState();
+            ocean.setWhaleInk(state.whaleInk);
             if (wanted()) {
-              ripple.start();
-              ripple.refresh();
+              ocean.start();
+              ocean.refresh();
             } else {
-              ripple.stop();
+              ocean.stop();
             }
           };
           sync();
           const unsubscribe = typeof settings2.subscribe === "function" ? settings2.subscribe(sync) : null;
           const onThemeChange = service !== null && typeof ctx.on === "function" ? ctx.on("theme/change", function() {
-            ripple.refresh();
+            ocean.refresh();
           }) : null;
           return function() {
             if (typeof unsubscribe === "function") unsubscribe();
             if (typeof onThemeChange === "function") onThemeChange();
-            ripple.stop();
+            ocean.stop();
           };
         }, "dsh-cds-theme: blank-session backdrop");
         const slots = ctx.slots;
@@ -8540,6 +10373,12 @@ window.__ModuleLoader__.load({
                   return slots.register({
                     name: "tool.call.toolview",
                     key,
+                    // WITHOUT THIS THE CARD IS ALWAYS ENGLISH. `locale: ns` is what
+                    // makes the outlet inject `t` into the component; a card that
+                    // declares none gets no translator, and `makeT(undefined)` then
+                    // answers from the embedded `en` table. In a Chinese UI that is
+                    // how this row ended up saying "Writing write".
+                    locale: LOCALE_NS,
                     // LOW WINS. The keyed seat elects by ASCENDING priority and keeps
                     // the first live entry, so a LOWER number shadows a higher one.
                     // The host's own FileMutationRow sits at 0; registering at 100
@@ -8729,23 +10568,19 @@ window.__ModuleLoader__.load({
       numberBody,
       sweepDiffNumbers,
       createDiffNumberMarker,
-      RIPPLE_ATTR,
-      GLYPH_TOKENS,
+      OCEAN_ATTR,
+      SHARK_SPECS,
       TUNING,
       FALLBACK_PALETTE,
-      createRng,
-      gridFor,
-      layoutGlyphs,
-      glyphCount,
-      rippleProgress,
-      rippleRadius,
-      easeOutCubic,
-      waveStrength,
-      totalWave,
-      restingAlpha,
+      parseInk,
       readPalette,
       findHeroHost,
-      createHeroRipple,
+      createHeroOcean,
+      // Deterministic, canvas-free world builder for offline trajectory checks:
+      // same seed in, same nodes out, with a caller-owned clock.
+      createTestWorld,
+      stepTestWorld,
+      normalizedInk,
       LOCALE_NS,
       EN_STRINGS: en,
       ZH_STRINGS: zh,

@@ -236,6 +236,79 @@ function argsOf(block) {
 }
 
 /**
+ * Read one field from the host's STREAMING argument view.
+ *
+ * The dispatch owner passes `block.args` — a tolerance layer over the argument
+ * JSON that can answer while the call is still arriving (`text(field)` and
+ * `complete(field)`; `dsh-client-ui-tool:263`). `argsRaw` cannot: it is partial
+ * JSON during a stream, so `JSON.parse` throws and everything derived from it
+ * is empty for exactly as long as the row says "editing". Asking the view first
+ * is what keeps a file path in the title before the call settles.
+ *
+ * @param {object} block the tool block for the current phase
+ * @param {string} field the argument name
+ * @returns {string} the readable value, or '' when unavailable
+ */
+export function argumentViewText(block, field) {
+  const views = []
+  if (block !== null && typeof block === 'object') views.push(block.args)
+  const call = callOf(block)
+  if (call !== null && typeof call === 'object') views.push(call.args)
+  for (const view of views) {
+    if (view === null || typeof view !== 'object' || typeof view.text !== 'function') continue
+    let value
+    try {
+      value = view.text(field)
+    } catch (error) {
+      value = undefined
+    }
+    if (typeof value === 'string' && value !== '') return value
+  }
+  return ''
+}
+
+/**
+ * Last-resort path read for a raw argument string that is not valid JSON yet.
+ *
+ * Only the `"file_path": "…"` member is worth recovering: it is written first
+ * by both tools, and a completed string value inside an unfinished object is
+ * still an exact path. Escapes are decoded through `JSON.parse` on the quoted
+ * fragment so a Windows path is not written twice.
+ *
+ * @param {unknown} raw the call's raw argument text
+ * @returns {string} the path, or '' when the text does not carry a complete one
+ */
+export function scanArgumentPath(raw) {
+  if (typeof raw !== 'string' || raw === '') return ''
+  const match = /"file_path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(raw)
+  if (match === null) return ''
+  try {
+    const value = JSON.parse('"' + match[1] + '"')
+    return typeof value === 'string' ? value : ''
+  } catch (error) {
+    return ''
+  }
+}
+
+/**
+ * The call's file path, readable at every phase.
+ *
+ * Parsed arguments first (a settled call), then the streaming view, then the
+ * tolerant scan. All three answer "which file", and none of them ever answers
+ * with the tool name.
+ *
+ * @param {object} block the tool block for the current phase
+ * @returns {string}
+ */
+export function callPath(block) {
+  const args = argsOf(block)
+  if (typeof args?.file_path === 'string' && args.file_path !== '') return args.file_path
+  const viewed = argumentViewText(block, 'file_path')
+  if (viewed !== '') return viewed
+  return scanArgumentPath(callOf(block)?.argsRaw)
+}
+
+/**
  * Derive a diff from the call's own arguments.
  *
  * This is the host's fallback for a `write`: its `presentationMeta` reports
@@ -268,9 +341,34 @@ export function baseName(path) {
 }
 
 /**
+ * Whether a path is absolute in either spelling the host can hand over.
+ *
+ * A tool argument may arrive exactly as the model wrote it: `src/foo.js` is
+ * relative and already names its directories, while `C:\work\src\foo.js` and
+ * `/work/src/foo.js` are absolute and have to be shortened before display.
+ *
+ * @param {unknown} path
+ * @returns {boolean}
+ */
+export function isAbsolutePath(path) {
+  if (typeof path !== 'string' || path === '') return false
+  return path.startsWith('/') || path.startsWith('\\')
+    || /^[A-Za-z]:[\\/]/.test(path) || /^[A-Za-z]:$/.test(path)
+}
+
+/**
  * The path as the reader thinks of it: workspace-relative when it sits under
  * the session's `cwd`, absolute otherwise — the same short form the host's own
  * tool rows use for their summary.
+ *
+ * THE PREFIX TEST NEEDS A SEPARATOR BOUNDARY. `C:\work-other\a.js` starts with
+ * `C:\work`, so a bare `startsWith` claims it lives inside the workspace and
+ * prints `-other\a.js`. The character after the root must be a separator (or
+ * the root must be the whole path, which stays verbatim).
+ *
+ * WINDOWS MATCHES CASE-INSENSITIVELY, AND `\` IS `/`. The same directory can be
+ * spelled `C:\Work` by the session and `c:/work` by a tool argument; neither
+ * mismatch means "outside the workspace".
  *
  * @param {string} path a recorded or argument path
  * @param {string | undefined} cwd the session workspace root
@@ -278,9 +376,49 @@ export function baseName(path) {
  */
 export function displayPath(path, cwd) {
   if (typeof path !== 'string' || path === '') return ''
-  if (typeof cwd !== 'string' || cwd === '' || path.startsWith(cwd) === false) return path
-  const rest = path.slice(cwd.length).replace(/^[\\/]+/, '')
+  if (typeof cwd !== 'string' || cwd === '') return path
+  const root = cwd.replace(/[\\/]+$/, '')
+  if (root === '') return path
+  // Windows-style input on either side: compare with one separator and folded
+  // case, then slice the ORIGINAL string by the root's length (every separator
+  // is one character, so the offsets line up).
+  const windows = root.includes('\\') || root.includes('/') && /^[A-Za-z]:/.test(root) || path.includes('\\')
+  const fold = windows
+    ? function windowsForm(text) { return text.replace(/\\/g, '/').toLowerCase() }
+    : function verbatim(text) { return text }
+  const foldedPath = fold(path)
+  const foldedRoot = fold(root)
+  if (foldedPath === foldedRoot) return path
+  if (foldedPath.startsWith(foldedRoot) === false) return path
+  const boundary = foldedPath.charAt(foldedRoot.length)
+  if (boundary !== '/' && boundary !== '\\') return path
+  const rest = path.slice(root.length).replace(/^[\\/]+/, '')
   return rest === '' ? path : rest
+}
+
+/**
+ * The target a row title names: the path the reader can act on.
+ *
+ * Three cases, in the order the reader's question is answered:
+ *
+ *   1. a relative path is ALREADY the short form and keeps its directories —
+ *      `src/foo.js` stays `src/foo.js`, because dropping `src/` is a different
+ *      file to a reader scanning the workspace;
+ *   2. an absolute path under the workspace root becomes relative
+ *      (`C:\work\src\foo.js` → `src\foo.js`);
+ *   3. an absolute path elsewhere falls back to its bare name, so a temp or
+ *      home path does not take the whole row.
+ *
+ * @param {string} path the call's file path
+ * @param {string | undefined} cwd the session workspace root
+ * @returns {string} the displayed target, or '' when there is no path at all
+ */
+export function rowTarget(path, cwd) {
+  if (typeof path !== 'string' || path === '') return ''
+  if (isAbsolutePath(path) === false) return path
+  const relative = displayPath(path, cwd)
+  if (relative !== '' && relative !== path) return relative
+  return baseName(path)
 }
 
 /**
@@ -292,8 +430,7 @@ export function displayPath(path, cwd) {
 export function buildDiffModel(block) {
   const done = block !== null && typeof block === 'object' && 'kind' in block
   const call = callOf(block)
-  const args = argsOf(block)
-  const argPath = typeof args?.file_path === 'string' ? args.file_path : ''
+  const argPath = callPath(block)
   let raw = []
   const recorded = done && block.meta !== null && typeof block.meta === 'object' ? block.meta.diffs : null
   for (const hunk of Array.isArray(recorded) ? recorded : []) {
@@ -433,6 +570,39 @@ export function decorateHunk(hunk) {
 }
 
 /**
+ * The row's one sentence: an operation, optionally followed by its target.
+ *
+ * NEVER A RAW TOOL NAME. The reader sees `Editing src\a.js`, `Wrote a.js`,
+ * `Failed to write a.js` — the same three-state sentence the reference uses,
+ * localised by the host dictionary (`diff.edit.*` / `diff.write.*`). When the
+ * target is not known yet (a `preparing` call carries no arguments at all) the
+ * sentence is the operation alone: the `{name}` placeholder collapses, and the
+ * trailing separator is trimmed rather than left dangling. Printing the wire
+ * tool name there is what produced `Editing edit`.
+ *
+ * @param {(key: string, params?: object) => string} t the host translator
+ * @param {'edit' | 'write'} kind which operation the row is
+ * @param {string} state `preparing` | `running` | `ok` | `error` | `stopped`
+ * @param {{ failed: boolean, stopped: boolean }} model the card model
+ * @param {string} name the target: workspace-relative path, bare name, or ''
+ * @returns {string}
+ */
+export function rowTitle(t, kind, state, model, name) {
+  const key = model.failed
+    ? 'diff.' + kind + '.failed'
+    : model.stopped
+      ? 'diff.stopped'
+      : 'diff.' + kind + (state === 'ok' ? '.done' : '.running')
+  if (typeof t !== 'function') return key
+  const target = typeof name === 'string' ? name : ''
+  const text = String(t(key, { name: target }))
+  // Only a MISSING target needs repair. With a target the sentence is returned
+  // exactly as the dictionary wrote it, so a path containing two spaces or a
+  // non-breaking space cannot be rewritten by this function.
+  return target === '' ? text.replace(/\s+/g, ' ').trim() : text
+}
+
+/**
  * Build the slot occupant for one React instance.
  *
  * @param {object} deps
@@ -501,12 +671,23 @@ export function createDiffView({ React }) {
     const state = model.done === false
       ? (block?.phase === 'preparing' ? 'preparing' : 'running')
       : model.stopped ? 'stopped' : model.failed ? 'error' : 'ok'
-    const kind = props.toolName === 'write' ? 'write' : 'edit'
-    const name = baseName(model.path) || props.toolName
-    const title = model.failed
-      ? t('diff.' + kind + '.failed', { name })
-      : model.stopped ? t('diff.stopped', { name })
-        : t('diff.' + kind + (state === 'ok' ? '.done' : '.running'), { name })
+    // THE VERB COMES FROM THE TOOL, THE TARGET FROM THE FILE — NEVER THE TOOL
+    // NAME ITSELF. This row used to fall back to `props.toolName` when no path
+    // was readable, so an in-flight call printed `Editing edit` / `Writing
+    // write`: `argsRaw` is partial JSON while arguments stream, `JSON.parse`
+    // throws, and the path stayed empty until the result landed. `callPath`
+    // reads the streaming view instead, and the fallback is now the verb alone
+    // (see `rowTitle`).
+    const tool = typeof props.toolName === 'string' && props.toolName !== ''
+      ? props.toolName
+      : model.tool
+    const kind = tool === 'write' ? 'write' : 'edit'
+    // The reader's form of the path, including its directories: a RELATIVE
+    // `src/foo.js` is already the short form and keeps `src/`, an absolute path
+    // under the workspace root drops the root, and an absolute path elsewhere
+    // falls back to its bare name (see `rowTarget`).
+    const name = rowTarget(model.path, props.cwd)
+    const title = rowTitle(t, kind, state, model, name)
 
     const stats = []
     // A settled-with-cue row (failed, stopped) shows the cue, not a diff stat:
@@ -584,7 +765,11 @@ export function createDiffView({ React }) {
 
     return h('div', {
       'data-cds-diffrow': '',
-      'data-tool': props.toolName,
+      // The row's OWN hook keeps the wire tool name: the theme's stat cell is
+      // scoped through `[data-tool]` in `styles.js`, and the title no longer
+      // reads this attribute at all — one is CSS structure, the other is
+      // language, and only the second one was wrong.
+      'data-tool': tool,
       'data-state': state,
       'data-expanded': expanded ? 'true' : 'false',
       'data-inspect': expanded && body.length > 0 && typeof props.inspect === 'function' ? '' : undefined,

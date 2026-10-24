@@ -1,4 +1,15 @@
-# Third-party notices — bundled fonts
+# Third-party notices
+
+## ASCII ocean
+
+The ocean rendering code includes modified files from
+[stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks), commit
+`c521e24` (2026-10-19). The upstream repository has no licence file as checked
+on 2026-10-24. The MIT licence of this plugin does not grant rights to that
+upstream code. Integration details and modifications are recorded in
+`client/src/sharks/README.md` in the source repository.
+
+## Bundled fonts
 
 `dsh-cds-theme` inlines exactly two font faces into `client/client.js` as
 `data:font/woff2;base64,…` strings. Both are subset from Noto CJK faces; the sans

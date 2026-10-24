@@ -1,7 +1,8 @@
-import { PLUGIN_ID, PANEL_STYLE_ID } from './constants.js'
+import { PLUGIN_ID, PANEL_STYLE_ID, WHALE_INKS } from './constants.js'
 import { makeT } from './locales.js'
 import { ACCENT_PRESETS } from './palette.js'
 import { THEME_MODES, THEME_MODE_LABELS } from './thememode.js'
+import { WHALE_BASE } from './whaleInk.js'
 
 // --------------------------------------------------------- row styles
 
@@ -110,6 +111,23 @@ export const PANEL_CSS = [
   '  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color); }',
   '.dct-mode-cube svg { flex: none; }',
   '.dct-mode-label { font-size: 13px; line-height: 20px; white-space: nowrap; }',
+
+  // The whale-colour swatch: one dot per option, the same 8px radius and 1px
+  // inset hairline as `.dct-swatch` so the two colour rows on this page read as
+  // one family. The fill comes from the two custom properties the row writes, so
+  // the dot shows the colour THAT THEME MODE will actually paint — the accent
+  // swatches below use the same technique and for the same reason.
+  //
+  // `live` is a conic gradient instead of a fill: it is the only option that has
+  // no single colour, and a flat dot would claim it does.
+  '.dct-ink-dot { flex: none; width: 14px; height: 14px; border-radius: 50%;',
+  '  background: var(--dct-whale-light);',
+  '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }',
+  'body[data-ds-dark-theme] .dct-ink-dot { background: var(--dct-whale-dark); }',
+  '.dct-ink-dot-live { background: conic-gradient(from 0deg, #2050b8, #26b6a8, #b8a020, #b83074, #2050b8);',
+  '  box-shadow: inset 0 0 0 .5px var(--dsw-alias-border-l3); }',
+  'body[data-ds-dark-theme] .dct-ink-dot-live {',
+  '  background: conic-gradient(from 0deg, #7aaaff, #7ae0d2, #ffe082, #ff9ec4, #7aaaff); }',
 
   // The settings page frame for 「主题定制 / Theme」: one intro line above the
   // rows. The host's own sections are a plain column, so this matches them.
@@ -308,6 +326,68 @@ export function createPanel({ React, primitives, settings, themeMode }) {
         React.createElement('div', { className: 'dct-swatches', role: 'group', 'aria-label': t('accent.title') }, ...swatches)))
   }
 
+  // --------------------------------------------------- whale colour row
+  //
+  // THREE FIXED OPTIONS, NOT A PICKER. The whale is decorative: a colour wheel
+  // would ask the user to think about a surface they never read text on. Two
+  // answers they can predict (blue, the product's brand blue) plus one playful
+  // mode (live) is the whole space, and the swatch under each label shows what
+  // the animals will actually be — the palette is mode-aware (light/dark), so the
+  // preview is painted from the same `WHALE_BASE` table the renderer uses.
+  //
+  // The control reuses `.dct-mode-cube`, the same vocabulary as the 浅色/深色 cubes
+  // two rows above: this page must not grow a second segmented-control idiom for a
+  // three-way choice.
+  function WhaleInkRow(props) {
+    const t = makeT(props.t)
+    const state = useStoreValue(settings, settings.getState)
+    const cubes = WHALE_INKS.map(function (inkId) {
+      const selected = state.whaleInk === inkId
+      const label = t('whaleInk.' + inkId)
+      // `live` has no single colour, so its swatch is the two ends of the walk —
+      // a colour wheel segment, not a fill. Painting it one hue would claim the
+      // mode is static. It carries NO inline style: the gradient is a stylesheet
+      // rule with its own dark variant, and an inline `background` would outrank
+      // the dark rule and freeze the swatch in the light palette.
+      //
+      // `black` reads its colour from `WHALE_BASE.black`, like `blue`: the table
+      // is the same one the renderer paints with, so the dot cannot claim a
+      // shade the animals do not use (pure black on light, light ink on dark).
+      const swatch = inkId === 'live'
+        ? undefined
+        : {
+            // Both mode colours ride as custom properties; the stylesheet picks by
+            // theme mode, exactly like the accent swatches do.
+            '--dct-whale-light': 'rgb(' + WHALE_BASE[inkId].light.r + ' ' + WHALE_BASE[inkId].light.g + ' ' + WHALE_BASE[inkId].light.b + ')',
+            '--dct-whale-dark': 'rgb(' + WHALE_BASE[inkId].dark.r + ' ' + WHALE_BASE[inkId].dark.g + ' ' + WHALE_BASE[inkId].dark.b + ')',
+          }
+      return React.createElement('button', {
+        key: inkId,
+        type: 'button',
+        className: 'dct-mode-cube',
+        'data-ink': inkId,
+        'data-selected': selected ? 'true' : 'false',
+        'aria-pressed': selected,
+        title: label,
+        'aria-label': label,
+        onClick: function () { settings.setState({ whaleInk: inkId }) },
+      },
+      React.createElement('span', {
+        className: 'dct-ink-dot' + (inkId === 'live' ? ' dct-ink-dot-live' : ''),
+        'aria-hidden': 'true',
+        style: swatch,
+      }),
+      React.createElement('span', { className: 'dct-mode-label' }, label))
+    })
+    return React.createElement('div', { className: 'dct-row' },
+      React.createElement('div', { className: 'dct-row-text' },
+        React.createElement('div', { className: 'dct-title' }, t('whaleInk.title')),
+        React.createElement('div', { className: 'dct-desc' }, t('whaleInk.desc'))),
+      React.createElement('div', { className: 'dct-control' },
+        React.createElement('div', { className: 'dct-mode-cubes', role: 'group', 'aria-label': t('whaleInk.title') },
+          ...cubes)))
+  }
+
   // ---------------------------------------------------------- slider row
   function SliderRow(props) {
     const slot = props.slot
@@ -487,6 +567,10 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       // retires into this seat: 42 was the hero-compaction switch and stays
       // vacant, and every other order below 40 belongs to a row that exists or
       // that the section test asserts vacant.
+      //
+      // The id, the key and the order are unchanged from the glyph-field era on
+      // purpose: the id is a DOM contract and the key is user data. Only the copy
+      // and what the layer draws changed.
       id: 'dsh-cds-theme-hero-ripple',
       order: 44,
       key: 'heroRipple',
@@ -504,6 +588,27 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       },
     },
     {
+      // The whale pigment. Its own row because it is a CHOICE, not a switch: a
+      // toggle has exactly one off state and this has three (blue / DeepSeek /
+      // live).
+      //
+      // ORDER 49, NOT 45/46/47. Those three were vacated by rows that were deleted
+      // and, by the rule this file states below, a vacated number may never be
+      // reused — taking one would silently reorder the page against the layout the
+      // user reviewed. So the whale row takes the first number that nothing ever
+      // held, and the vacancy assertions keep their whole list. The cost is that
+      // it does not sit directly under the ocean switch (44); the copy carries the
+      // link instead, naming the backdrop as the thing being coloured.
+      id: 'dsh-cds-theme-whale-ink',
+      order: 49,
+      key: 'whaleInk',
+      titleKey: 'whaleInk.title',
+      descKey: 'whaleInk.desc',
+      component: function BoundWhaleInk(props) {
+        return React.createElement(WhaleInkRow, { t: props.t })
+      },
+    },
+    {
       // The turn-changes hover preview is a CONVENIENCE, not a replication
       // item: it exists to show a comparison without opening the sidebar. Its
       // switch therefore only removes the preview, never the "Edited N files"
@@ -514,7 +619,7 @@ export function createPanel({ React, primitives, settings, themeMode }) {
       // row ever held. 45 is vacated with the markdown switch, 46/47 with the
       // removed reference-derived looks, and 40/41 belong to usage-stats on this
       // same page — reusing any of them would make a vacancy assertion read as a
-      // reordering of the settings page.
+      // reordering of the settings page. The whale-colour row takes 49.
       id: 'dsh-cds-theme-diff-preview',
       order: 48,
       key: 'diffPreview',

@@ -5,7 +5,7 @@ import { createHeroComposerVisibility } from './hero-composer.js'
 import { createTableMarker } from './markdown.js'
 import { createAppearanceIconMarker } from './navicon.js'
 import { createPasteConverter } from './paste.js'
-import { createHeroRipple } from './ripple.js'
+import { createHeroOcean } from './ocean.js'
 import { createDiffNumberMarker } from './diffnumbers.js'
 import { installVariantHooks } from './varianthooks.js'
 import { createNativeCopyMarker } from './native-copy.js'
@@ -283,39 +283,48 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
       }
     }, 'dsh-cds-theme: diff line numbers')
 
-    // The blank-session backdrop (ripple.js). One switch, one module, and the
+    // The blank-session backdrop (ocean.js). One switch, one module, and the
     // stylesheet's layer promotion follows the same switch (styles.js
-    // `heroRippleRules`), so a canvas can never outlive the rules that keep it
+    // `heroOceanRules`), so a canvas can never outlive the rules that keep it
     // behind the greeting. Mounted BEFORE the slots guard below: this effect
     // needs no React and no slot, so a composition with no settings shell still
     // gets the backdrop.
+    //
+    // The setting key is `heroRipple`: it predates the ocean and renaming it
+    // would silently reset every saved preference.
     //
     // `theme/change` and a settings change both refresh the palette, because the
     // accent it paints with is a token the user can move while the field is up.
     ctx.effect(function () {
       if (typeof document === 'undefined') return function () {}
-      const ripple = createHeroRipple({ doc: document })
+      const ocean = createHeroOcean({ doc: document })
       const wanted = function () {
         const state = settings.getState()
         return state.enabled !== false && state.heroRipple !== false
       }
       const sync = function () {
+        const state = settings.getState()
+        // The whale colour is a LIVE property of the layer, not a start/stop
+        // condition: a colour change must recolour the animals in place. Setting
+        // it before `start()` also seeds the very first frame, so switching to
+        // blue/DeepSeek never shows one frame in the previous colour.
+        ocean.setWhaleInk(state.whaleInk)
         if (wanted()) {
-          ripple.start()
-          ripple.refresh()
+          ocean.start()
+          ocean.refresh()
         } else {
-          ripple.stop()
+          ocean.stop()
         }
       }
       sync()
       const unsubscribe = typeof settings.subscribe === 'function' ? settings.subscribe(sync) : null
       const onThemeChange = service !== null && typeof ctx.on === 'function'
-        ? ctx.on('theme/change', function () { ripple.refresh() })
+        ? ctx.on('theme/change', function () { ocean.refresh() })
         : null
       return function () {
         if (typeof unsubscribe === 'function') unsubscribe()
         if (typeof onThemeChange === 'function') onThemeChange()
-        ripple.stop()
+        ocean.stop()
       }
     }, 'dsh-cds-theme: blank-session backdrop')
 
@@ -357,6 +366,12 @@ export function createLifecycle({ settings, bridge, styles, panel, React, primit
               return slots.register({
                 name: 'tool.call.toolview',
                 key: key,
+                // WITHOUT THIS THE CARD IS ALWAYS ENGLISH. `locale: ns` is what
+                // makes the outlet inject `t` into the component; a card that
+                // declares none gets no translator, and `makeT(undefined)` then
+                // answers from the embedded `en` table. In a Chinese UI that is
+                // how this row ended up saying "Writing write".
+                locale: LOCALE_NS,
                 // LOW WINS. The keyed seat elects by ASCENDING priority and keeps
                 // the first live entry, so a LOWER number shadows a higher one.
                 // The host's own FileMutationRow sits at 0; registering at 100

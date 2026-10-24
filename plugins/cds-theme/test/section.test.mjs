@@ -251,6 +251,7 @@ const APPEARANCE_ROW_IDS = [
   'dsh-cds-theme-prefer-theme-cjk',
   'dsh-cds-theme-hero-ripple',
   'dsh-cds-theme-diff-preview',
+  'dsh-cds-theme-whale-ink',
 ]
 
 // The flat fallback concatenates the two ledgers: appearance rows first (in
@@ -396,8 +397,8 @@ test('the row orders are the same numbers on the new page', function () {
   createRows({ slots })
 
   const orders = slots.entries(APPEARANCE_SLOT).map(function (entry) { return entry.options.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 44, 39, 43, 48].sort(function (a, b) { return a - b }),
-    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39/43, the backdrop 44 and the diff-preview switch 48 (40/41 are usage-stats on this page; 42/45/46/47 are vacated)')
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 39, 43, 44, 48, 49].sort(function (a, b) { return a - b }),
+    'the theme-mode row takes order 10; the knobs keep 18-29; the feature rows take 39/43, the backdrop 44, the diff-preview switch 48 and the whale colour 49 (40/41 are usage-stats on this page; 42/45/46/47 are vacated)')
   const generalOrders = slots.entries(GENERAL_SLOT).map(function (entry) { return entry.options.order })
   assert.deepEqual(generalOrders, [30])
 })
@@ -627,7 +628,7 @@ test('the panel splits the rows the way the section expects', function () {
   assert.equal(panel.appearanceSlots.length + panel.generalSlots.length, panel.slots.length)
   // `slots` keeps display order, so the fallback list reads top to bottom.
   const orders = panel.slots.map(function (slot) { return slot.order })
-  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44, 48])
+  assert.deepEqual(orders, [10, 18, 19, 22, 24, 26, 29, 30, 39, 43, 44, 48, 49])
 })
 
 test('the two verified replication rows are gone from every slot', function () {
