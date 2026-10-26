@@ -30,6 +30,7 @@ const categories = {
   '@hwfee/dsh-predict': 'interface',
   '@hwfee/dsh-git-bash': 'tools',
   '@hwfee/dsh-usage-stats': 'usage',
+  '@hwfee/dsh-context-rail': 'interface',
 }
 
 const categoryTitles = {
