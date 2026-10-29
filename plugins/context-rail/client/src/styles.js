@@ -49,6 +49,17 @@ body[data-dcr-open="true"] [data-conversation-scroll] {
   padding-right: var(--dcr-rail-width, 328px);
 }
 
+/*
+ * The trajectory view mounts a composer overlay and the host turns the composer
+ * seat into an absolutely positioned box (left 0, right the scrollbar width).
+ * An absolutely positioned box is not constrained by the scroller's padding, so
+ * without this rule the input card slides under the rail. The seat is positioned
+ * against the scroller's padding box, hence the rail plus the scrollbar gutter.
+ */
+body[data-dcr-open="true"] [data-conversation-scroll]:has([data-conversation-composer-overlay]) > [data-composer-seat] {
+  right: var(--dcr-composer-inset, calc(var(--dsh-scrollbar-width, 5px) + var(--dcr-rail-width, 328px))) !important;
+}
+
 .dcr-rail {
   box-sizing: border-box;
   position: fixed;

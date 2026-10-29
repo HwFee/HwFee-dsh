@@ -14,7 +14,7 @@
  */
 
 import {
-  breakdownBands, formatPercent, formatTokens, leafOf, occupancy, usageTotals,
+  bandShares, formatPercent, formatTokens, leafOf, occupancy, usageTotals,
 } from './format.js'
 
 const FALLBACK = {
@@ -141,30 +141,37 @@ export function createPanel({ React }) {
 
   /**
    * Context: occupancy over the window, drawn as one stacked bar whose empty
-   * tail is the free space, then the three measured bands and the remainder.
+   * tail is the free space, then the composition bands and the remainder.
+   *
+   * ONE AUTHORITY FOR "REMAINING". The free row and its percentage come from
+   * the pressure total (`context.ratio`), never from the breakdown sum: the two
+   * projections are measured independently and need not agree, so deriving the
+   * free share from the bands would print a remainder that contradicts the
+   * occupancy above it.
    */
   function ContextCard({ props, t }) {
     const context = occupancy(props.pressure)
-    const bands = breakdownBands(props.breakdown, context)
+    const bands = bandShares(props.breakdown, context)
     if (context === null) {
       return h(Card, { id: 'context', title: t('context.title') },
         h('p', { className: 'dcr-empty' }, t('context.empty')))
     }
-    const freePercent = Math.max(0, 100 - bands.reduce((sum, band) => sum + band.percent, 0))
+    const occupiedWidth = context.ratio * 100
+    const freeWidth = Math.max(0, 100 - occupiedWidth)
     const segments = bands.length === 0
-      ? [h('div', { key: 'total', className: 'dcr-seg', 'data-band': 'total', style: { width: pct(context.percent) } })]
+      ? [h('div', { key: 'total', className: 'dcr-seg', 'data-band': 'total', style: { width: pct(occupiedWidth) } })]
       : bands.map((band) => h('div', {
         key: band.key,
         className: 'dcr-seg',
         'data-band': band.key,
-        style: { width: pct(band.percent) },
+        style: { width: pct(band.share * 100) },
       }))
-    if (bands.length > 0 && freePercent > 0) {
+    if (freeWidth > 0) {
       segments.push(h('div', {
         key: 'free',
         className: 'dcr-seg',
         'data-band': 'free',
-        style: { width: pct(freePercent) },
+        style: { width: pct(freeWidth) },
       }))
     }
     const rows = bands.map((band) => h(Row, {
@@ -179,7 +186,7 @@ export function createPanel({ React }) {
       band: 'free',
       label: t('context.free'),
       value: formatTokens(context.freeTokens),
-      percent: formatPercent(freePercent),
+      percent: formatPercent(context.freePercent),
     }))
     return h(Card, {
       id: 'context',

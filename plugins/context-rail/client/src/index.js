@@ -26,9 +26,18 @@
  * rail plus a readable text column.
  */
 
+import {
+  AUTO_OPEN_MIN_WIDTH, MIN_CONTENT_WIDTH, RAIL_WIDTH, composerInset, railFits,
+} from './geometry.js'
 import { createPanel, translator } from './panel.js'
 import { installCss } from './styles.js'
 import { NS, en, zh } from './locales.js'
+
+// The geometry lives in its own module (no React import); re-exported so the
+// plugin's public surface stays in one place.
+export {
+  AUTO_OPEN_MIN_WIDTH, MIN_CONTENT_WIDTH, RAIL_WIDTH, composerInset, railFits,
+}
 
 // React and ReactDOM come from the host's frozen platform module table. Both
 // are absent in a non-browser context, so registration guards on them.
@@ -44,24 +53,6 @@ try {
 
 /** Service names this plugin reads; both provided by the host. */
 export const inject = ['slots', 'locale']
-
-/** Rail width in CSS pixels. The content padding uses the same constant. */
-export const RAIL_WIDTH = 328
-
-/** Windows narrower than this keep the rail closed until the user asks for it. */
-export const AUTO_OPEN_MIN_WIDTH = 1180
-
-/** Content left beside the rail before the rail gives up its place entirely. */
-export const MIN_CONTENT_WIDTH = 240
-
-/**
- * Whether the conversation column can hold the rail at all.
- * @param {number} columnWidth - the scroller's border-box width
- * @returns {boolean}
- */
-export function railFits(columnWidth) {
-  return typeof columnWidth === 'number' && columnWidth >= RAIL_WIDTH + MIN_CONTENT_WIDTH
-}
 
 /** The user's explicit choice survives restarts; absence means "follow width". */
 export const STORAGE_KEY = 'dsh-context-rail/open'
@@ -191,6 +182,7 @@ function RailToggle(props) {
           height: Math.max(0, rect.height),
           width: Math.max(0, (scroll === null ? rect : scroll).width),
           right: Math.max(0, window.innerWidth - (scroll === null ? rect.right : scroll.right) + bar),
+          inset: composerInset(bar),
         })
       }
       measure()
@@ -222,16 +214,22 @@ function RailToggle(props) {
   // under it. The reservation is a body attribute plus a custom property rather
   // than an inline style on the host's node: a host re-render that replaces that
   // node must not drop the reservation, and removal is one attribute.
+  const composerRight = geometry === null ? null : geometry.inset
+
   React.useEffect(() => {
     if (!visible) return undefined
     const body = document.body
     body.dataset.dcrOpen = 'true'
     body.style.setProperty('--dcr-rail-width', RAIL_WIDTH + 'px')
+    if (typeof composerRight === 'number') {
+      body.style.setProperty('--dcr-composer-inset', composerRight + 'px')
+    }
     return () => {
       delete body.dataset.dcrOpen
       body.style.removeProperty('--dcr-rail-width')
+      body.style.removeProperty('--dcr-composer-inset')
     }
-  }, [visible])
+  }, [visible, composerRight])
 
   const pressure = projection('contextPressure')
   const breakdown = projection('contextBreakdown')

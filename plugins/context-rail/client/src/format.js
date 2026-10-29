@@ -43,8 +43,14 @@ export function occupancy(pressure) {
   if (typeof usedTokens !== 'number' || typeof contextWindow !== 'number' || contextWindow <= 0) {
     return null
   }
+  // `ratio` is the one occupancy authority: the free row, the bar and every
+  // percentage are derived from it, so a breakdown that disagrees with the
+  // pressure total can never produce two different "remaining" numbers.
+  const ratio = Math.max(0, Math.min(1, usedTokens / contextWindow))
   return {
-    percent: Math.max(0, Math.min(100, Math.round((usedTokens / contextWindow) * 100))),
+    ratio,
+    percent: Math.round(ratio * 100),
+    freePercent: Math.round((1 - ratio) * 1000) / 10,
     usedTokens,
     contextWindow,
     freeTokens: Math.max(0, contextWindow - usedTokens),
@@ -63,20 +69,40 @@ export function occupancy(pressure) {
  * @param {{ contextWindow: number } | null} context
  * @returns {Array<{ key: string, tokens: number, percent: number }>}
  */
-export function breakdownBands(breakdown, context) {
-  if (!breakdown || !context || context.contextWindow <= 0) return []
+export function bandShares(breakdown, context) {
+  if (!breakdown || !context) return []
   const rows = [
     { key: 'system', tokens: breakdown.systemTokens },
     { key: 'tools', tokens: breakdown.toolsTokens },
     { key: 'messages', tokens: breakdown.messageTokens },
-  ]
-  return rows
-    .filter((row) => typeof row.tokens === 'number' && row.tokens > 0)
-    .map((row) => ({
+  ].filter((row) => typeof row.tokens === 'number' && row.tokens > 0)
+  const total = rows.reduce((sum, row) => sum + row.tokens, 0)
+  if (total <= 0) return []
+  // The bands describe the composition of the context, not its size: the host's
+  // pressure total is the size authority, so each band gets that total's share
+  // in proportion to its own token count (the same allocation the host's
+  // ContextMeter draws). `share` is exact for the bar; `percent` is its display.
+  const bands = rows.map((row) => {
+    const share = context.ratio * (row.tokens / total)
+    return {
       key: row.key,
       tokens: row.tokens,
-      percent: Math.min(100, (row.tokens / context.contextWindow) * 100),
-    }))
+      share,
+      percent: Math.round(share * 1000) / 10,
+    }
+  })
+  // Rounding each band on its own made the printed shares add up to 40.1 while
+  // the occupancy said 40.0. Let the last band absorb the rounding remainder so
+  // the displayed composition sums to the displayed occupancy exactly.
+  const occupied = Math.round(context.ratio * 1000) / 10
+  let printed = 0
+  bands.forEach((band, index) => {
+    if (index === bands.length - 1) {
+      band.percent = Math.max(0, Math.round((occupied - printed) * 10) / 10)
+    }
+    printed = Math.round((printed + band.percent) * 10) / 10
+  })
+  return bands
 }
 
 /**

@@ -9,7 +9,7 @@ DeepSeek Harness 的**会话内**信息侧栏：像 Claude Code 的 session rail
 | 模块 | 内容 | 数据来源 |
 |---|---|---|
 | 环境 | 工作目录（末段，悬停看全路径）、模型、会话标题、运行状态 | `workingDirectory` / `modelSelection` / `title` 投影 + 会话列表 |
-| 上下文 | 标题右侧「26% 已用」、右对齐的 `~已用 / 窗口`、4px 分段条、系统提示 / 工具 / 消息 / 剩余四行（含占比） | `contextPressure` + `contextBreakdown` |
+| 上下文 | 标题右侧「26% 已用」、右对齐的 `~已用 / 窗口`、4px 分段条、系统提示 / 工具 / 消息 / 剩余四行（含占比）。**剩余数量与剩余占比都由同一个占用总量算出**，分段按 `contextBreakdown` 的比例分摊这个总量（与宿主 ContextMeter 同法） | `contextPressure` + `contextBreakdown` |
 | 用量 | 输入、输出、缓存读、缓存写、合计 | `tokenUsage` |
 
 标题行可点开合，chevron 随之转向。
@@ -30,7 +30,8 @@ DeepSeek Harness 的**会话内**信息侧栏：像 Claude Code 的 session rail
 2. 按钮组件同时用 `ReactDOM.createPortal` 把侧栏渲染到 `document.body`，`position: fixed`；
 3. 位置来自 `[data-conversation-content]` 的实测矩形：`top` 取内容区顶边（标题栏之下），`height` 取内容区高度，`right` 取视口右边缘到内容区右缘的距离。`ResizeObserver` 盯着内容区和 `[data-rightbar-col]`，窗口缩放、侧栏开合、右栏开合都会重算；
 4. 打开时给 `body` 加 `data-dcr-open`，由 CSS 给**滚动容器** `[data-conversation-scroll]` 加 `padding-right: var(--dcr-rail-width)`——正文和输入框一起变窄，而不是被浮层盖住。留白必须加在滚动容器上而不是外层列上：加在外层列会把滚动条一起挤到内容与 rail 之间；加在滚动容器上，滚动条留在最右边，rail 再按 `calc(5px + 2px)`（滚动条宽度 + 宿主的 2px 外边距）往左让位，于是滚动条在 rail **右侧**的窄条里，而不是夹在中间；
-5. **原生右栏不是隐藏理由**：它打开时会话列变窄，实测矩形随之变窄，侧栏跟着左移；是否显示只看「列宽 ≥ rail 宽 + 240px 正文」。
+5. **原生右栏不是隐藏理由**：它打开时会话列变窄，实测矩形随之变窄，侧栏跟着左移；是否显示只看「列宽 ≥ rail 宽 + 240px 正文」；
+6. **轨迹视图的输入框单独处理**：宿主在 `[data-conversation-scroll]:has([data-conversation-composer-overlay]) > [data-composer-seat]` 上把输入框改成绝对定位（`left: 0; right: var(--dsh-scrollbar-width)`），绝对定位不吃滚动容器的 padding，会直接压到 rail 上。插件在同一个 `data-dcr-open` 作用域下把这条 seat 的 `right` 改成 `var(--dcr-composer-inset)`（= rail 宽 + 实测滚动条宽），布局测试断言两者落在同一像素。
 
 **没有一条 CSS 规则指向原生右栏。** `test/styles.test.mjs` 钉死这一点：插件可以读取 `[data-rightbar-col]` 的宽度，但不能给它写样式。
 

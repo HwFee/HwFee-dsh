@@ -57,10 +57,23 @@ window.__ModuleLoader__.load({
       RAIL_WIDTH: () => RAIL_WIDTH,
       STORAGE_KEY: () => STORAGE_KEY,
       apply: () => apply,
+      composerInset: () => composerInset,
       inject: () => inject,
       railFits: () => railFits
     });
     module.exports = __toCommonJS(index_exports);
+
+    // client/src/geometry.js
+    var RAIL_WIDTH = 328;
+    var AUTO_OPEN_MIN_WIDTH = 1180;
+    var MIN_CONTENT_WIDTH = 240;
+    function railFits(columnWidth) {
+      return typeof columnWidth === "number" && columnWidth >= RAIL_WIDTH + MIN_CONTENT_WIDTH;
+    }
+    function composerInset(scrollbarWidth) {
+      const bar = typeof scrollbarWidth === "number" && scrollbarWidth > 0 ? scrollbarWidth : 0;
+      return RAIL_WIDTH + bar;
+    }
 
     // client/src/format.js
     function formatTokens(value) {
@@ -76,25 +89,43 @@ window.__ModuleLoader__.load({
       if (typeof usedTokens !== "number" || typeof contextWindow !== "number" || contextWindow <= 0) {
         return null;
       }
+      const ratio = Math.max(0, Math.min(1, usedTokens / contextWindow));
       return {
-        percent: Math.max(0, Math.min(100, Math.round(usedTokens / contextWindow * 100))),
+        ratio,
+        percent: Math.round(ratio * 100),
+        freePercent: Math.round((1 - ratio) * 1e3) / 10,
         usedTokens,
         contextWindow,
         freeTokens: Math.max(0, contextWindow - usedTokens)
       };
     }
-    function breakdownBands(breakdown, context) {
-      if (!breakdown || !context || context.contextWindow <= 0) return [];
+    function bandShares(breakdown, context) {
+      if (!breakdown || !context) return [];
       const rows = [
         { key: "system", tokens: breakdown.systemTokens },
         { key: "tools", tokens: breakdown.toolsTokens },
         { key: "messages", tokens: breakdown.messageTokens }
-      ];
-      return rows.filter((row) => typeof row.tokens === "number" && row.tokens > 0).map((row) => ({
-        key: row.key,
-        tokens: row.tokens,
-        percent: Math.min(100, row.tokens / context.contextWindow * 100)
-      }));
+      ].filter((row) => typeof row.tokens === "number" && row.tokens > 0);
+      const total = rows.reduce((sum, row) => sum + row.tokens, 0);
+      if (total <= 0) return [];
+      const bands = rows.map((row) => {
+        const share = context.ratio * (row.tokens / total);
+        return {
+          key: row.key,
+          tokens: row.tokens,
+          share,
+          percent: Math.round(share * 1e3) / 10
+        };
+      });
+      const occupied = Math.round(context.ratio * 1e3) / 10;
+      let printed = 0;
+      bands.forEach((band, index) => {
+        if (index === bands.length - 1) {
+          band.percent = Math.max(0, Math.round((occupied - printed) * 10) / 10);
+        }
+        printed = Math.round((printed + band.percent) * 10) / 10;
+      });
+      return bands;
     }
     function usageTotals(usage) {
       if (!usage) return null;
@@ -234,7 +265,7 @@ window.__ModuleLoader__.load({
       }
       function ContextCard({ props, t }) {
         const context = occupancy(props.pressure);
-        const bands = breakdownBands(props.breakdown, context);
+        const bands = bandShares(props.breakdown, context);
         if (context === null) {
           return h(
             Card,
@@ -242,19 +273,20 @@ window.__ModuleLoader__.load({
             h("p", { className: "dcr-empty" }, t("context.empty"))
           );
         }
-        const freePercent = Math.max(0, 100 - bands.reduce((sum, band) => sum + band.percent, 0));
-        const segments = bands.length === 0 ? [h("div", { key: "total", className: "dcr-seg", "data-band": "total", style: { width: pct(context.percent) } })] : bands.map((band) => h("div", {
+        const occupiedWidth = context.ratio * 100;
+        const freeWidth = Math.max(0, 100 - occupiedWidth);
+        const segments = bands.length === 0 ? [h("div", { key: "total", className: "dcr-seg", "data-band": "total", style: { width: pct(occupiedWidth) } })] : bands.map((band) => h("div", {
           key: band.key,
           className: "dcr-seg",
           "data-band": band.key,
-          style: { width: pct(band.percent) }
+          style: { width: pct(band.share * 100) }
         }));
-        if (bands.length > 0 && freePercent > 0) {
+        if (freeWidth > 0) {
           segments.push(h("div", {
             key: "free",
             className: "dcr-seg",
             "data-band": "free",
-            style: { width: pct(freePercent) }
+            style: { width: pct(freeWidth) }
           }));
         }
         const rows = bands.map((band) => h(Row, {
@@ -269,7 +301,7 @@ window.__ModuleLoader__.load({
           band: "free",
           label: t("context.free"),
           value: formatTokens(context.freeTokens),
-          percent: formatPercent(freePercent)
+          percent: formatPercent(context.freePercent)
         }));
         return h(
           Card,
@@ -353,6 +385,17 @@ window.__ModuleLoader__.load({
 
     body[data-dcr-open="true"] [data-conversation-scroll] {
       padding-right: var(--dcr-rail-width, 328px);
+    }
+
+    /*
+     * The trajectory view mounts a composer overlay and the host turns the composer
+     * seat into an absolutely positioned box (left 0, right the scrollbar width).
+     * An absolutely positioned box is not constrained by the scroller's padding, so
+     * without this rule the input card slides under the rail. The seat is positioned
+     * against the scroller's padding box, hence the rail plus the scrollbar gutter.
+     */
+    body[data-dcr-open="true"] [data-conversation-scroll]:has([data-conversation-composer-overlay]) > [data-composer-seat] {
+      right: var(--dcr-composer-inset, calc(var(--dsh-scrollbar-width, 5px) + var(--dcr-rail-width, 328px))) !important;
     }
 
     .dcr-rail {
@@ -643,12 +686,6 @@ window.__ModuleLoader__.load({
       ReactDOM = null;
     }
     var inject = ["slots", "locale"];
-    var RAIL_WIDTH = 328;
-    var AUTO_OPEN_MIN_WIDTH = 1180;
-    var MIN_CONTENT_WIDTH = 240;
-    function railFits(columnWidth) {
-      return typeof columnWidth === "number" && columnWidth >= RAIL_WIDTH + MIN_CONTENT_WIDTH;
-    }
     var STORAGE_KEY = "dsh-context-rail/open";
     function readStored() {
       try {
@@ -740,7 +777,8 @@ window.__ModuleLoader__.load({
               top: Math.max(0, rect.top),
               height: Math.max(0, rect.height),
               width: Math.max(0, (scroll === null ? rect : scroll).width),
-              right: Math.max(0, window.innerWidth - (scroll === null ? rect.right : scroll.right) + bar)
+              right: Math.max(0, window.innerWidth - (scroll === null ? rect.right : scroll.right) + bar),
+              inset: composerInset(bar)
             });
           };
           measure();
@@ -761,16 +799,21 @@ window.__ModuleLoader__.load({
         };
       }, [wanted]);
       const visible = wanted && geometry !== null && railFits(geometry.width);
+      const composerRight = geometry === null ? null : geometry.inset;
       React.useEffect(() => {
         if (!visible) return void 0;
         const body = document.body;
         body.dataset.dcrOpen = "true";
         body.style.setProperty("--dcr-rail-width", RAIL_WIDTH + "px");
+        if (typeof composerRight === "number") {
+          body.style.setProperty("--dcr-composer-inset", composerRight + "px");
+        }
         return () => {
           delete body.dataset.dcrOpen;
           body.style.removeProperty("--dcr-rail-width");
+          body.style.removeProperty("--dcr-composer-inset");
         };
-      }, [visible]);
+      }, [visible, composerRight]);
       const pressure = projection("contextPressure");
       const breakdown = projection("contextBreakdown");
       const usage = projection("tokenUsage");

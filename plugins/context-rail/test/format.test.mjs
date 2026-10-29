@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  breakdownBands, formatPercent, formatTokens, leafOf, occupancy, usageTotals,
+  bandShares, formatPercent, formatTokens, leafOf, occupancy, usageTotals,
 } from '../client/src/format.js'
 
 test('formatTokens compacts at k and M', () => {
@@ -21,13 +21,46 @@ test('formatTokens refuses a negative or non-finite value', () => {
   assert.equal(formatTokens(undefined), '—')
 })
 
-test('occupancy prefers the projected total and clamps at 100', () => {
+test('occupancy is the single authority for used, free and percent', () => {
   assert.deepEqual(occupancy({ pressureTokens: 100, projectedTokens: 200, contextWindow: 1000 }), {
-    percent: 20, usedTokens: 200, contextWindow: 1000, freeTokens: 800,
+    ratio: 0.2,
+    percent: 20,
+    freePercent: 80,
+    usedTokens: 200,
+    contextWindow: 1000,
+    freeTokens: 800,
   })
   assert.equal(occupancy({ pressureTokens: 100, contextWindow: 1000 }).percent, 10)
-  assert.equal(occupancy({ projectedTokens: 2000, contextWindow: 1000 }).percent, 100)
-  assert.equal(occupancy({ projectedTokens: 2000, contextWindow: 1000 }).freeTokens, 0)
+  const full = occupancy({ projectedTokens: 2000, contextWindow: 1000 })
+  assert.equal(full.percent, 100)
+  assert.equal(full.ratio, 1)
+  assert.equal(full.freePercent, 0)
+  assert.equal(full.freeTokens, 0)
+})
+
+test('free tokens and free percent always describe the same remainder', () => {
+  // Review case: 400 / 1000 with no breakdown used to print "used 40%" beside
+  // "free 600, 100%", because the remainder came from the window while the
+  // percentage came from the (empty) bands.
+  const context = occupancy({ projectedTokens: 400, contextWindow: 1000 })
+  assert.equal(context.freeTokens, 600)
+  assert.equal(context.freePercent, 60)
+  assert.deepEqual(bandShares(undefined, context), [])
+
+  // And with a breakdown whose own sum differs from the pressure total, the
+  // bands are scaled onto the same total instead of inventing a third reading.
+  const bands = bandShares({ systemTokens: 20, toolsTokens: 50, messageTokens: 250 }, context)
+  const bandTotal = bands.reduce((sum, band) => sum + band.percent, 0)
+  assert.equal(Math.round(bandTotal * 10) / 10, 40)
+  assert.equal(Math.round((bandTotal + context.freePercent) * 10) / 10, 100)
+  assert.equal(context.freePercent, 60)
+  assert.equal(Math.round((bandTotal + context.freePercent) * 10) / 10, 100)
+})
+
+test('the PR panel data reads 74.4%, not 75.1%', () => {
+  const context = occupancy({ projectedTokens: 256_300, contextWindow: 1_000_000 })
+  assert.equal(context.freePercent, 74.4)
+  assert.equal(formatPercent(context.freePercent), '74.4%')
 })
 
 test('occupancy is null until both sides are known', () => {
@@ -37,19 +70,22 @@ test('occupancy is null until both sides are known', () => {
   assert.equal(occupancy({ projectedTokens: 10, contextWindow: 0 }), null)
 })
 
-test('breakdownBands draws against the window, not the sum', () => {
-  const bands = breakdownBands({ systemTokens: 100, toolsTokens: 50, messageTokens: 250 }, { contextWindow: 1000 })
-  assert.deepEqual(bands, [
-    { key: 'system', tokens: 100, percent: 10 },
-    { key: 'tools', tokens: 50, percent: 5 },
-    { key: 'messages', tokens: 250, percent: 25 },
-  ])
+test('bandShares allocates the occupancy across the breakdown, like the host meter', () => {
+  const context = occupancy({ projectedTokens: 400, contextWindow: 1000 })
+  const bands = bandShares({ systemTokens: 20, toolsTokens: 50, messageTokens: 250 }, context)
+  assert.deepEqual(bands.map((band) => band.key), ['system', 'tools', 'messages'])
+  // The printed shares sum to the printed occupancy: the last band absorbs the
+  // one-decimal rounding remainder instead of pushing the total to 40.1.
+  assert.deepEqual(bands.map((band) => band.percent), [2.5, 6.3, 31.2])
+  // The shares are proportions of the window, and they add up to the occupancy.
+  assert.equal(bands.reduce((sum, band) => sum + band.share, 0), 0.4)
 })
 
-test('breakdownBands drops empty bands and refuses a missing window', () => {
-  assert.deepEqual(breakdownBands({ systemTokens: 0, toolsTokens: 0, messageTokens: 0 }, { contextWindow: 1000 }), [])
-  assert.deepEqual(breakdownBands(undefined, { contextWindow: 1000 }), [])
-  assert.deepEqual(breakdownBands({ systemTokens: 1 }, null), [])
+test('bandShares drops empty bands and refuses a missing basis', () => {
+  const context = occupancy({ projectedTokens: 400, contextWindow: 1000 })
+  assert.deepEqual(bandShares({ systemTokens: 0, toolsTokens: 0, messageTokens: 0 }, context), [])
+  assert.deepEqual(bandShares(undefined, context), [])
+  assert.deepEqual(bandShares({ systemTokens: 1 }, null), [])
 })
 
 test('usageTotals sums the four counters', () => {

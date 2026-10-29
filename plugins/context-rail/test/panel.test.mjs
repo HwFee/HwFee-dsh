@@ -79,7 +79,7 @@ test('the context card reads percent, figures and four bar segments', () => {
   const segments = flat.filter((child) => child.props?.['data-band'] !== undefined)
   assert.deepEqual(segments.map((segment) => segment.props['data-band']), ['system', 'tools', 'messages', 'free'])
   assert.deepEqual(segments.map((segment) => segment.props.style.width),
-    ['0.9%', '3.06%', '20.97%', '75.07%'])
+    ['0.93%', '3.15%', '21.56%', '74.37%'])
   const text = texts(tree).join(' ')
   assert.ok(text.includes('26%'), 'the percent reads 26')
   assert.ok(text.includes('~256k / 1M'), 'the figures pair used and window')
@@ -132,6 +132,6 @@ test('the context header carries the percent and every row its share', () => {
   assert.ok(text.includes('26% 已用'), 'header percent: ' + text)
   assert.ok(text.includes('0.9%'), 'system share')
   assert.ok(text.includes('3.1%'), 'tools share')
-  assert.ok(text.includes('21%'), 'messages share')
-  assert.ok(text.includes('75.1%'), 'free share')
+  assert.ok(text.includes('21.6%'), 'messages share')
+  assert.ok(text.includes('74.4%'), 'free share shares the occupancy total')
 })

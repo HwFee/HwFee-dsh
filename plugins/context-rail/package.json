@@ -60,7 +60,7 @@
   "scripts": {
     "build": "node tools/build-client.mjs",
     "build:check": "node tools/build-client.mjs --check",
-    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/format.test.mjs && node test/panel.test.mjs && node test/styles.test.mjs && node test/effect.test.mjs && node test/registration.test.mjs"
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/format.test.mjs && node test/panel.test.mjs && node test/styles.test.mjs && node test/effect.test.mjs && node test/layout.test.mjs && node test/registration.test.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.10"

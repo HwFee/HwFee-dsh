@@ -47,3 +47,11 @@ test('the conversation reserves the rail width while open', () => {
 test('the rail leaves the scrollbar gutter outside itself', () => {
   assert.match(SOURCE, /\.dcr-rail \{[^}]*right:\s*calc\(var\(--dsh-scrollbar-width, 5px\) \+ 2px\)/)
 })
+
+test('the trajectory composer overlay seat clears the rail', () => {
+  // Host rule: [data-conversation-scroll]:has(overlay) > [data-composer-seat]
+  // becomes absolutely positioned and ignores the scroller's padding.
+  assert.match(SOURCE, /body\[data-dcr-open="true"\] \[data-conversation-scroll\]:has\(\[data-conversation-composer-overlay\]\) > \[data-composer-seat\]/)
+  assert.match(SOURCE, /right:\s*var\(--dcr-composer-inset[^;]*!important/)
+  assert.ok(ARTIFACT.includes('--dcr-composer-inset'))
+})
