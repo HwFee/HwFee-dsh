@@ -1,0 +1,123 @@
+import { readFileSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { buildSync } from 'esbuild'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const ENTRY = join(root, 'client', 'src', 'index.js')
+const OUT = join(root, 'client', 'client.js')
+
+// The id the bundle registers with `window.__ModuleLoader__.load({ id })`.
+//
+// It is the PACKAGE NAME, read here rather than hardcoded, because the host
+// keys each client-module graph row by the package name: a bundle that
+// registers under anything else never satisfies its own row. The loader then
+// reports "loaded without registering", retries through the one-resource URL,
+// executes the bundle a second time, and the retry dies with
+// `client-modules: duplicate factory registration` — taking the whole web boot
+// down. Never hardcode this.
+const PACKAGE_NAME = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).name
+
+function entryHeader() {
+  const source = readFileSync(ENTRY, 'utf8')
+  const match = /^(\s*\/\*\*[\s\S]*?\*\/)/.exec(source)
+  return match ? match[1].trimEnd() + '\n\n' : ''
+}
+
+export function buildArtifact() {
+  const result = buildSync({
+    absWorkingDir: root,
+    entryPoints: ['client/src/index.js'],
+    bundle: true,
+    format: 'cjs',
+    platform: 'neutral',
+    external: ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives'],
+    legalComments: 'inline',
+    write: false,
+    logLevel: 'warning',
+  })
+  const cjs = result.outputFiles[0].text.trimEnd()
+  const indented = cjs.split('\n').map((line) => (line === '' ? '' : '    ' + line)).join('\n')
+  return entryHeader() +
+    'window.__ModuleLoader__.load({\n' +
+    '  id: ' + JSON.stringify(PACKAGE_NAME) + ',\n' +
+    '  factory: (require) => {\n' +
+    '    var module = { exports: {} }\n' +
+    '    var exports = module.exports\n' +
+    indented + '\n' +
+    '    return module.exports\n' +
+    '  },\n' +
+    '})\n'
+}
+
+/**
+ * Execute the artifact exactly the way the host does, so a factory that throws
+ * at load time fails the BUILD instead of the user's app boot.
+ *
+ * Why this exists: a stray backtick inside a CSS template string can still
+ * produce a syntactically valid bundle whose factory dies at evaluation. The
+ * host then shows its red "application could not start" frame, and the cause is
+ * two characters in a comment. Executing the factory here catches it with exit
+ * code 1 and a readable message.
+ */
+function assertLoads(artifact) {
+  let loaded = false
+  let exported = null
+  const window = {
+    __ModuleLoader__: {
+      load(registration) {
+        if (registration.id !== PACKAGE_NAME) {
+          throw new Error('bundle registered as "' + registration.id + '", expected "' + PACKAGE_NAME + '"')
+        }
+        loaded = true
+        exported = registration.factory((name) => {
+          if (name === 'react-dom') return { createPortal: () => null }
+          if (name === 'react') {
+            return {
+              Component: class { constructor(props) { this.props = props } },
+              createElement: () => null,
+              useEffect: () => {},
+              useState: () => [undefined, () => {}],
+              useSyncExternalStore: () => undefined,
+            }
+          }
+          throw new Error('unexpected require("' + name + '") at load time')
+        })
+      },
+    },
+  }
+  // eslint-disable-next-line no-new-func
+  new Function('window', artifact)(window)
+  if (!loaded) throw new Error('bundle did not call window.__ModuleLoader__.load')
+  if (exported === null || typeof exported !== 'object') throw new Error('factory returned no exports')
+  if (typeof exported.apply !== 'function') throw new Error('exports.apply is not a function')
+  if (!Array.isArray(exported.inject)) throw new Error('exports.inject is not an array')
+  return exported
+}
+
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === join(process.argv[1])
+
+if (isMain) {
+  const check = process.argv.includes('--check')
+  const artifact = buildArtifact()
+
+  try {
+    assertLoads(artifact)
+  } catch (error) {
+    console.error('client/client.js does not load: ' + error.message)
+    process.exit(1)
+  }
+
+  if (check) {
+    const committed = readFileSync(OUT, 'utf8')
+    if (committed === artifact) {
+      console.log('client/client.js is up to date with client/src/')
+      process.exit(0)
+    }
+    console.error('client/client.js is STALE — run `npm run build` and commit the artifact')
+    process.exit(1)
+  }
+
+  writeFileSync(OUT, artifact)
+  console.log('wrote ' + OUT.replace(root, '.') + ' (' + artifact.length + ' bytes)')
+}

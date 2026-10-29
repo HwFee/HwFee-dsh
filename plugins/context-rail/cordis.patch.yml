@@ -1,0 +1,8 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+#
+# `name` MUST equal the package's own `name` field. A mismatch leaves the row
+# unresolvable, the row never activates, and the plugin silently disappears —
+# see AGENTS.md.
+- insert:
+    - id: dsh-context-rail
+      name: '@hwfee/dsh-context-rail'

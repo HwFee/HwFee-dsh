@@ -1,0 +1,68 @@
+{
+  "name": "@hwfee/dsh-context-rail",
+  "version": "0.2.4",
+  "description": "DeepSeek Harness 的会话内上下文侧栏插件：在会话标题栏右侧的按钮排里加一个开关，宽屏自动展开；侧栏贴着会话内容流右缘，不占用宿主原生右栏（文件预览、文件树等照常），显示当前会话的目录、模型、上下文窗口占用与分段、Token 用量。 / In-page session rail for DeepSeek Harness: a toggle in the conversation header's utility row, auto-opened on wide windows; it sits at the conversation's right edge without occupying the native right sidebar, and shows the session's environment, context occupancy and token usage.",
+  "type": "module",
+  "main": "lib/index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "HwFee <1744567281@qq.com>",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "context",
+    "sidebar",
+    "token",
+    "usage"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client/client.js",
+    "locale",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node tools/build-client.mjs",
+    "build:check": "node tools/build-client.mjs --check",
+    "test": "node tools/build-client.mjs --check && node test/manifest.test.mjs && node test/format.test.mjs && node test/panel.test.mjs && node test/styles.test.mjs && node test/effect.test.mjs && node test/layout.test.mjs && node test/registration.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

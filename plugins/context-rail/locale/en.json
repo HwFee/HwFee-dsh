@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Context rail",
+    "description": "Adds a toggle to the conversation header's utility row, auto-opened on wide windows; the rail sits at the conversation's right edge without occupying the native right sidebar, and shows the session's environment, context occupancy and token usage."
+  }
+}
