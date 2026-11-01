@@ -2,7 +2,7 @@
 
 这个目录放的是**证据**，不是概述：每个数值、每个钩子、每个取舍都要能对回代码或实机。面向使用者的说明在根 `README.md`，面向维护者的规则在 `AGENTS.md`。
 
-安装与发布的操作步骤不在本目录：装插件看 [`install-plugins.md`](install-plugins.md) 与 [`../market/SUBMISSION-FLOW.md`](../market/SUBMISSION-FLOW.md)。
+安装与发布的操作步骤不在本目录：装插件看 [`install-plugins.md`](install-plugins.md) 与 [`../market/SUBMISSION-FLOW.md`](../market/SUBMISSION-FLOW.md)。宿主归档补丁的索引在 [`../patches/README.md`](../patches/README.md)。
 
 | 文件 | 记录什么 |
 |---|---|

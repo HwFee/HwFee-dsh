@@ -184,6 +184,8 @@ dsh plugin --profile desktop add dsh-cds-theme@<版本> --registry=https://regis
 
 不锁版本的 `dsh plugin add <包名>` 仍可能落到上一版：pnpm 会从本地状态解析 `latest`。实测同一条官方源，`pnpm view` 报 0.1.10，`pnpm add` 却装出 0.1.8。`market/install-all.ps1` 绕开这一步——先用 npm 问版本，再装 `包名@版本`。
 
+`dsh-cds-theme@0.1.9` 已在 npm 上标记 deprecated：它会让代码与公式字体出错，请安装 0.1.10 或更新版本。
+
 另外提醒一件事：插件从 `link:` 变成 npm/Release 实体后，profile 就不再指向工作区，此后在工作区改源码、重建 bundle 都不会生效，除非重新用 `link:` 安装一次。而实体化安装会先清掉 `link:` 指向目录的内容——源码还没 commit + push 时这么做，工作区文件会被删除。
 
 ## 字体与许可

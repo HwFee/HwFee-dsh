@@ -184,6 +184,8 @@ dsh plugin --profile desktop add dsh-cds-theme@<version> --registry=https://regi
 
 An unpinned `dsh plugin add <name>` can still land on the previous version: pnpm resolves the `latest` tag from local state, and we measured `pnpm view` reporting 0.1.10 while `pnpm add` installed 0.1.8 against the same official registry. `market/install-all.ps1` avoids that step by asking npm for the version and installing `name@version`.
 
+`dsh-cds-theme@0.1.9` is marked deprecated on npm: it breaks code and math fonts. Install 0.1.10 or newer.
+
 One consequence is worth knowing before you upgrade. Once a plugin is an npm/Release package rather than a `link:`, the profile no longer points at the workspace, so editing sources and rebuilding the bundle there has no effect until you install it with `link:` again; and a materialized install first clears the contents the `link:` pointed at, so doing this while the sources are not committed and pushed deletes workspace files.
 
 ## Fonts and licensing

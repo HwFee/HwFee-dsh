@@ -6,7 +6,8 @@
     "audit": "node tools/audit.mjs",
     "verify": "node plugins/cds-theme/tools/verify.mjs",
     "release:compare": "node market/compare-published.mjs --write",
-    "market:index": "node market/build-index.mjs"
+    "market:index": "node market/build-index.mjs",
+    "test:tools": "node --test tools/test-patch-asar.mjs"
   },
   "dependencies": {
     "zod": "^4.4.3"

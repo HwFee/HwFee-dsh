@@ -238,6 +238,7 @@ npm test                          # 新鲜度 + 清单契约 + 全部单测
 
 # 仓库级
 node tools/audit.mjs              # 产物预算、unsafe DOM、eval、观察器释放、开关契约
+npm run test:tools                # 归档补丁工具：变体选择、编辑后置断言、repack 往返
 cd plugins/cds-theme && node tools/verify.mjs    # 主题自身的 73 项断言
 
 # 真机（改了用户看得见的东西就必须跑）

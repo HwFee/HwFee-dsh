@@ -47,6 +47,6 @@ pwsh market/verify-mount.ps1 -Package <包名>
 ## 5. 遗留项
 
 - 编辑卡片的真实行号依赖宿主补丁；不打补丁的记录显示 `—` 与「文件行号不可用」，不会伪造。
-- `dsh-cds-theme@0.1.9` 仍在 npm 上并带旧缺陷，升级到 0.1.10。
-- `tools/patch-asar.mjs` 对 rc.5 前端资产的变体重写尚未完成，当前只有 `hunk-lines` 可用；WIP 在 git stash。
+- `dsh-cds-theme@0.1.9` 已在 npm 上标记 deprecated（`npm deprecate`），提示升级到 0.1.10；npm 不允许删除已发布版本，所以这是能做到的极限。
+- `tools/patch-asar.mjs` 已支持 rc.2 与 rc.5 两套变体（含 rc.5 改名后的前端资产），`status` 会在未登记的构建上报告 unavailable 而不是猜测；两个补丁的 `--dry-run` 已在本机整包验证（framing / 偏移 / 每个成员 sha256 一致）。说明见 [`../patches/README.md`](../patches/README.md)。
 - 不锁版本的解析问题出在 pnpm 一侧，本仓库用 `market/install-all.ps1` 规避，未从根上修 pnpm。
