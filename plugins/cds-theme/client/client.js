@@ -4473,176 +4473,6 @@ window.__ModuleLoader__.load({
     `;
     }
 
-    // client/src/tobottom-styles.js
-    var TOBOTTOM_SCOPE = "[data-conversation-content]";
-    var TOBOTTOM_VIEW = TOBOTTOM_SCOPE + ' [data-slot="conversation.view"]';
-    var PATH_SLOT = ' [data-slot="conversation.view"] > * > *:has(> button:only-child)';
-    var PATH_BUTTON = PATH_SLOT + " > button:only-child";
-    var TOBOTTOM_SLOT = TOBOTTOM_SCOPE + PATH_SLOT;
-    var TOBOTTOM_BUTTON = TOBOTTOM_SCOPE + PATH_BUTTON;
-    var RUNNING_MARKER = "data-chat-running";
-    var STREAMING_MARKER = "data-streaming";
-    var IS_ANSWERING = ":is(:has([" + RUNNING_MARKER + "]), :has([" + STREAMING_MARKER + "]))";
-    var IS_IDLE = ":not(:has([" + RUNNING_MARKER + "])):not(:has([" + STREAMING_MARKER + "]))";
-    var ANSWERING_GUARD = TOBOTTOM_SCOPE + IS_ANSWERING;
-    var IDLE_GUARD = TOBOTTOM_SCOPE + IS_IDLE;
-    var DOT_ANIMATION = "cds-tobottom-dot";
-    var DOT_SIZE = "4px";
-    var DOT_GAP = "6px";
-    var DOT_CYCLE_MS = 1200;
-    var DOT_DELAYS = ["0ms", "160ms", "320ms"];
-    var DOT_RISE = "-3px";
-    var PULSE = "var(--cds-ease-pulse, " + EASING.pulse + ")";
-    var SNAP = "var(--ds-ease-snap, " + EASING.snap + ")";
-    function answeringButton() {
-      return ANSWERING_GUARD + PATH_BUTTON;
-    }
-    function idleButton() {
-      return IDLE_GUARD + PATH_BUTTON;
-    }
-    function dotKeyframes() {
-      return [
-        "@keyframes " + DOT_ANIMATION + " {",
-        "  0% {",
-        "    transform: translateY(0);",
-        "    animation-timing-function: " + SNAP + ";",
-        "  }",
-        "  36% {",
-        "    transform: translateY(" + DOT_RISE + ");",
-        "    animation-timing-function: " + PULSE + ";",
-        "  }",
-        "  72%, 100% {",
-        "    transform: translateY(0);",
-        "  }",
-        "}"
-      ].join("\n");
-    }
-    function toBottomRules() {
-      const answering = answeringButton();
-      const idle = idleButton();
-      const dotBox = [
-        '  content: "";',
-        "  flex: none;",
-        "  width: " + DOT_SIZE + ";",
-        "  height: " + DOT_SIZE + ";",
-        "  border-radius: 50%;",
-        "  background: currentColor;",
-        "  animation: " + DOT_ANIMATION + " " + DOT_CYCLE_MS + "ms " + PULSE + " infinite;"
-      ].join("\n");
-      return [
-        "/* ---- back to bottom: centred seat, streaming dots, down affordance --- */",
-        // 1. Centre the seat on the chat column. The host right-aligns it with a
-        //    flex-end seat plus an inline padding-right derived from the composer
-        //    clearance; both go, and the full-width seat centres instead. Vertical
-        //    geometry is the host's and is not touched: the button already floats in
-        //    the gap above the composer, and moving it down would cover the composer.
-        TOBOTTOM_SLOT + " {",
-        "  justify-content: center !important;",
-        "  padding-left: 0 !important;",
-        "  padding-right: 0 !important;",
-        "}",
-        // 2. THE CONTROL IS LIGHTER THAN THE HOST'S DEFAULT. The host draws a filled
-        //    white plate with a 1px hard ring (0 0 0 1px) plus two drop shadows; at
-        //    34px that reads as a solid chip floating over the transcript. The theme's
-        //    own floating controls use the raised surface with the soft elevation and
-        //    NO hard ring, so this matches them: one surface token, one shadow tier,
-        //    a hairline instead of an outline ring. Nothing here changes the box size
-        //    or position — only weight.
-        TOBOTTOM_BUTTON + " {",
-        "  cursor: pointer !important;",
-        "  background: var(--dsw-alias-bg-layer-1) !important;",
-        "  box-shadow: var(--dsw-elevation-soft) !important;",
-        "  border: 0.5px solid var(--dsw-alias-border-l1) !important;",
-        "  color: var(--dsw-alias-label-secondary) !important;",
-        "  transition: background-color 120ms " + SNAP + ", color 120ms " + SNAP + ",",
-        "    box-shadow 120ms " + SNAP + ";",
-        "}",
-        // Hover lifts it a step instead of deepening the shadow: the tier change is
-        // what the rest of the theme does on hover.
-        TOBOTTOM_BUTTON + ":hover {",
-        "  background: var(--dsw-alias-bg-layer-2) !important;",
-        "  color: var(--dsw-alias-label-primary) !important;",
-        "}",
-        // 3. Idle: the chevron dips on hover. Guarded by IDLE so it can never fight
-        //    the dots' own transform while the assistant is answering.
-        idle + " > svg {",
-        "  transition: transform 140ms " + SNAP + ";",
-        "}",
-        idle + ":hover > svg {",
-        "  transform: translateY(2px);",
-        "}",
-        // 4. Answering: the chevron becomes the middle dot and two pseudos appear
-        //    around it. `gap` keeps the group centred inside the fixed-size button;
-        //    nothing here can change the button's outside geometry.
-        answering + " {",
-        "  gap: " + DOT_GAP + ";",
-        "}",
-        // HOVERING WHILE BUSY MUST SHOW THE AFFORDANCE AGAIN. The dots say "working",
-        // but the pointer says "I am about to click this", so the control has to
-        // answer with what the click will do. Hover therefore drops the dots and
-        // restores the downward chevron the button has when idle; the wave resumes
-        // when the pointer leaves.
-        answering + ":hover {",
-        "  gap: 0;",
-        "}",
-        answering + " > svg {",
-        "  flex: none;",
-        "  width: " + DOT_SIZE + ";",
-        "  height: " + DOT_SIZE + ";",
-        "  background: currentColor;",
-        "  border-radius: 50%;",
-        "  transform: translateY(0);",
-        "  animation: " + DOT_ANIMATION + " " + DOT_CYCLE_MS + "ms " + PULSE + " infinite;",
-        "  animation-delay: " + DOT_DELAYS[1] + ";",
-        "  transition: none;",
-        "}",
-        answering + " > svg > path {",
-        "  stroke: none;",
-        "}",
-        answering + "::before {",
-        dotBox,
-        "  animation-delay: " + DOT_DELAYS[0] + ";",
-        "}",
-        answering + "::after {",
-        dotBox,
-        "  animation-delay: " + DOT_DELAYS[2] + ";",
-        "}",
-        // The hovered-while-busy shape: no dots, the real chevron back, same box.
-        answering + ":hover::before,",
-        answering + ":hover::after {",
-        "  content: none;",
-        "  animation: none;",
-        "}",
-        answering + ":hover > svg {",
-        "  width: 16px;",
-        "  height: 16px;",
-        "  background: none;",
-        "  border-radius: 0;",
-        "  animation: none;",
-        "  transform: translateY(2px);",
-        "}",
-        answering + ":hover > svg > path {",
-        "  stroke: currentColor;",
-        "}",
-        dotKeyframes(),
-        // 5. Reduced motion means NOT MOVING, not moving slower: the three dots stay
-        //    as a static ellipsis (the state is still legible) and every transition
-        //    on this control is dropped.
-        "@media (prefers-reduced-motion: reduce) {",
-        "  " + TOBOTTOM_BUTTON + ",",
-        "  " + idle + " > svg,",
-        "  " + answering + " > svg,",
-        "  " + answering + ":hover > svg,",
-        "  " + answering + "::before,",
-        "  " + answering + "::after {",
-        "    animation: none !important;",
-        "    transition: none !important;",
-        "    transform: none !important;",
-        "  }",
-        "}"
-      ].join("\n");
-    }
-
     // client/src/styles.js
     function elevationRules(state) {
       const lines = [];
@@ -5011,15 +4841,12 @@ window.__ModuleLoader__.load({
         "body {",
         "  font-family: var(--dsw-font-family-ui) !important;",
         "}",
-        // Conversation content takes the TEXT role back, so the two can differ.
-        // `[data-conversation-content]` is the host's own marker for the message
-        // column (docs/host-hooks.md §1.4), and the selector is repeated on its
-        // descendants because the host sets `font` (a shorthand, family included) on
-        // markdown elements further in. KaTeX roots and all their descendants keep
-        // renderer-owned fonts: its glyph positions assume KaTeX's font metrics,
-        // so forcing the prose family here makes sums and subscripts overlap.
-        "[data-conversation-content],",
-        "[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {",
+        // Conversation content inherits the TEXT role from its stable container.
+        // Markdown's own font tokens already select the text family. Forcing it on
+        // every descendant overrides code-token spans and renderer-owned fonts;
+        // even exclusions increase specificity and can beat code-surface rules.
+        // Keep that boundary here so code and KaTeX retain their own font metrics.
+        "[data-conversation-content] {",
         "  font-family: var(--dsw-font-family) !important;",
         "}"
       ].join("\n");
@@ -5036,35 +4863,15 @@ window.__ModuleLoader__.load({
     function toolRowsRules() {
       return [
         "/* ---- tool rows: inset card, boxed request, flowing response --------- */",
-        // CODE GETS ITS MONOSPACE BACK. `uiFontRules()` pins the TEXT family on
-        // every descendant of the conversation with `!important` (excluding
-        // `code`/`pre`/`kbd`/`samp`), but every code surface in a tool card is
-        // built out of plain DIVs:
-        //
-        //   diff rows   ._body_17vb8_5 { font: var(--dsw-font-markdown-code-block) }
-        //               ._line_17vb8_13 { … }            ← a div
-        //   read rows   ._body_1pq26_79 { font: var(--dsw-font-markdown-code-block) }
-        //               ._content_1ay0u_16 { … }         ← a div
-        //
-        // A plain declaration loses to that `!important`, so those cards rendered
-        // in the TEXT family while the markdown block beside them stayed
-        // monospace — the "some code is Mono, some is Sans" report. This rule
-        // matches the `!important` and sits later in the sheet, so it wins without
-        // touching prose. It lives here (not in `uiFontRules`) because that
-        // function's output is inside a byte-pinned baseline slice.
-        // SPECIFICITY IS LOAD-BEARING. The prose rule this fights is
-        // `[data-conversation-content] :not(code):not(pre):not(kbd):not(samp)`
-        // (0,2,1) with `!important`; a bare `[data-diff] *` is (0,1,0) and loses
-        // even with `!important`. Measured live before this change: the diff rows
-        // computed to anthropic-sans. Prefixing with the conversation hook puts
-        // these at (0,2,0)+ and lets the code family win.
+        // Tool code surfaces include DIV-based diff/read rows as well as PREs.
+        // Select the code role across their tokens and controls using stable hooks.
+        // uiFontRules now sets prose only on the conversation container, so these
+        // declarations no longer compete with a per-descendant prose override.
         "[data-conversation-content] [data-diff], [data-conversation-content] [data-diff] *,",
         "[data-conversation-content] [data-read], [data-conversation-content] [data-read] *,",
         "[data-conversation-content] [data-code-wrap], [data-conversation-content] [data-code-wrap] *,",
-        // The theme's own diff card is NOT `[data-diff]` (it deliberately avoids
-        // that hook so the host's counter never double-numbers it), so it needs to
-        // be named here or it inherits the TEXT family from the rule above and the
-        // code inside it renders in prose type.
+        // The theme's own diff card avoids data-diff so the host's counter never
+        // double-numbers it. Include its own stable hook in the code role too.
         "[data-conversation-content] [data-cds-diffcard], [data-conversation-content] [data-cds-diffcard] *,",
         '[data-slot="tool.call.toolview"] pre, [data-slot="tool.call.toolview"] pre *,',
         ".md-code-block, .md-code-block * {",
@@ -5750,6 +5557,12 @@ window.__ModuleLoader__.load({
       };
       return [
         "/* ---- diff card: tokenised rows, owned by the theme ---------------- */",
+        "[data-cds-diff-numbering] {",
+        "  padding: 2px 10px 6px;",
+        "  font-size: 11px;",
+        "  line-height: 16px;",
+        "  color: var(--dsw-alias-label-caption);",
+        "}",
         // The row: one 24px line, the seat the host's tool rows use, so a
         // conversation that mixes host rows and this card keeps one rhythm.
         "[data-cds-diffrow] { position: relative; }",
@@ -6644,7 +6457,6 @@ window.__ModuleLoader__.load({
       if (state.refine !== false) parts.push(changesPreviewRules(state));
       if (state.refine !== false) parts.push(toolChromeRules());
       parts.push(diffStatFamilyRules());
-      if (state.refine !== false) parts.push(toBottomRules());
       return parts.join("\n\n");
     }
     function createStyles({ getState, isThemeModeAvailable }) {
@@ -6765,7 +6577,8 @@ window.__ModuleLoader__.load({
       "diff.expand": "\u2026 {count} more lines",
       "diff.expandAria": "Expand the remaining {count} diff lines",
       "diff.collapse": "Collapse",
-      "diff.empty": "No changes were recorded for this call"
+      "diff.empty": "No changes were recorded for this call",
+      "diff.linesUnavailable": "File line numbers unavailable"
     };
     var zh = {
       "appearance.nav": "\u4E3B\u9898\u5B9A\u5236",
@@ -6821,7 +6634,8 @@ window.__ModuleLoader__.load({
       "diff.expand": "\u2026 \u5176\u4F59 {count} \u884C",
       "diff.expandAria": "\u5C55\u5F00\u5176\u4F59 {count} \u884C\u5DEE\u5F02",
       "diff.collapse": "\u6536\u8D77",
-      "diff.empty": "\u8FD9\u6B21\u8C03\u7528\u6CA1\u6709\u8BB0\u5F55\u4EFB\u4F55\u6539\u52A8"
+      "diff.empty": "\u8FD9\u6B21\u8C03\u7528\u6CA1\u6709\u8BB0\u5F55\u4EFB\u4F55\u6539\u52A8",
+      "diff.linesUnavailable": "\u6587\u4EF6\u884C\u53F7\u4E0D\u53EF\u7528"
     };
     function makeTranslator(dict) {
       return function translate(key, params) {
@@ -9385,7 +9199,9 @@ window.__ModuleLoader__.load({
       const oldStart = line(hunk?.oldStart);
       const newStart = line(hunk?.newStart);
       if (oldStart === null && newStart === null) return null;
-      return { oldStart: oldStart ?? newStart, newStart: newStart ?? oldStart };
+      if (splitLines(hunk.oldText).length > 0 && oldStart === null) return null;
+      if (splitLines(hunk.newText).length > 0 && newStart === null) return null;
+      return { oldStart: oldStart ?? 1, newStart: newStart ?? 1 };
     }
     function buildHunk(hunk) {
       const starts = resolveStarts(hunk);
@@ -9444,12 +9260,12 @@ window.__ModuleLoader__.load({
       for (const row of rows) {
         row.pair = null;
         if (row.kind === "del") {
-          row.number = oldNo;
+          row.number = starts === null ? null : oldNo;
           row.side = "old";
           oldNo += 1;
           continue;
         }
-        row.number = newNo;
+        row.number = starts === null ? null : newNo;
         row.side = "new";
         newNo += 1;
         if (row.kind === "ctx") oldNo += 1;
@@ -9543,7 +9359,7 @@ window.__ModuleLoader__.load({
       const path = typeof args.file_path === "string" ? args.file_path : "";
       if (path === "") return null;
       if (call.name === "write") {
-        return typeof args.content === "string" ? { path, oldText: null, newText: args.content } : null;
+        return typeof args.content === "string" ? { path, oldText: null, newText: args.content, newStart: 1 } : null;
       }
       if (call.name !== "edit") return null;
       if (typeof args.old_string !== "string" || typeof args.new_string !== "string") return null;
@@ -9727,7 +9543,7 @@ window.__ModuleLoader__.load({
             // hook for "is that number a file line or a hunk-relative count".
             "data-side": row.side
           },
-          h("span", { "data-cds-diff-num": "", "aria-hidden": "true" }, String(row.number)),
+          h("span", { "data-cds-diff-num": "", "aria-hidden": "true" }, row.number === null ? "\u2014" : String(row.number)),
           h(
             "span",
             { "data-cds-diff-glyph": "", "aria-hidden": "true" },
@@ -9794,6 +9610,10 @@ window.__ModuleLoader__.load({
               const rows = hunk.rows;
               const decoded = decorated[index];
               const nodes = [];
+              if (hunk.starts === null) nodes.push(h("div", {
+                key: "numbering",
+                "data-cds-diff-numbering": ""
+              }, t("diff.linesUnavailable")));
               const hidden = rows.length - LINE_LIMIT;
               const open = openHunks[index] === true;
               const push = (at) => nodes.push(rowNode(at, rows[at], decoded.tokens[at], decoded.marks[at]));

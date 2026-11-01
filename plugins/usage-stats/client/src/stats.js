@@ -111,14 +111,18 @@ export const UNIT_SCALES = {
 /**
  * Resolve the stored preference to the scale that is actually rendered.
  *
- * `auto` is a real third state, not sugar for one of the scales: it follows the
- * ACTIVE LANGUAGE, so the same stored value renders 万/亿 in a zh UI and K/M/B
- * in an en UI. The caller passes the language (`'zh'`/`'en'`) so a locale switch
- * re-formats without touching the store.
+ * CHINESE UNITS BELONG TO THE CHINESE UI. 万/亿 are Chinese numerals, not a
+ * stylistic choice: an English panel that reads `2.94亿` is unreadable to the
+ * reader it addresses, and the shipped default (`myriad`) did exactly that on an
+ * English interface. So the ACTIVE LANGUAGE decides first, and the stored switch
+ * only chooses between the two ladders once the interface is Chinese.
+ *
+ * The caller passes the language (`'zh'`/`'en'`) so a locale switch re-formats
+ * without touching the store.
  */
 export function resolveUnitScale(mode, language) {
-  if (mode === 'short' || mode === 'myriad') return mode
-  return language === 'zh' ? 'myriad' : 'short'
+  if (language !== 'zh') return 'short'
+  return mode === 'short' ? 'short' : 'myriad'
 }
 
 /** Round half away from zero at `decimals` places, without float dust. */

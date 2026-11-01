@@ -12,10 +12,10 @@
 
 ## 安装与卸载
 
-在命令行运行，或在 DSH 的 **设置 → 插件 → 添加插件** 里直接输入 `dsh-cds-theme@0.1.9`：
+在命令行运行，或在 DSH 的 **设置 → 插件 → 添加插件** 里直接输入 `dsh-cds-theme@0.1.10`：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@0.1.9 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
 ```
 
 **装完或卸完后必须彻底退出并重开 DSH。**
@@ -35,12 +35,12 @@ dsh plugin --profile desktop remove dsh-cds-theme
 | **配色与形状令牌** | `ctx.theme.overrideTokens` | **173 个配色令牌**（明暗成对）：暖灰表面阶梯、文本三阶、`hsla(0,0%,8%,α)` 发丝边框、陶土品牌色双轨（`#c6613f` / `#d97757`）、圆角六档（输入框 28→**20px**，气泡 20→**18px**）、代码 diff 暖绿与陶红、三层焦点环 |
 | **排印令牌** | `ctx.theme.overrideTokens` | **133 个排印令牌**：17 个 Markdown 角色 × 6 个变量 + 13 级 UI 字阶，对齐 CDS 7 阶字号与**暗色字重减薄**（正文 400→360、Medium 500→460、Semibold 580→550） |
 | **内嵌字体** | 构建时内联 `data:font/woff2` | **只内联 2 个做过 `avar` 轴偏移校准的思源黑体/宋体子集**（SIL OFL，本项目自制子集），无网络请求，任意 origin 下直接加载。**6 个 Anthropic 字面（Sans/Serif/Mono × Roman/Italic）没有再分发授权，包里零字节**：它们只声明成 `local("Anthropic Sans" / "Anthropic Serif" / "Anthropic Mono")`，本机装了才生效，没装就回落到系统字体。构建与产物测试都会拦住受限字面重新混入，详见 [`market/PUBLISHING.md`](../../market/PUBLISHING.md) |
-| **数学公式字体** | 正文字体规则排除 `.katex` 及其全部后代 | 行内和独立公式保留宿主 KaTeX 的数学、运算符与尺寸字体，避免正文字体替换字形后出现求和下标重叠；关闭组件精修时同样保留 |
+| **正文、代码与数学字体** | 正文字体只设在会话容器，后代按组件自己的字体声明继承 | 代码块的语法高亮片段、代码内链接、行内代码和工具代码保持等宽字体；行内和独立公式保留 KaTeX 的数学、运算符与尺寸字体，避免字形错位。关闭组件精修时同样保留各自字体 |
 | **海拔阴影** | 插件样式表 `!important` | 双层弥散阴影（一层贴边、一层大半径散开），覆盖 `--dsw-elevation-panel/prominent/soft` |
 | **组件与正文细节** | 结构定位 + 自有属性 + 样式表 | 首页问候语改衬线 Display（38px / wght 330）；聊天表格闭合 `.5px` 发丝外框 + 浅底表头 + 等宽数字；代码块浅色下是白底、深色下 `#1a1a19` 暖黑；思考提示改柔和呼吸微光；消息操作栏悬停显现；滚动渐隐遮罩 |
 | **代码块默认换行** | `white-space: pre-wrap` + 隐藏 `aria-pressed` 按钮 | 所有代码块（含工具卡片里的 diff / 文件行）**默认自动换行**，并**移除**宿主右上角的「自动换行」开关——主题不再提供「不换行」这个状态。diff/read 的每一行是独立的行元素而不是 `<pre>`，所以单独有一条 `[data-code-wrap] [class*="_line_"]` 规则，并把 diff 的 `max-content` 网格列钉成 `minmax(0, 1fr)`，否则行内文字会溢出卡片被裁掉 |
 | **工具调用卡片** | `[data-slot="tool.call.toolview"]` + `[class*="_ioCard"]` | 统一成参考实现的「一张卡」：展开体缩进到行下方，`输入`/`输出` 标签与分隔线去掉；请求变成带 `.5px` 发丝描边、12px 圆角、代码底色的代码块，响应变成无框流淌的次要色文本（高 220/280px 后内部滚动）。diff / read / terminal 等自有卡片同样套上这张卡（发丝框 + 12px 圆角 + 代码底），语言标签收进悬停显示的复制按钮。行尾的 **`+N−N` 变更数连成一组**排在标题之后，与 diff 行号共用代码字体 token（默认 Mono，跟随代码字体设置）：红绿两段背景之间无缝，只有整组外侧圆角。背景与 diff 行共用 `--cds-bg-git-added` / `--cds-bg-git-removed`，**文字仍为绿 / 红**；组件精修关闭时，背景回落到宿主对应的文件 diff token。`refine` 关闭、宿主自己的卡片回来时同样生效 |
-| **编辑 / 写入卡片（主题自绘 diff）** | `tool.call.toolview`，键 `edit` / `write`，`priority: -1` | 行和卡都由主题渲染：行号列（新增/上下文行印新文件行号，删除行回退旧文件行号）、`+`/`-`/空格字形、按语言分词的语法着色（`--shiki-token-*`）、以及**词级高亮**——配对的两行只把真正变化的 token 洗亮，看见的是「哪个词变了」而不是两行相像的文本。失败调用只渲染错误文本，行标题写成「编辑失败 <文件名>」；超长 hunk 收成 16 行 + 本地化展开器。**真实行号需要两个宿主补丁**（见下方说明），未应用时如实标 `data-numbered="false"` 并显示 hunk 内相对序号 |
+| **编辑 / 写入卡片（主题自绘 diff）** | `tool.call.toolview`，键 `edit` / `write`，`priority: -1` | 行和卡都由主题渲染：行号列（新增/上下文行印新文件行号，删除行回退旧文件行号）、`+`/`-`/空格字形、按语言分词的语法着色（`--shiki-token-*`）、以及**词级高亮**——配对的两行只把真正变化的 token 洗亮，看见的是「哪个词变了」而不是两行相像的文本。失败调用只渲染错误文本，行标题写成「编辑失败 <文件名>」；超长 hunk 收成 16 行 + 本地化展开器。真实行号来自宿主持久化的 `oldStart` / `newStart`（见下方说明）；缺失或只提供了非空一侧的起点时，行号列显示 `—` 并明确提示「文件行号不可用」，不把片段内的计数冒充文件行号 |
 | **「主题定制」设置页** | `settings.section` (`order: 1`) | 设置侧栏独立一页（与「通用」同级，同心双框图标），包含 10 个外观调节项；总开关留在「通用」 |
 
 ---
@@ -66,7 +66,7 @@ dsh plugin --profile desktop remove dsh-cds-theme
 **设置 → 通用设置** 里只留一行 **「启用 CDS 主题」** 总开关。关掉它，所有令牌和样式规则当场撤回，回到宿主原样。
 
 
-> **diff 卡片的真实行号需要两个宿主补丁。** 主题的 `edit` / `write` 卡片会读 `data-diff-new-start` / `data-diff-old-start` 并把行号印成**真实文件行号**；这两个属性由仓库自带的 `patches/dsh-tool-fs-hunk-lines.patch`（数据层：`computeHunkDiffs` 增加 `oldStart` / `newStart`）与 `patches/dsh-web-frontend-diff-start.patch`（渲染层：把 start 写到 DOM）产出。**当前安装未应用这两个补丁**，所以主题拿不到起点，只能显示 hunk 内的相对序号，并在卡片上如实标 `data-numbered="false"`——不会伪造文件行号。补丁属于宿主安装层面，主题不会自行改动 asar。
+> **真实行号需要宿主保留每个 hunk 的文件起点。** 主题自绘的 `edit` / `write` 卡片直接读取 `block.meta.diffs[].oldStart` / `newStart`；仓库的 [`dsh-tool-fs-hunk-lines.patch`](../../patches/dsh-tool-fs-hunk-lines.patch) 保留这些数据。关闭组件精修后显示的宿主原生卡片，还需要 [`dsh-web-frontend-diff-start.patch`](../../patches/dsh-web-frontend-diff-start.patch) 将起点写入 DOM。[`patch-asar.mjs`](../../tools/patch-asar.mjs) 提供检测、预演、备份与回退；应用补丁前须完全退出 DSH，再启动应用。主题包不会自行改动宿主归档。**仅升级主题无法补回旧记录里已经丢失的起点**：主题会显示 `—` 和「文件行号不可用」，不读取当前文件来猜历史位置。
 
 ---
 
@@ -102,7 +102,7 @@ Anthropic 的三个官方可变字体里**一个汉字都没有**（625 个码�
 
 宿主的 `DiffBlock` 把每行渲染成**纯文本节点**（行对象只有 `{ kind, text }`）。它能给整行上色，但 DOM 里根本没有 token 结构，所以**没法给关键字/字符串/数字分别上色，也没法指出哪一段才是真正改动的地方**——而这正是 diff 卡片存在的意义。所以主题在 `tool.call.toolview` 上接管了 `edit` / `write` 两个键（和 git-bash 插件接管 `run_shell` 是同一条缝），自己分词、自己配对改动的行、自己画单元格。
 
-分词器 `client/src/tokenscan.js` 是零依赖的单行扫描器，覆盖 JS/TS、JSON、CSS 与 Markdown，其它一律降级成 `plain`；它保证**输出拼起来等于输入**（渲染时不会丢字符），并且**永不抛异常、游标永远前进**（在 React 渲染里抛异常会整行消失）。行号来自 `block.meta.diffs` 里的 `oldStart` / `newStart`；**装没装 `patches/dsh-tool-fs-hunk-lines.patch` 决定这两个字段在不在**——没有补丁时卡片退回「本 hunk 内 1..n」的编号，并在 `data-numbered="false"` 上如实标注，不会伪造文件行号。
+分词器 `client/src/tokenscan.js` 是零依赖的单行扫描器，覆盖 JS/TS、JSON、CSS 与 Markdown，其它一律降级成 `plain`；它保证**输出拼起来等于输入**（渲染时不会丢字符），并且**永不抛异常、游标永远前进**（在 React 渲染里抛异常会整行消失）。行号来自 `block.meta.diffs` 里的 `oldStart` / `newStart`；新增与上下文行使用新文件行号，删除行使用旧文件行号。只有实际包含文本的一侧都提供有效起点，卡片才显示数字；缺失时在 `data-numbered="false"` 的 hunk 上显示 `—` 和本地化提示。新建文件的完整写入内容明确从第 1 行开始。
 
 ### 6. 组件规则与视图注册同生共死
 

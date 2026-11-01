@@ -1257,28 +1257,24 @@ test('the three motion curves are tokens: unconditional and exact', function () 
     'a retired switch field must change nothing')
 })
 
-test('the UI font role is unconditional, master-switched and excludes code', function () {
+test('UI and text font roles are unconditional, master-switched container boundaries', function () {
   const ui = 'body {\n  font-family: var(--dsw-font-family-ui) !important;\n}'
-  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {\n  font-family: var(--dsw-font-family) !important;\n}'
+  const text = '[data-conversation-content] {\n  font-family: var(--dsw-font-family) !important;\n}'
   for (const state of [{}, { refine: false }]) {
     const sheet = buildCssFor(sanitize(state))
     assert.ok(sheet.includes(ui), 'chrome must take the UI family: ' + JSON.stringify(state))
     assert.ok(sheet.includes(text), 'conversation content must keep the text family: ' + JSON.stringify(state))
   }
   assert.equal(buildCssFor(sanitize({ enabled: false })), '')
-  assert.ok(hasRule(buildCssFor(sanitize({})),
-    /:not\(code\):not\(pre\):not\(kbd\):not\(samp\)/,
-    /font-family: var\(--dsw-font-family\)/),
-    'code, pre, kbd and samp must be excluded from the text-role rule')
 })
 
-test('conversation font overrides leave KaTeX roots and glyph descendants to the renderer', function () {
+test('conversation font inheritance preserves code tokens and KaTeX glyph families', function () {
   for (const state of [{}, { refine: false }]) {
     const sheet = buildCssFor(sanitize(state))
-    const rule = sheet.match(/\[data-conversation-content\],\n([^\n]+) \{\n  font-family: var\(--dsw-font-family\) !important;\n\}/)
-    assert.ok(rule, 'the text font role must still reach ordinary conversation prose')
-    assert.ok(rule[1].includes(':not(.katex)'), 'KaTeX roots need their own main font')
-    assert.ok(rule[1].includes(':not(.katex *)'), 'nested KaTeX glyphs need their own math and size fonts')
+    const textRules = [...sheet.matchAll(/([^{}]+)\{\s*font-family: var\(--dsw-font-family\) !important;\s*\}/g)]
+      .map(function (match) { return match[1].trim() })
+    assert.deepEqual(textRules, ['[data-conversation-content]'],
+      'set the text role on the container; descendant overrides replace syntax token, link and math fonts')
   }
 })
 
@@ -1698,4 +1694,16 @@ test('diff card: no path line, full bleed, numbered gutter', function () {
   assert.ok(number, 'expected the line-number gutter')
   assert.match(number.body, /content:\s*counter\(cds-diff-line\)/)
   assert.match(number.body, /text-align:\s*right/)
+})
+
+test('the floating back-to-bottom button is left to the host, in both refine states', function () {
+  // The theme used to re-seat that button and swap its chevron for a three-dot
+  // wave. It is the host's control, so no rule may reach it again: the whole
+  // seat/animation block must stay out of the sheet with refinement on or off.
+  for (const state of [{}, { refine: false }]) {
+    const sheet = buildCssFor(sanitize(state))
+    assert.ok(!sheet.includes('button:only-child'), 'no structural seat override: ' + JSON.stringify(state))
+    assert.ok(!sheet.includes('cds-tobottom-dot'), 'no theme-owned dot animation: ' + JSON.stringify(state))
+    assert.ok(!sheet.includes('conversation.view'), 'the conversation-view outlet stays untouched: ' + JSON.stringify(state))
+  }
 })

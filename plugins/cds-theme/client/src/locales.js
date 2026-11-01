@@ -80,6 +80,7 @@ export const en = {
   'diff.expandAria': 'Expand the remaining {count} diff lines',
   'diff.collapse': 'Collapse',
   'diff.empty': 'No changes were recorded for this call',
+  'diff.linesUnavailable': 'File line numbers unavailable',
 }
 
 export const zh = {
@@ -137,6 +138,7 @@ export const zh = {
   'diff.expandAria': '展开其余 {count} 行差异',
   'diff.collapse': '收起',
   'diff.empty': '这次调用没有记录任何改动',
+  'diff.linesUnavailable': '文件行号不可用',
 }
 
 /**

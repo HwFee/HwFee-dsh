@@ -263,8 +263,7 @@ test('the file-change counts use the diff code family in BOTH card states', func
   assert.ok(rule.selector.includes('[data-tool]'), 'and to the tool summary, not to every stat cell')
   assert.ok(rule.selector.includes('[data-cds-diffrow-stats]'),
     'the theme\'s own card draws its counts with this marker — it needs the rule too')
-  // Restore the same code role as the diff gutter on the group AND leaves:
-  // an inherited family cannot beat the conversation's explicit prose rule.
+  // Select the same code role as the diff gutter on both group and leaves.
   for (const refine of [true, false]) {
     for (const needle of ['[class*="diffStat"]', '[class*="diffAdded"]', '[class*="diffRemoved"]']) {
       assert.ok(ruleFor(rules({ refine }), needle).body.includes('font-family: var(--ds-font-family-code) !important;'),

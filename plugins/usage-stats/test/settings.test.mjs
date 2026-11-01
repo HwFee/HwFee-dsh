@@ -1049,7 +1049,9 @@ function lifecycleRows() {
     store: store,
     registrations: registrations,
     unitsTree: function () {
-      return units.component({ t: function (key) { return key } })
+      // The row is offered on a CHINESE interface only, so the fake translator
+      // has to report `zh` for the language marker.
+      return units.component({ t: function (key) { return key === 'book.lang' ? 'zh' : key } })
     },
   }
 }
@@ -1085,24 +1087,26 @@ test('one formatter reaches the cards, model rows, heatmap text and book line', 
   assert.match(String(heatMyriad.props['aria-label']), /"max":"1.2万"/)
 })
 
-test('the chosen scale applies whatever the interface language is', function () {
-  // `auto` used to make the scale follow the language. It is gone: the switch
-  // stores the scale the user picked, so an English UI showing Chinese units
-  // keeps them, and vice versa. What must still hold is that the stored value is
-  // never rewritten by a render — the language only decides DEFAULTS at boot.
+test('Chinese units never reach an English interface', function () {
+  // THE BUG THIS PINS: the shipped default is `myriad`, so an English panel
+  // rendered `2.94亿`. 万/亿 are Chinese numerals; the language decides first and
+  // the switch only picks a ladder once the interface is Chinese.
   const englishMyriad = renderUnitPanel({ lang: 'en', mode: 'myriad' })
   const chineseShort = renderUnitPanel({ lang: 'zh', mode: 'short' })
-  assert.equal(cardValues(englishMyriad.tree)[2].value, '18.8亿',
-    'an explicit myriad choice survives an English UI')
+  assert.equal(cardValues(englishMyriad.tree)[2].value, '1.9B',
+    'an English UI reads the Western ladder even with a stored myriad choice')
   assert.equal(cardValues(chineseShort.tree)[2].value, '1.9B',
-    'an explicit short choice survives a Chinese UI')
+    'the switch still reaches K/M/B on a Chinese interface')
   assert.equal(englishMyriad.store.getState().units, 'myriad', 'the stored mode never changed')
   assert.equal(chineseShort.store.getState().units, 'short')
 
-  // A store that has no units field at all takes the language-appropriate
-  // default, which is the one place the language still matters.
-  assert.equal(renderUnitPanel({ lang: 'zh' }).store.getState().units, 'myriad',
+  // The language decides the rendered ladder, not the stored default.
+  assert.equal(cardValues(renderUnitPanel({ lang: 'zh' }).tree)[2].value, '18.8亿',
     'a zh interface defaults to 万/亿')
+  assert.equal(cardValues(renderUnitPanel({ lang: 'en' }).tree)[2].value, '1.9B',
+    'an en interface defaults to K/M/B')
+  assert.equal(renderUnitPanel({ lang: 'zh' }).store.getState().units, 'myriad',
+    'and the store keeps the language-appropriate default')
 })
 
 test('the models list uses the same scale as the cards', function () {

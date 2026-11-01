@@ -129,12 +129,13 @@ test('a unified gutter prints the new number, and a deleted row the old one', fu
   assert.equal(findAll(tree, 'data-cds-diff-hunk')[0].props['data-numbered'], 'true')
 })
 
-test('without oldStart/newStart the gutter counts 1..n and says so', function () {
-  // The shipped archive carries neither field (patch 1 is not installed), so
-  // this is the path every real conversation takes today.
+test('missing file offsets show unavailable gutters and a visible explanation', function () {
   const tree = render(editBlock(THREE_LINES))
-  assert.deepEqual(rows(tree).map(function (row) { return row.number }), ['1', '2', '2', '3'])
+  assert.deepEqual(rows(tree).map(function (row) { return row.number }), ['—', '—', '—', '—'])
   assert.equal(findAll(tree, 'data-cds-diff-hunk')[0].props['data-numbered'], 'false')
+  assert.equal(flat(findAll(tree, 'data-cds-diff-numbering')[0]), 'File line numbers unavailable')
+  const chinese = render(editBlock(THREE_LINES), { t: makeTranslator(zh) })
+  assert.equal(flat(findAll(chinese, 'data-cds-diff-numbering')[0]), '文件行号不可用')
 })
 
 test('a pure insertion numbers from its newStart and has no old side', function () {
@@ -150,10 +151,27 @@ test('a pure insertion numbers from its newStart and has no old side', function 
   ])
 })
 
-test('one published side seeds both counters', function () {
-  const tree = render(editBlock(Object.assign({ newStart: 10 }, THREE_LINES)))
-  assert.deepEqual(rows(tree).map(function (row) { return row.number }), ['10', '11', '11', '12'])
-  assert.equal(findAll(tree, 'data-cds-diff-hunk')[0].props['data-numbered'], 'true')
+test('a missing offset on a nonempty file side never guesses that side from the other', function () {
+  for (const start of [{ newStart: 10 }, { oldStart: 20 }, { oldStart: 0, newStart: 10 }]) {
+    const tree = render(editBlock(Object.assign({}, THREE_LINES, start)))
+    assert.deepEqual(rows(tree).map(function (row) { return row.number }), ['—', '—', '—', '—'])
+    assert.equal(findAll(tree, 'data-cds-diff-hunk')[0].props['data-numbered'], 'false')
+  }
+})
+
+test('old and new offsets remain independent after earlier insertions', function () {
+  const tree = render(editBlock(Object.assign({}, THREE_LINES, { oldStart: 118, newStart: 125 })))
+  assert.deepEqual(rows(tree).map(function (row) { return row.number }), ['125', '119', '126', '127'])
+  assert.equal(findAll(tree, 'data-cds-diff-numbering').length, 0)
+})
+
+test('separate hunks retain their own real file offsets', function () {
+  const first = Object.assign({}, THREE_LINES, { oldStart: 118, newStart: 125 })
+  const second = Object.assign({}, THREE_LINES, { oldStart: 1451, newStart: 1458 })
+  const block = editBlock(first)
+  block.meta.diffs.push(second)
+  assert.deepEqual(rows(render(block)).map(function (row) { return row.number }),
+    ['125', '119', '126', '127', '1458', '1452', '1459', '1460'])
 })
 
 // ----------------------------------------------------------- token spans

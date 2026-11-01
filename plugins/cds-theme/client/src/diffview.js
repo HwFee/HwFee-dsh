@@ -3,10 +3,10 @@
  *
  * WHY A VIEW. The host renders these two tools with its own `DiffBlock`, which
  * re-diffs `oldText`/`newText` and emits rows as `{ kind, text }` — plain text
- * nodes (`dsh-client-ui-tool`, `gF`/`yF`). There is no token structure in the
- * DOM, so CSS can tint a row and nothing else: it cannot colour a keyword, a
- * string or a number, and it cannot say WHICH token changed. Both are the point
- * of this card, so the theme owns the view, through the same `tool.call.toolview`
+ * nodes (`dsh-client-ui-tool`). There is no token structure in the DOM, so CSS
+ * can tint a row and nothing else: it cannot colour a keyword, a string or a
+ * number, and it cannot say WHICH token changed. Both are the point of this
+ * card, so the theme owns the view, through the same `tool.call.toolview`
  * seam the git-bash plugin uses.
  *
  * WHERE THE DATA COMES FROM. `block.meta.diffs` is an array of
@@ -16,8 +16,8 @@
  *     a string;
  *   - `oldStart` / `newStart` are 1-based FILE line numbers, present only when
  *     the asar patch (`patches/dsh-tool-fs-hunk-lines.patch`) is installed. The
- *     shipped archive has neither, so the card falls back to hunk-relative
- *     1..n and says so with `data-numbered="false"` on the hunk.
+ *     shipped archive has neither. Missing offsets render as em dashes with
+ *     a visible notice; hunk-relative counts must not impersonate file lines.
  *
  * WHAT IS RENDERED, per hunk: a gutter with the file line number, the
  * `+`/`-`/space glyph, and the line text split into `data-cds-tok` spans whose
@@ -74,12 +74,10 @@ export function splitLines(text) {
 }
 
 /**
- * Resolve a hunk's two start lines, mirroring one side onto the other.
+ * Resolve file offsets only when every nonempty side has its own start.
  *
- * Same rule as `diffnumbers.resolveStart`: a header that published only one
- * side is exact for the common `-N,M +N,K` case, an approximation otherwise,
- * and never worse than 1. Returning null keeps "the card does not know"
- * distinct from "the hunk starts at line 1".
+ * Earlier insertions or deletions can shift the two file versions differently.
+ * Never infer a missing offset from the opposite side; null means unavailable.
  *
  * @param {object} hunk a metadata hunk
  * @returns {{ oldStart: number, newStart: number } | null}
@@ -89,7 +87,9 @@ export function resolveStarts(hunk) {
   const oldStart = line(hunk?.oldStart)
   const newStart = line(hunk?.newStart)
   if (oldStart === null && newStart === null) return null
-  return { oldStart: oldStart ?? newStart, newStart: newStart ?? oldStart }
+  if (splitLines(hunk.oldText).length > 0 && oldStart === null) return null
+  if (splitLines(hunk.newText).length > 0 && newStart === null) return null
+  return { oldStart: oldStart ?? 1, newStart: newStart ?? 1 }
 }
 
 /**
@@ -105,8 +105,8 @@ export function resolveStarts(hunk) {
  *
  * Numbering is the reference's unified rule: the gutter prints the NEW number
  * and a deleted row falls back to the OLD one (`docs/tool-cards-diff.md` §2.4),
- * because a deleted line has no new-file number at all. Without start lines both
- * counters begin at 1, which is hunk-relative numbering.
+ * because a deleted line has no new-file number at all. Without complete file
+ * offsets row numbers are null, and the view marks them unavailable.
  *
  * @param {object} hunk a metadata hunk (`path`, `oldText`, `newText`, starts)
  * @returns {object} the hunk with `rows`, `starts` and `language`
@@ -165,12 +165,12 @@ export function buildHunk(hunk) {
   for (const row of rows) {
     row.pair = null
     if (row.kind === 'del') {
-      row.number = oldNo
+      row.number = starts === null ? null : oldNo
       row.side = 'old'
       oldNo += 1
       continue
     }
-    row.number = newNo
+    row.number = starts === null ? null : newNo
     row.side = 'new'
     newNo += 1
     if (row.kind === 'ctx') oldNo += 1
@@ -327,7 +327,7 @@ export function argumentDiff(block) {
   const path = typeof args.file_path === 'string' ? args.file_path : ''
   if (path === '') return null
   if (call.name === 'write') {
-    return typeof args.content === 'string' ? { path, oldText: null, newText: args.content } : null
+    return typeof args.content === 'string' ? { path, oldText: null, newText: args.content, newStart: 1 } : null
   }
   if (call.name !== 'edit') return null
   if (typeof args.old_string !== 'string' || typeof args.new_string !== 'string') return null
@@ -632,7 +632,7 @@ export function createDiffView({ React }) {
       // hook for "is that number a file line or a hunk-relative count".
       'data-side': row.side,
     },
-    h('span', { 'data-cds-diff-num': '', 'aria-hidden': 'true' }, String(row.number)),
+    h('span', { 'data-cds-diff-num': '', 'aria-hidden': 'true' }, row.number === null ? '—' : String(row.number)),
     h('span', { 'data-cds-diff-glyph': '', 'aria-hidden': 'true' },
       row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' '),
     h('code', { 'data-cds-diff-text': '' }, spans))
@@ -718,6 +718,9 @@ export function createDiffView({ React }) {
           const rows = hunk.rows
           const decoded = decorated[index]
           const nodes = []
+          if (hunk.starts === null) nodes.push(h('div', {
+            key: 'numbering', 'data-cds-diff-numbering': '',
+          }, t('diff.linesUnavailable')))
           const hidden = rows.length - LINE_LIMIT
           const open = openHunks[index] === true
           const push = (at) => nodes.push(rowNode(at, rows[at], decoded.tokens[at], decoded.marks[at]))

@@ -46,7 +46,11 @@ param(
   [string]$ReportPath,
   [string]$Registry = 'https://registry.npmjs.org',
   [switch]$SkipMirror,
-  [switch]$KeepProfiles
+  [switch]$KeepProfiles,
+  # A release ships ONE package at a time; without this the matrix would also
+  # exercise packages that are unpublished or mid-change, and fail for reasons
+  # that have nothing to do with the version under test.
+  [string[]]$Only
 )
 
 $ErrorActionPreference = 'Continue'
@@ -66,7 +70,7 @@ if (-not $ReportPath) {
 # Scoped names drop the scope in the asset (`@hwfee/dsh-usage-stats` ships as
 # `hwfee-dsh-usage-stats-<v>.tgz`).
 . (Join-Path $PSScriptRoot 'packages.ps1')
-$packages = @(Get-ReleasePackages -RepoRoot $RepoRoot | ForEach-Object {
+$packages = @(Get-ReleasePackages -RepoRoot $RepoRoot -Only $Only | ForEach-Object {
   # `Asset` is the concrete filename; the matrix substitutes the live version, so
   # keep the shape it fills in (`{v}`) rather than swapping the string, which
   # would depend on the version never appearing twice in a filename.

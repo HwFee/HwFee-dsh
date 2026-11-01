@@ -98,12 +98,15 @@ test('the two scales agree on the value, only the unit ladder differs', function
   }
 })
 
-test('resolveUnitScale turns the mode into a scale per language', function () {
+test('resolveUnitScale keeps Chinese units out of an English interface', function () {
   assert.equal(resolveUnitScale('auto', 'zh'), 'myriad')
   assert.equal(resolveUnitScale('auto', 'en'), 'short')
-  assert.equal(resolveUnitScale('short', 'zh'), 'short', 'an explicit scale wins over the language')
-  assert.equal(resolveUnitScale('myriad', 'en'), 'myriad')
-  // Unknown/absent modes follow the language, exactly like `auto`.
+  assert.equal(resolveUnitScale('short', 'zh'), 'short', 'the switch still works on a Chinese UI')
+  assert.equal(resolveUnitScale('myriad', 'zh'), 'myriad')
+  // The shipped default is `myriad`, and it used to render 万/亿 on an English
+  // panel: the language decides first, so the Chinese ladder never reaches an
+  // English reader even with that stored value.
+  assert.equal(resolveUnitScale('myriad', 'en'), 'short')
   assert.equal(resolveUnitScale(undefined, 'zh'), 'myriad')
   assert.equal(resolveUnitScale('bogus', 'en'), 'short')
 })

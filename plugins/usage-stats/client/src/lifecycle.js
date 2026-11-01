@@ -133,6 +133,10 @@ export function createLifecycle({ React, primitives, panel, fetchSummary, peekSu
   function UnitRow(props) {
     const t = typeof props.t === 'function' ? props.t : fallbackTranslate
     const state = React.useSyncExternalStore(settings.subscribe, settings.getState)
+    // The switch chooses between 万/亿 and K/M/B on a CHINESE interface only.
+    // An English panel always reads the Western ladder (`2.94亿` is unreadable
+    // there), so the row is not offered where the choice does not exist.
+    if (t('book.lang') !== 'zh') return null
     const on = unitsIsOn(state.units)
     return React.createElement('div', { className: 'dus-row' },
       React.createElement('div', { className: 'dus-row-text' },

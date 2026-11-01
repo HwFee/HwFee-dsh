@@ -544,8 +544,8 @@ window.__ModuleLoader__.load({
       ]
     };
     function resolveUnitScale(mode, language) {
-      if (mode === "short" || mode === "myriad") return mode;
-      return language === "zh" ? "myriad" : "short";
+      if (language !== "zh") return "short";
+      return mode === "short" ? "short" : "myriad";
     }
     function roundTo(value, decimals) {
       const factor = 10 ** decimals;
@@ -1684,6 +1684,7 @@ window.__ModuleLoader__.load({
       function UnitRow(props) {
         const t = typeof props.t === "function" ? props.t : fallbackTranslate;
         const state = React2.useSyncExternalStore(settings2.subscribe, settings2.getState);
+        if (t("book.lang") !== "zh") return null;
         const on = unitsIsOn(state.units);
         return React2.createElement(
           "div",

@@ -12,7 +12,6 @@ import { toolChromeRules } from './tool-chrome-styles.js'
 import { sessionPreviewRules } from './session-preview-styles.js'
 import { workspacePreviewRules } from './workspace-preview-styles.js'
 import { changesPreviewRules } from './changes-preview-styles.js'
-import { toBottomRules } from './tobottom-styles.js'
 
 // ------------------------------------------------------------- rationale
 
@@ -495,15 +494,12 @@ function uiFontRules() {
     'body {',
     '  font-family: var(--dsw-font-family-ui) !important;',
     '}',
-    // Conversation content takes the TEXT role back, so the two can differ.
-    // `[data-conversation-content]` is the host's own marker for the message
-    // column (docs/host-hooks.md §1.4), and the selector is repeated on its
-    // descendants because the host sets `font` (a shorthand, family included) on
-    // markdown elements further in. KaTeX roots and all their descendants keep
-    // renderer-owned fonts: its glyph positions assume KaTeX's font metrics,
-    // so forcing the prose family here makes sums and subscripts overlap.
-    '[data-conversation-content],',
-    '[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {',
+    // Conversation content inherits the TEXT role from its stable container.
+    // Markdown's own font tokens already select the text family. Forcing it on
+    // every descendant overrides code-token spans and renderer-owned fonts;
+    // even exclusions increase specificity and can beat code-surface rules.
+    // Keep that boundary here so code and KaTeX retain their own font metrics.
+    '[data-conversation-content] {',
     '  font-family: var(--dsw-font-family) !important;',
     '}',
   ].join('\n')
@@ -548,35 +544,15 @@ function messageRules() {
 function toolRowsRules() {
   return [
     '/* ---- tool rows: inset card, boxed request, flowing response --------- */',
-    // CODE GETS ITS MONOSPACE BACK. `uiFontRules()` pins the TEXT family on
-    // every descendant of the conversation with `!important` (excluding
-    // `code`/`pre`/`kbd`/`samp`), but every code surface in a tool card is
-    // built out of plain DIVs:
-    //
-    //   diff rows   ._body_17vb8_5 { font: var(--dsw-font-markdown-code-block) }
-    //               ._line_17vb8_13 { … }            ← a div
-    //   read rows   ._body_1pq26_79 { font: var(--dsw-font-markdown-code-block) }
-    //               ._content_1ay0u_16 { … }         ← a div
-    //
-    // A plain declaration loses to that `!important`, so those cards rendered
-    // in the TEXT family while the markdown block beside them stayed
-    // monospace — the "some code is Mono, some is Sans" report. This rule
-    // matches the `!important` and sits later in the sheet, so it wins without
-    // touching prose. It lives here (not in `uiFontRules`) because that
-    // function's output is inside a byte-pinned baseline slice.
-    // SPECIFICITY IS LOAD-BEARING. The prose rule this fights is
-    // `[data-conversation-content] :not(code):not(pre):not(kbd):not(samp)`
-    // (0,2,1) with `!important`; a bare `[data-diff] *` is (0,1,0) and loses
-    // even with `!important`. Measured live before this change: the diff rows
-    // computed to anthropic-sans. Prefixing with the conversation hook puts
-    // these at (0,2,0)+ and lets the code family win.
+    // Tool code surfaces include DIV-based diff/read rows as well as PREs.
+    // Select the code role across their tokens and controls using stable hooks.
+    // uiFontRules now sets prose only on the conversation container, so these
+    // declarations no longer compete with a per-descendant prose override.
     '[data-conversation-content] [data-diff], [data-conversation-content] [data-diff] *,',
     '[data-conversation-content] [data-read], [data-conversation-content] [data-read] *,',
     '[data-conversation-content] [data-code-wrap], [data-conversation-content] [data-code-wrap] *,',
-    // The theme's own diff card is NOT `[data-diff]` (it deliberately avoids
-    // that hook so the host's counter never double-numbers it), so it needs to
-    // be named here or it inherits the TEXT family from the rule above and the
-    // code inside it renders in prose type.
+    // The theme's own diff card avoids data-diff so the host's counter never
+    // double-numbers it. Include its own stable hook in the code role too.
     '[data-conversation-content] [data-cds-diffcard], [data-conversation-content] [data-cds-diffcard] *,',
     '[data-slot="tool.call.toolview"] pre, [data-slot="tool.call.toolview"] pre *,',
     '.md-code-block, .md-code-block * {',
@@ -1221,8 +1197,8 @@ function toolRowsRules() {
  *
  * SAME FAMILY AS THE DIFF GUTTER. Use the code-font token rather than a
  * hardcoded face, so a user's code-font choice reaches both sets of numbers.
- * The conversation text rule sets font-family with !important on descendants,
- * so both the group and its number spans must explicitly restore the code role.
+ * Both the group and its number spans select that role explicitly so they
+ * stay consistent with the diff gutter in either refinement mode.
  *
  * SCOPED TO A TOOL ROW, twice: `[data-slot="tool.call.toolview"]` is the host's
  * outlet for the row, and `[data-tool]` is set on the row itself (and on the
@@ -1318,8 +1294,8 @@ function diffStatFamilyRules() {
  *
  * NUMBERS. `data-numbered` says whether the hunk knew its file line numbers
  * (`meta.diffs[].oldStart`/`newStart`, from the asar patch). The gutter prints
- * the same shape either way; the flag exists so a probe can tell 1..n apart from
- * a real file number, which is the one thing a reader cannot see.
+ * real file numbers only when offsets are known. Otherwise em dashes and a
+ * localized notice identify the unavailable numbers.
  *
  * @returns {string} the rules
  */
@@ -1338,6 +1314,12 @@ function diffCardRules() {
   }
   return [
     '/* ---- diff card: tokenised rows, owned by the theme ---------------- */',
+    '[data-cds-diff-numbering] {',
+    '  padding: 2px 10px 6px;',
+    '  font-size: 11px;',
+    '  line-height: 16px;',
+    '  color: var(--dsw-alias-label-caption);',
+    '}',
     // The row: one 24px line, the seat the host's tool rows use, so a
     // conversation that mixes host rows and this card keeps one rhythm.
     '[data-cds-diffrow] { position: relative; }',
@@ -2916,12 +2898,9 @@ export function buildCss(state, accentGlow, accent, themeModeAvailable, options)
   if (state.refine !== false) parts.push(toolChromeRules())
   parts.push(diffStatFamilyRules())
 
-  // The floating "back to bottom" button: centred seat, streaming dots and the
-  // down affordance. APPENDED LAST for the same reason as the two blocks above —
-  // the byte-pinned slices in `test/rule-baseline.mjs` and the block lookups in
-  // `test/css.test.mjs` are anchored on marker comments, and inserting ahead of
-  // them would move what those slices contain.
-  if (state.refine !== false) parts.push(toBottomRules())
+  // The floating "back to bottom" button stays the HOST's: original seat,
+  // chevron and idle/hover behaviour. The theme used to re-seat it and replace
+  // the chevron with a three-dot wave, which reads as a different control.
 
   return parts.join('\n\n')
 }
