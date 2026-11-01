@@ -24,3 +24,10 @@
 *.gif binary
 *.ico binary
 *.pdf binary
+
+# Unified diffs are checked by the same whitespace rules as source, but their
+# CONTEXT lines are one leading space followed by the patched file's own
+# indentation (tabs in the DSH bundles), and an empty context line is a single
+# space. Both come from the diff format, not from sloppy editing, so the generic
+# rules are switched off for .patch files only.
+*.patch whitespace=-space-before-tab,-trailing-space,-blank-at-eof,-blank-at-eol

@@ -66,7 +66,18 @@ dsh plugin --profile desktop remove dsh-cds-theme
 **设置 → 通用设置** 里只留一行 **「启用 CDS 主题」** 总开关。关掉它，所有令牌和样式规则当场撤回，回到宿主原样。
 
 
-> **真实行号需要宿主保留每个 hunk 的文件起点。** 主题自绘的 `edit` / `write` 卡片直接读取 `block.meta.diffs[].oldStart` / `newStart`；仓库的 [`dsh-tool-fs-hunk-lines.patch`](../../patches/dsh-tool-fs-hunk-lines.patch) 保留这些数据。关闭组件精修后显示的宿主原生卡片，还需要 [`dsh-web-frontend-diff-start.patch`](../../patches/dsh-web-frontend-diff-start.patch) 将起点写入 DOM。[`patch-asar.mjs`](../../tools/patch-asar.mjs) 提供检测、预演、备份与回退；应用补丁前须完全退出 DSH，再启动应用。主题包不会自行改动宿主归档。**仅升级主题无法补回旧记录里已经丢失的起点**：主题会显示 `—` 和「文件行号不可用」，不读取当前文件来猜历史位置。
+> **真实行号需要宿主保留每个 hunk 的文件起点。** 主题自绘的 `edit` / `write` 卡片直接读取 `block.meta.diffs[].oldStart` / `newStart`；宿主的文件工具在生成 diff 时把这两个起点丢掉了，所以需要一次性的宿主补丁。
+>
+> **补丁随本包一起发布**，不占用主题运行时，也不会自行改动宿主：先完全退出 DSH，再运行
+>
+> ```sh
+> node node_modules/dsh-cds-theme/host-patch/patch-asar.mjs status    # 看当前是否已装
+> node node_modules/dsh-cds-theme/host-patch/patch-asar.mjs apply     # 应用（先写 app.asar.bak-<时间戳>）
+> ```
+>
+> 说明、参数与回退方法见 [`host-patch/README.md`](host-patch/README.md)。补丁改的是安装目录里的 `app.asar`，**DSH 每次升级都会覆盖它**，升级后重新 `status` 再 `apply`。只需要数据层时可以 `--patch hunk-lines`：它足以让主题的卡片显示真实行号；第二个补丁只影响关闭精修后宿主自己那张卡片。
+>
+> **仅升级主题无法补回旧记录里已经丢失的起点**：主题会显示 `—` 和「文件行号不可用」，不会读取当前文件去猜历史位置。
 
 ---
 

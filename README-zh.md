@@ -125,7 +125,7 @@ pwsh market/install-all.ps1 -Profile desktop
 也可以逐条安装：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.11 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.5 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org

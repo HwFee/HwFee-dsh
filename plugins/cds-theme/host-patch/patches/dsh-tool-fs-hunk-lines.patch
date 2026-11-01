@@ -1,0 +1,150 @@
+# Patch: carry hunk start lines through DeepSeek Harness's edit/write diff metadata
+#
+# WHICH PATCH: this is "patch 1 of 2" — the data half. Applied alone it changes no pixels; it
+# has to be paired with patches/dsh-web-frontend-diff-start.patch to reach the screen.
+#
+# APPLIES TO: the SHIPPED bundled files inside the Electron asar, not upstream package source.
+#   1) dsh/node_modules/@deepseek-ai/dsh-tool-fs/lib/index.js            (dsh-tool-fs 0.2.1-rc.2)
+#   2) dsh/node_modules/@deepseek-ai/dsh-client-ui-tool/lib/client.js   (dsh-client-ui-tool 0.2.1-rc.2)
+# Both paths are archive-relative, i.e. relative to the root the asar header describes
+# (…/resources/app.asar). Apply from a directory that mirrors that root:
+#
+#   git apply -p1 patches/dsh-tool-fs-hunk-lines.patch      # in the mirror of the asar root
+#   git apply -p1 -R patches/dsh-tool-fs-hunk-lines.patch   # roll back
+#
+# Do NOT point git apply at the installation. Use tools/patch-asar.mjs, which does the same
+# edits as literal anchors AND repacks the archive header/data (member offsets + sha256)
+# with a timestamped backup. This file is the reviewable form of those same edits.
+#
+# FRAGILITY: low. These are unminified, tab-indented `lib/` files that keep their function
+# names, so an upgrade is likely to keep the anchors intact (or fail loudly if not).
+#
+# WHY the numbers must be threaded through four places, not one:
+#   computeHunkDiffs() is the only function holding hunk.oldStart / hunk.newStart, and it
+#   dropped them; presentationMeta() then re-projects each hunk through a destructure; the
+#   client's narrowDiffs() rebuilds each hunk a third time from three keys; and both guards
+#   (isFileDiff on the host, the inline checks in narrowDiffs on the client) would reject or
+#   silently strip any field they do not know about. Fixing only computeHunkDiffs leaves the
+#   transcript exactly as it is today.
+
+diff --git a/dsh/node_modules/@deepseek-ai/dsh-client-ui-tool/lib/client.js b/dsh/node_modules/@deepseek-ai/dsh-client-ui-tool/lib/client.js
+index d761e08..901f279 100644
+--- a/dsh/node_modules/@deepseek-ai/dsh-client-ui-tool/lib/client.js
++++ b/dsh/node_modules/@deepseek-ai/dsh-client-ui-tool/lib/client.js
+@@ -467,20 +467,27 @@ window.__ModuleLoader__.load({
+ 		*/
+ 		function narrowDiffs(diffs) {
+ 			if (!Array.isArray(diffs) || diffs.length === 0) return null;
+ 			const out = [];
+ 			for (const hunk of diffs) {
+ 				if (typeof hunk !== "object" || hunk === null) return null;
+-				const { path, oldText, newText } = hunk;
++				const { path, oldText, newText, oldStart, newStart } = hunk;
+ 				if (typeof path !== "string") return null;
+ 				if (oldText !== null && typeof oldText !== "string") return null;
+ 				if (typeof newText !== "string") return null;
++				// WHY: same rule as the host guard — old metadata has no start lines, new
++				// metadata does, and this rebuild must not be the third place that drops them.
++				// Absent stays absent (the card falls back to 1..n); present-but-invalid fails.
++				if (oldStart !== void 0 && !(Number.isInteger(oldStart) && oldStart >= 0)) return null;
++				if (newStart !== void 0 && !(Number.isInteger(newStart) && newStart >= 0)) return null;
+ 				out.push({
+ 					path,
+ 					oldText,
+-					newText
++					newText,
++					...(oldStart !== void 0 ? { oldStart } : {}),
++					...(newStart !== void 0 ? { newStart } : {})
+ 				});
+ 			}
+ 			return out;
+ 		}
+ 		function intendedDiff(block) {
+ 			const parsed = parsedToolCall(block);
+diff --git a/dsh/node_modules/@deepseek-ai/dsh-tool-fs/lib/index.js b/dsh/node_modules/@deepseek-ai/dsh-tool-fs/lib/index.js
+index b32a7ad..c7ee42c 100644
+--- a/dsh/node_modules/@deepseek-ai/dsh-tool-fs/lib/index.js
++++ b/dsh/node_modules/@deepseek-ai/dsh-tool-fs/lib/index.js
+@@ -417,22 +417,33 @@ function computeHunkDiffs(path, before, after) {
+ 				newLines.push(text);
+ 			}
+ 		}
+ 		diffs.push({
+ 			path,
+ 			oldText: oldLines.length > 0 ? oldLines.join("\n") : null,
+-			newText: newLines.join("\n")
++			newText: newLines.join("\n"),
++			// WHY: the hunk header already knows where this change sits in the file, but
++			// only the joined text was kept — a renderer could number rows 1..n and nothing
++			// else. Carry both sides' 1-based start lines so the diff card can print real
++			// file line numbers (and so a clicked number can jump to that line).
++			oldStart: hunk.oldStart,
++			newStart: hunk.newStart
+ 		});
+ 	}
+ 	return diffs;
+ }
+ /** Whether `value` is a valid {@link FileDiff} (defensive narrowing from opaque `meta`). */
+ function isFileDiff(value) {
+ 	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+-	const { path, oldText, newText } = value;
+-	return typeof path === "string" && (oldText === null || typeof oldText === "string") && typeof newText === "string";
++	const { path, oldText, newText, oldStart, newStart } = value;
++	// WHY: both start lines are optional on purpose. Sessions recorded before this
++	// patch (and the argument-derived diff on a tool call that never settled) have
++	// no numbers; replaying them must stay valid. A number that is present but not a
++	// line number is still rejected.
++	const startLine = (line) => line === void 0 || Number.isInteger(line) && line >= 0;
++	return typeof path === "string" && (oldText === null || typeof oldText === "string") && typeof newText === "string" && startLine(oldStart) && startLine(newStart);
+ }
+ /**
+ * Narrow opaque live or replayed result metadata to non-empty file diffs. Malformed metadata
+ * returns `undefined` so presentation can fall back instead of throwing during replay.
+ * @param meta - result metadata.
+ * @returns validated hunks, or `undefined` for absent or malformed data.
+@@ -590,16 +601,20 @@ function applyWriteTool(ctx, sandbox) {
+ 				type: "text",
+ 				text: formatWriteOutput(value.path, value)
+ 			}],
+ 			presentationMeta: (_args, value) => ({
+ 				operation: value.operation,
+ 				path: value.path,
+-				diffs: value.before === null ? [] : computeHunkDiffs(value.path, value.before, value.after).map(({ path, oldText, newText }) => ({
++				diffs: value.before === null ? [] : computeHunkDiffs(value.path, value.before, value.after).map(({ path, oldText, newText, oldStart, newStart }) => ({
+ 					path,
+ 					oldText,
+-					newText
++					newText,
++					// WHY: this rebuild is the second place the numbers used to die. It must list
++					// them explicitly, because the projection exists to keep `meta` to three keys.
++					oldStart,
++					newStart
+ 				}))
+ 			})
+ 		},
+ 		async execute(args, exec) {
+ 			const input = parseWriteArgs(args);
+ 			const sandboxPolicy = await sandbox.resolvePolicy("write", args, exec);
+@@ -734,16 +749,20 @@ function applyEditTool(ctx, sandbox) {
+ 			render: (args, value) => [{
+ 				type: "text",
+ 				text: formatEditOutput(value.path, args.replace_all ?? false)
+ 			}],
+ 			presentationMeta: (_args, value) => ({
+ 				path: value.path,
+-				diffs: computeHunkDiffs(value.path, value.before, value.after).map(({ path, oldText, newText }) => ({
++				diffs: computeHunkDiffs(value.path, value.before, value.after).map(({ path, oldText, newText, oldStart, newStart }) => ({
+ 					path,
+ 					oldText,
+-					newText
++					newText,
++					// WHY: mirror of the write path — a hunk that reaches `diffCardModel` without
++					// its start line is a hunk the card has to renumber from 1.
++					oldStart,
++					newStart
+ 				}))
+ 			})
+ 		},
+ 		async execute(args, exec) {
+ 			const input = parseEditArgs(args);
+ 			const sandboxPolicy = await sandbox.resolvePolicy("edit", args, exec);

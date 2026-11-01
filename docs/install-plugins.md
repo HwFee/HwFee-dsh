@@ -32,7 +32,7 @@ pwsh market/install-all.ps1 -Profile desktop
 一次一条，版本写死，任何一条失败不会影响其他：
 
 ```powershell
-dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.11 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.5 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org
@@ -71,7 +71,7 @@ node -e "const j=require(process.env.USERPROFILE+'/.dsh/profiles/desktop/package
 重跑第 1 节即可；`dsh plugin add` 对已装包会跳到新版本。只想升级一个：
 
 ```powershell
-dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.11 --registry=https://registry.npmjs.org
 ```
 
 **从 0.1.9 升到 0.1.10 是必须的**：0.1.9 把正文填充规则写到了所有后代上，代码块里的高亮词、链接、行内代码会掉成无衬线；0.1.10 修好了这一点，并把「回到底部」按钮还给宿主。
@@ -98,11 +98,13 @@ dsh plugin --profile desktop remove @hwfee/dsh-predict
 | 应用起不来 | bundle 与页面启动时算出的 rev 不一致 | 不要按 F5，彻底退出后重开 |
 | 编辑卡片没有真实行号 | 宿主归档未打补丁 | 见下节 |
 
-**编辑卡片真实文件行号**：需要宿主保留每个 hunk 的起点。仓库提供 `patches/dsh-tool-fs-hunk-lines.patch` 与 `tools/patch-asar.mjs`：
+**编辑卡片真实文件行号**：需要宿主保留每个 hunk 的起点，而宿主在生成 diff 时丢掉了它。补丁**随主题包一起发布**，所以从 npm 或 Release 安装的用户也能直接用：
 
 ```powershell
-node tools/patch-asar.mjs status
-node tools/patch-asar.mjs apply --patch hunk-lines
+node node_modules/dsh-cds-theme/host-patch/patch-asar.mjs status
+node node_modules/dsh-cds-theme/host-patch/patch-asar.mjs apply --patch hunk-lines
 ```
 
-应用前要完全退出 DSH（Windows 会锁住归档）。**DSH 每次升级都会覆盖 `app.asar`**，升级后要重新应用；备份文件名是 `app.asar.bak-<时间戳>`，用 `node tools/patch-asar.mjs revert` 回退。
+只在仓库里工作时把路径换成 `tools/patch-asar.mjs`（同一份文件，打包副本由 `tools/sync-host-patch.mjs` 生成，`npm run test:tools` 会在两者不一致时报错）。
+
+应用前要完全退出 DSH（Windows 会锁住归档）。**DSH 每次升级都会覆盖 `app.asar`**，升级后要重新应用；备份文件名是 `app.asar.bak-<时间戳>`，用同一条命令 `revert` 回退。说明见 [`../plugins/cds-theme/host-patch/README.md`](../plugins/cds-theme/host-patch/README.md)。
