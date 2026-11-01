@@ -120,7 +120,7 @@ shell 解析与沙箱判定表：[`plugins/git-bash/README.md`](plugins/git-bash
 pwsh market/install-all.ps1 -Profile desktop
 ```
 
-分步教程（验证、升级、卸载、排错）：[`docs/install-plugins.md`](docs/install-plugins.md)。
+Agent 执行手册（安装、层判定、挂载验证、失败动作）：[`docs/install-plugins.md`](docs/install-plugins.md)。
 
 也可以逐条安装：
 

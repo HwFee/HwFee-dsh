@@ -24,4 +24,4 @@
 | [`reference-absorption-ledger.md`](reference-absorption-ledger.md) | 参考实现吸收台账：哪些做了、哪些没做、为什么 |
 | [`reference-next-wave.md`](reference-next-wave.md) | 参考实现的下一批候选项 |
 | [`handoff.md`](handoff.md) | 当前状态交接：已发布版本、渠道、环境事实、遗留项 |
-| [`install-plugins.md`](install-plugins.md) | 安装全部插件（不含 context-rail）的分步教程 |
+| [`install-plugins.md`](install-plugins.md) | Agent 执行手册：装/升级命令、层判定谓词、挂载验证、失败时唯一允许的动作 |

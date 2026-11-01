@@ -64,7 +64,8 @@ foreach ($package in $packages) {
   $installed += [pscustomobject]@{ Package = $package.Name; Version = "$latest".Trim() }
 }
 
-$manifestPath = Join-Path (Join-Path $env:USERPROFILE ".dsh\profiles\$Profile") 'package.json'
+$profileDir = Join-Path $env:USERPROFILE ".dsh\profiles\$Profile"
+$manifestPath = Join-Path $profileDir 'package.json'
 if (Test-Path $manifestPath) {
   $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
   Write-Host "`nInstalled in profile ${Profile}:" -ForegroundColor Cyan
@@ -72,8 +73,17 @@ if (Test-Path $manifestPath) {
     $declared = if ($manifest.dependencies.PSObject.Properties.Name -contains $row.Package) {
       $manifest.dependencies.($row.Package)
     } else { '(missing)' }
-    $ok = $declared -like "*$($row.Version)*"
-    Write-Host ("  {0} {1,-10} declared {2} {3}" -f $row.Package, $row.Version, $declared, $(if ($ok) { 'OK' } else { 'MISMATCH' }))
+    # THE INSTALLED VERSION COMES FROM THE INSTALLED MANIFEST, not from the declared
+    # specifier. A `link:` dependency stores a path, so comparing the declaration with a
+    # version marked every development install as MISMATCH even when it was correct.
+    $resolved = Join-Path (Join-Path $profileDir 'node_modules') $row.Package
+    $actual = if (Test-Path (Join-Path $resolved 'package.json')) {
+      (Get-Content (Join-Path $resolved 'package.json') -Raw | ConvertFrom-Json).version
+    } else { $null }
+    $ok = $actual -eq $row.Version
+    $shown = if ($null -eq $actual) { '(not installed)' } else { $actual }
+    Write-Host ("  {0} expected {1} actual {2} declared {3} {4}" -f `
+      $row.Package, $row.Version, $shown, $declared, $(if ($ok) { 'OK' } else { 'MISMATCH' }))
   }
 }
 

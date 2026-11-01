@@ -120,7 +120,7 @@ All six at once, with the version resolved from the official registry:
 pwsh market/install-all.ps1 -Profile desktop
 ```
 
-Step-by-step tutorial (verification, upgrades, uninstall, troubleshooting): [`docs/install-plugins.md`](docs/install-plugins.md).
+Agent runbook (install, layer check, mount verification, failure actions): [`docs/install-plugins.md`](docs/install-plugins.md).
 
 Or from a terminal, one command per plugin:
 
