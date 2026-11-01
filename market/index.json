@@ -82,9 +82,19 @@
           "engines": {
             "dsh": ">=0.2.1-rc.2"
           }
+        },
+        {
+          "version": "0.1.11",
+          "publishTimestamp": 1793536479,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
         }
       ],
-      "version": "0.1.10"
+      "version": "0.1.11"
     },
     {
       "name": "@hwfee/dsh-genui",

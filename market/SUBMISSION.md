@@ -31,6 +31,16 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 两条都逐句对过代码。**本次不新开 PR**：条目结构没变，只是描述措辞与版本推进，
 而市场规则要求 PR 不碰与自己无关的条目；等确有结构性变更时再用 `-Update` 一次性提交。
 
+### 2026-11-01 发布（cds-theme 0.1.11）
+
+| 包 | 版本 | npm | GitHub Release | 备注 |
+|---|---|---|---|---|
+| `dsh-cds-theme` | **0.1.11** | 已发布 | `cds-theme-v0.1.11` | 宿主补丁随插件发布：`host-patch/` 内含应用器与两份 diff，用户可以从 `node_modules` 直接 `status` / `apply` / `revert`，不必再克隆仓库 |
+
+这是"插件给不了宿主能力、但用户又拿不到补丁"的收口：npm 不能打包包目录之外的文件，所以补丁过去只存在于仓库根。现在 `host-patch/` 是随包产物，由 `tools/sync-host-patch.mjs` 从仓库根生成，`npm run test:tools` 会在两者不一致时失败。资产 SHA-1 `3e841e63…` 与 npm `shasum` 一致，完整哈希见 [publish-record.md](publish-record.md)。
+
+矩阵 13 例：12 通过、1 例预期失败（`git-subdir`）。**未锁定安装仍会落后**（`npm-name` 实测落到 0.1.8 / 0.1.4）——原因是 pnpm 从本地状态解析 `latest`，与 registry 无关；安装说明一律钉版本或用 `market/install-all.ps1`。
+
 ### 2026-11-01 发布（cds-theme 0.1.10、usage-stats 0.1.5）
 
 | 包 | 版本 | npm | GitHub Release | 备注 |
@@ -40,9 +50,9 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 
 两个 Release 资产都由 `npm pack` 于发布提交产出，cds-theme 的 SHA-1 与 npm 打印的 `shasum` 逐字节一致；完整哈希见 [publish-record.md](publish-record.md)。
 
-**安装矩阵 14 例：13 通过、1 例预期失败**（`git-subdir` 仍不可用），两个包都覆盖了 npm 名、`包名@版本`、Release 资产、本地 tarball 与 `link:` 五条路径；`remove-clean`、`double-install`、`mirror-install` 与挂载验证同样通过，后者逐包确认行名解析、bundle id、Host `apply` 与 `dump-config`。
+**安装矩阵**（该次 14 例、13 通过；此后镜像用例已从矩阵移除，现为 13 例）：两个包都覆盖了 npm 名、`包名@版本`、Release 资产、本地 tarball 与 `link:` 五条路径，`remove-clean`、`double-install` 与挂载验证同时通过，后者逐包确认行名解析、bundle id、Host `apply` 与 `dump-config`。
 
-**未锁定安装仍会落后**：矩阵里不带版本的 `npm-name` 实际装到 cds-theme 0.1.8、usage-stats 0.1.4，镜像站也是 0.1.8（见 `install-matrix.md` 的 Installed 列），原因仍未定位。所以安装说明与 README 一律写死版本；锁定版本、Release 资产与本地 tarball 都实测落到新版本。
+**未锁定安装会落后**，原因已知：pnpm 从本地状态解析 `latest`（同一官方源上 `pnpm view` 报 0.1.10、`pnpm add` 装出 0.1.8）。因此安装说明与 README 一律写死版本；锁定版本、Release 资产与本地 tarball 都实测落到新版本。
 
 ### 2026-10-24 发布与市场更新
 

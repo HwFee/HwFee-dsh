@@ -6,7 +6,7 @@
 
 | 包 | 版本 | 渠道 |
 |---|---|---|
-| `dsh-cds-theme` | 0.1.10 | npm + `cds-theme-v0.1.10` Release |
+| `dsh-cds-theme` | 0.1.11 | npm + `cds-theme-v0.1.11` Release |
 | `dsh-system-fonts` | 0.1.3 | npm + `system-fonts-v0.1.3` Release |
 | `@hwfee/dsh-usage-stats` | 0.1.5 | npm + `usage-stats-v0.1.5` Release |
 | `@hwfee/dsh-genui` | 0.1.2 | npm + `genui-v0.1.2` Release |
@@ -30,6 +30,14 @@
 - 发布 token 只在 **User** 作用域：`[Environment]::GetEnvironmentVariable('NPM_TOKEN','User')`。不要写进 npmrc。
 - 宿主归档 `app.asar` 为本机打了 `hunk-lines` 补丁（编辑卡片真实行号的前提），备份在同目录 `app.asar.bak-<时间戳>`。**DSH 每次升级都会覆盖它**，升级后需重新 `node tools/patch-asar.mjs apply --patch hunk-lines`。
 - 桌面版与 Web 版 profile 都以 `link:` 指向 `.claude/worktrees/deepseek-harness-reinstall-380998/plugins/*`；改完 `client/src/` 必须在**该目录**重建 bundle，并彻底退出重开 DSH。
+- **那个 worktree 会被外部流程清空（2026-11-01 实测）**：目录里只剩一层空壳，profile 的两个 `link:` 指向不存在的 `package.json`，应用当次仍能跑（bundle 已在内存）而下次启动就少两个插件。`git worktree list` 会把它标成 `prunable`。修复：
+
+  ```sh
+  git worktree prune
+  git worktree add --detach .claude/worktrees/deepseek-harness-reinstall-380998 HEAD
+  ```
+
+  重建后 `plugins/cds-theme` 与 `plugins/usage-stats` 直接取自 HEAD，不需要再装依赖或重建 bundle（产物已提交）。判断是否已坏：`Test-Path <link>/package.json`。
 
 ## 4. 交付前跑什么
 
