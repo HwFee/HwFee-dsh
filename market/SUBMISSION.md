@@ -31,6 +31,19 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 两条都逐句对过代码。**本次不新开 PR**：条目结构没变，只是描述措辞与版本推进，
 而市场规则要求 PR 不碰与自己无关的条目；等确有结构性变更时再用 `-Update` 一次性提交。
 
+### 2026-11-01 发布（cds-theme 0.1.10、usage-stats 0.1.5）
+
+| 包 | 版本 | npm | GitHub Release | 备注 |
+|---|---|---|---|---|
+| `dsh-cds-theme` | **0.1.10** | 已发布 | `cds-theme-v0.1.10` | 代码/公式字体不再被正文规则覆盖；「回到底部」按钮还给宿主；edit/write 卡片缺失起点时显示 `—` + 「文件行号不可用」，不再用片段内计数冒充文件行号 |
+| `@hwfee/dsh-usage-stats` | **0.1.5** | 已发布 | `usage-stats-v0.1.5` | 英文界面固定 K/M/B/T，中文界面才出现万/亿开关；原先英文面板显示 `2.94亿` |
+
+两个 Release 资产都由 `npm pack` 于发布提交产出，cds-theme 的 SHA-1 与 npm 打印的 `shasum` 逐字节一致；完整哈希见 [publish-record.md](publish-record.md)。
+
+**安装矩阵 14 例：13 通过、1 例预期失败**（`git-subdir` 仍不可用），两个包都覆盖了 npm 名、`包名@版本`、Release 资产、本地 tarball 与 `link:` 五条路径；`remove-clean`、`double-install`、`mirror-install` 与挂载验证同样通过，后者逐包确认行名解析、bundle id、Host `apply` 与 `dump-config`。
+
+**未锁定安装仍会落后**：矩阵里不带版本的 `npm-name` 实际装到 cds-theme 0.1.8、usage-stats 0.1.4，镜像站也是 0.1.8（见 `install-matrix.md` 的 Installed 列），原因仍未定位。所以安装说明与 README 一律写死版本；锁定版本、Release 资产与本地 tarball 都实测落到新版本。
+
 ### 2026-10-24 发布与市场更新
 
 | 包 | 版本 | 分发 |

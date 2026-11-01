@@ -72,8 +72,19 @@
           "engines": {
             "dsh": ">=0.2.1-rc.2"
           }
+        },
+        {
+          "version": "0.1.10",
+          "publishTimestamp": 1793529414,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
         }
-      ]
+      ],
+      "version": "0.1.10"
     },
     {
       "name": "@hwfee/dsh-genui",
@@ -286,8 +297,19 @@
           "engines": {
             "dsh": ">=0.2.1-rc.2"
           }
+        },
+        {
+          "version": "0.1.5",
+          "publishTimestamp": 1793529414,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2"
+          }
         }
-      ]
+      ],
+      "version": "0.1.5"
     }
   ]
 }

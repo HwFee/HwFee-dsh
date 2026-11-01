@@ -1,15 +1,32 @@
-# Publish record · 2026-10-24
+# Publish record
 
-Official npm version records and canonical tarball HEAD/GET were rechecked after the initial processing window. All five new tarballs return 200. The Release assets were downloaded again and match the exact files submitted to npm.
+Written for the 2026-11-01 release of `dsh-cds-theme@0.1.10` and
+`@hwfee/dsh-usage-stats@0.1.5` (published from the release commit, `npm publish`
+run by hand; the packaged tarball was then attached to each GitHub Release).
 
-The first verification window returned 404 while npm processed the uploads; no version was republished or bumped to work around that delay.
+Each Release asset must match the row for its version: `AGENTS.md` requires the
+asset shasum to equal npm `dist.shasum`. SHA-1 is what npm reports as
+`dist.shasum`; SHA-256 is what GitHub prints as the asset digest.
+
+These hashes describe the tarball that `npm pack` produced from the release
+commit, byte-identical to the published upload: the cds-theme SHA-1 below equals
+the `shasum` npm printed at publish time, and both Release assets were created
+from these exact files.
 
 | Package | Version | Tarball | KB | SHA-1 = npm dist.shasum | SHA-256 | npm integrity |
 |---|---|---|---|---|---|---|
-| `@hwfee/dsh-genui` | 0.1.2 | `hwfee-dsh-genui-0.1.2.tgz` | 96.0 | `9fbcb34fa2a49d3c19d176cfbdcd51b22b4bb064` | `7cff1796ddfa2f3a696ffe8dcb3fd0229a172b056685c10d3b68bb889fb6ba74` | `sha512-nE5sB+hOJsVz8p8odcmAN88JxwKMWHCqt1D1dAt4AteOgYD8JgXvl7C20GHqK13OYU/S0HIo5nEk+qUsKXCHMg==` |
-| `@hwfee/dsh-git-bash` | 0.1.2 | `hwfee-dsh-git-bash-0.1.2.tgz` | 48.3 | `297ab133f70f35bc89c0cdd49eced741223889e6` | `85a498fe70fbf1a8e2b6ed883c9d9c501725088f20752f37298a4aaeb9dbd240` | `sha512-Cur7Xl5NSbOWQLehj2PJSlDgzVgjV7GXCgcdSJpeVjmbMJTt70BQnoV7TspbyOIcGb/R47wg17mWENDA3cJeWQ==` |
-| `@hwfee/dsh-predict` | 0.1.2 | `hwfee-dsh-predict-0.1.2.tgz` | 28.2 | `2507c8c11afc2078ef1006cf953a21faac6cb520` | `8e42ba858911f43b61e2a76b8f685fe84d55f2f9fc3396cc8611ee23e9e77119` | `sha512-cxwKLRI4nuDBPcQqh1xoLCc40OEu2//KRfRsqeP7iZrs4SZwGVKiXbkTdvrtkJn9JT5vy5F/m8bdZI+35AtCoA==` |
-| `@hwfee/dsh-usage-stats` | 0.1.4 | `hwfee-dsh-usage-stats-0.1.4.tgz` | 44.9 | `608009917c352add6bb68333d823a8fa366c1778` | `86a6fb128a2d43204276ae0d762dc4236bee29d84dc31e87767bc439b3608a51` | `sha512-rOKq9d39zHxy7ppjIe/iz5HLaoBpZZnJvb1J24DBpVbAcXr9GbX1oUxiQu/HN0+hBubzZACBgutHRZtXcwiEtg==` |
-| `dsh-cds-theme` | 0.1.8 | `dsh-cds-theme-0.1.8.tgz` | 3168.1 | `ea6ffeb131732f0be3d524d875eeebae3dd6a8d1` | `c618f4f1d4f7862744bce3f9413ff88196224ed1db35c6f243f4ab9a4ea69e73` | `sha512-6+/GDSBxbv7v+pSa0jJKkH3f4G/PBWxQNZ/AAlSwwo8fK0NBoxTQlZDFkE83RsmHvAIFOcpQOsEoUqWPrWgahA==` |
+| `dsh-cds-theme` | 0.1.10 | `dsh-cds-theme-0.1.10.tgz` | 3166.3 | `6ecf371fa467d36c63361e271fe8bfc6d4d3185f` | `3fc2390e977d557de611a81f26f656254e18757fdd418e3278818c96b4f04cf2` | `sha512-/LZLjHLilVe5LaFOLy65wIbKyU0I7hSC584KUgVvH6MvwLiBbhbwj3ybKwyTOOjZUpbkPA9HjZfF5aa/IhahBA==` |
+| `@hwfee/dsh-usage-stats` | 0.1.5 | `hwfee-dsh-usage-stats-0.1.5.tgz` | 45.0 | `b74cc0c3b716f4d84faa7aa757715dc0bfe48a19` | `f8f3499b82b31520245742de00b8441652764306b5f953e974caca6321eae5db` | `sha512-vF0khFo8dnzrbJzmFY0RoSYmZrF+Zlh6sy9cBMSZYJxQkQw+c6CK3027L2RLZKYhLENjELc3azap+tYPlWKoRA==` |
 
-dsh-system-fonts remains at 0.1.3 and was not republished. The previous record is archived in [publish-record-2026-10-22.md](publish-record-2026-10-22.md).
+Registry and Release visibility were checked with the two commands `AGENTS.md`
+treats as the only evidence:
+
+- `npm view <name> versions --registry=https://registry.npmjs.org` lists the new
+  version;
+- `curl -sI https://registry.npmjs.org/<name>/-/<name>-<version>.tgz` returns 200.
+
+`dsh-cds-theme@0.1.10` took roughly 40 minutes to become downloadable after
+`npm publish` accepted the upload (dist-tag `latest` pointed at it well before
+the tarball did). That is the package's usual delay, not a staging failure: the
+tarball URL answered 200 and the install matrix then reached 0.1.10 through the
+pinned, Release-asset and local-tarball paths.
