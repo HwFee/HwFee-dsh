@@ -58,7 +58,9 @@ PR #8392 只新增了后三条并在两个 README 各加三行，未改动任何
 
 [市场 PR #9162](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/9162) 更新主题、字体与生成式 UI 三个现有自有条目；上游合并状态以 PR 页面为准。外部推理滑条已移出仓库，不发布、不启用。
 
-验收证据见 [install-matrix.md](install-matrix.md) 和 [release-verification-2026-10-24.md](release-verification-2026-10-24.md)。不带版本的 predict 仍可能被解析为依赖 rc.2 的 0.1.1，安装说明已改用验证过的 0.1.2 和官方 registry。
+验收证据见 [install-matrix.md](install-matrix.md)。不带版本的 predict 仍可能被解析为依赖 rc.2 的 0.1.1，安装说明已改用验证过的 0.1.2 和官方 registry。
+
+> **归档策略（2026-11-01）。** 带日期的矩阵、发布记录与 release 校验快照已删除：当前有效的永远是 `install-matrix.md`、`publish-record.md` 与本文件的时间线，历史内容在 git 里。需要旧快照时用 `git log -- market/` 找对应提交。
 
 ### 2026-10-22 发布记录
 

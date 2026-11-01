@@ -33,7 +33,7 @@ plugins/<name>/
   icon.svg              插件图标
   test/                 node:test 套件
   tools/build-client.mjs  构建 + `--check` 新鲜度检查
-docs/                   证据文档，不是概述
+docs/                   证据文档，不是概述（索引在 docs/README.md）
 tools/                  仓库级审计与基准脚本
 market/                 发布与市场提交材料
 skills/                 第三方知识库（自带 LICENSE/NOTICE，勿改）
@@ -229,6 +229,9 @@ grep -A2 '__ModuleLoader__.load' client/client.js   # id 应等于新包名
 ## 六、验证：提交前跑什么
 
 ```sh
+# 首次或换机器：每个插件是独立包，node_modules 不进 git
+node tools/install-deps.mjs       # 缺依赖时 npm test 第一项就会因缺 esbuild 报错
+
 # 在改动过的插件目录内
 npm run build
 npm test                          # 新鲜度 + 清单契约 + 全部单测
@@ -269,13 +272,13 @@ node tools/preflight.mjs          # profile bundles / link 安装 / patch 行 / 
 
 cookie 堆积的清理脚本单独一份：`node tools/reset-auth-cookies.mjs`（需应用关闭，会自动备份 `Cookies.bak`）。
 
-当前基线（2026-10-20）：
+当前基线（2026-11-01，`npm test` 各套件 `pass` 之和；先在插件目录 `npm ci --ignore-scripts` 装依赖，否则第一项新鲜度检查就会因缺 `esbuild` 报错）：
 
 | 插件 | 测试数 | 版本 |
 |---|---|---|
-| `dsh-cds-theme` | 393 | 0.1.4 |
-| `dsh-usage-stats` | 114 | 0.1.2 |
-| `dsh-system-fonts` | 7 | 0.1.1 |
+| `dsh-cds-theme` | 592 | 0.1.10 |
+| `@hwfee/dsh-usage-stats` | 119 | 0.1.5 |
+| `dsh-system-fonts` | 23 | 0.1.3 |
 
 数字会随改动增长，**以实际运行结果为准**，不必回头改这张表；它只用来发现"某次改动把测试弄丢了"。
 
