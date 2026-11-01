@@ -1259,7 +1259,7 @@ test('the three motion curves are tokens: unconditional and exact', function () 
 
 test('the UI font role is unconditional, master-switched and excludes code', function () {
   const ui = 'body {\n  font-family: var(--dsw-font-family-ui) !important;\n}'
-  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {\n  font-family: var(--dsw-font-family) !important;\n}'
+  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {\n  font-family: var(--dsw-font-family) !important;\n}'
   for (const state of [{}, { refine: false }]) {
     const sheet = buildCssFor(sanitize(state))
     assert.ok(sheet.includes(ui), 'chrome must take the UI family: ' + JSON.stringify(state))
@@ -1270,6 +1270,16 @@ test('the UI font role is unconditional, master-switched and excludes code', fun
     /:not\(code\):not\(pre\):not\(kbd\):not\(samp\)/,
     /font-family: var\(--dsw-font-family\)/),
     'code, pre, kbd and samp must be excluded from the text-role rule')
+})
+
+test('conversation font overrides leave KaTeX roots and glyph descendants to the renderer', function () {
+  for (const state of [{}, { refine: false }]) {
+    const sheet = buildCssFor(sanitize(state))
+    const rule = sheet.match(/\[data-conversation-content\],\n([^\n]+) \{\n  font-family: var\(--dsw-font-family\) !important;\n\}/)
+    assert.ok(rule, 'the text font role must still reach ordinary conversation prose')
+    assert.ok(rule[1].includes(':not(.katex)'), 'KaTeX roots need their own main font')
+    assert.ok(rule[1].includes(':not(.katex *)'), 'nested KaTeX glyphs need their own math and size fonts')
+  }
 })
 
 test('the button-spring rules only reach controls this plugin owns', function () {

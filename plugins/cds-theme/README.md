@@ -12,10 +12,10 @@
 
 ## 安装与卸载
 
-在命令行运行，或在 DSH 的 **设置 → 插件 → 添加插件** 里直接输入 `dsh-cds-theme`：
+在命令行运行，或在 DSH 的 **设置 → 插件 → 添加插件** 里直接输入 `dsh-cds-theme@0.1.9`：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme
+dsh plugin --profile desktop add dsh-cds-theme@0.1.9 --registry=https://registry.npmjs.org
 ```
 
 **装完或卸完后必须彻底退出并重开 DSH。**
@@ -35,6 +35,7 @@ dsh plugin --profile desktop remove dsh-cds-theme
 | **配色与形状令牌** | `ctx.theme.overrideTokens` | **173 个配色令牌**（明暗成对）：暖灰表面阶梯、文本三阶、`hsla(0,0%,8%,α)` 发丝边框、陶土品牌色双轨（`#c6613f` / `#d97757`）、圆角六档（输入框 28→**20px**，气泡 20→**18px**）、代码 diff 暖绿与陶红、三层焦点环 |
 | **排印令牌** | `ctx.theme.overrideTokens` | **133 个排印令牌**：17 个 Markdown 角色 × 6 个变量 + 13 级 UI 字阶，对齐 CDS 7 阶字号与**暗色字重减薄**（正文 400→360、Medium 500→460、Semibold 580→550） |
 | **内嵌字体** | 构建时内联 `data:font/woff2` | **只内联 2 个做过 `avar` 轴偏移校准的思源黑体/宋体子集**（SIL OFL，本项目自制子集），无网络请求，任意 origin 下直接加载。**6 个 Anthropic 字面（Sans/Serif/Mono × Roman/Italic）没有再分发授权，包里零字节**：它们只声明成 `local("Anthropic Sans" / "Anthropic Serif" / "Anthropic Mono")`，本机装了才生效，没装就回落到系统字体。构建与产物测试都会拦住受限字面重新混入，详见 [`market/PUBLISHING.md`](../../market/PUBLISHING.md) |
+| **数学公式字体** | 正文字体规则排除 `.katex` 及其全部后代 | 行内和独立公式保留宿主 KaTeX 的数学、运算符与尺寸字体，避免正文字体替换字形后出现求和下标重叠；关闭组件精修时同样保留 |
 | **海拔阴影** | 插件样式表 `!important` | 双层弥散阴影（一层贴边、一层大半径散开），覆盖 `--dsw-elevation-panel/prominent/soft` |
 | **组件与正文细节** | 结构定位 + 自有属性 + 样式表 | 首页问候语改衬线 Display（38px / wght 330）；聊天表格闭合 `.5px` 发丝外框 + 浅底表头 + 等宽数字；代码块浅色下是白底、深色下 `#1a1a19` 暖黑；思考提示改柔和呼吸微光；消息操作栏悬停显现；滚动渐隐遮罩 |
 | **代码块默认换行** | `white-space: pre-wrap` + 隐藏 `aria-pressed` 按钮 | 所有代码块（含工具卡片里的 diff / 文件行）**默认自动换行**，并**移除**宿主右上角的「自动换行」开关——主题不再提供「不换行」这个状态。diff/read 的每一行是独立的行元素而不是 `<pre>`，所以单独有一条 `[data-code-wrap] [class*="_line_"]` 规则，并把 diff 的 `max-content` 网格列钉成 `minmax(0, 1fr)`，否则行内文字会溢出卡片被裁掉 |

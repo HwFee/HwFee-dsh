@@ -499,9 +499,11 @@ function uiFontRules() {
     // `[data-conversation-content]` is the host's own marker for the message
     // column (docs/host-hooks.md §1.4), and the selector is repeated on its
     // descendants because the host sets `font` (a shorthand, family included) on
-    // markdown elements further in.
+    // markdown elements further in. KaTeX roots and all their descendants keep
+    // renderer-owned fonts: its glyph positions assume KaTeX's font metrics,
+    // so forcing the prose family here makes sums and subscripts overlap.
     '[data-conversation-content],',
-    '[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {',
+    '[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {',
     '  font-family: var(--dsw-font-family) !important;',
     '}',
   ].join('\n')

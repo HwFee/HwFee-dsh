@@ -1,0 +1,91 @@
+diff --git a/plugins/cds-theme/README.md b/plugins/cds-theme/README.md
+index f997ee4..026f5a8 100644
+--- a/plugins/cds-theme/README.md
++++ b/plugins/cds-theme/README.md
+@@ -35,6 +35,7 @@ dsh plugin --profile desktop remove dsh-cds-theme
+ | **配色与形状令牌** | `ctx.theme.overrideTokens` | **173 个配色令牌**（明暗成对）：暖灰表面阶梯、文本三阶、`hsla(0,0%,8%,α)` 发丝边框、陶土品牌色双轨（`#c6613f` / `#d97757`）、圆角六档（输入框 28→**20px**，气泡 20→**18px**）、代码 diff 暖绿与陶红、三层焦点环 |
+ | **排印令牌** | `ctx.theme.overrideTokens` | **133 个排印令牌**：17 个 Markdown 角色 × 6 个变量 + 13 级 UI 字阶，对齐 CDS 7 阶字号与**暗色字重减薄**（正文 400→360、Medium 500→460、Semibold 580→550） |
+ | **内嵌字体** | 构建时内联 `data:font/woff2` | **只内联 2 个做过 `avar` 轴偏移校准的思源黑体/宋体子集**（SIL OFL，本项目自制子集），无网络请求，任意 origin 下直接加载。**6 个 Anthropic 字面（Sans/Serif/Mono × Roman/Italic）没有再分发授权，包里零字节**：它们只声明成 `local("Anthropic Sans" / "Anthropic Serif" / "Anthropic Mono")`，本机装了才生效，没装就回落到系统字体。构建与产物测试都会拦住受限字面重新混入，详见 [`market/PUBLISHING.md`](../../market/PUBLISHING.md) |
++| **数学公式字体** | 正文字体规则排除 `.katex` 及其全部后代 | 行内和独立公式保留宿主 KaTeX 的数学、运算符与尺寸字体，避免正文字体替换字形后出现求和下标重叠；关闭组件精修时同样保留 |
+ | **海拔阴影** | 插件样式表 `!important` | 双层弥散阴影（一层贴边、一层大半径散开），覆盖 `--dsw-elevation-panel/prominent/soft` |
+ | **组件与正文细节** | 结构定位 + 自有属性 + 样式表 | 首页问候语改衬线 Display（38px / wght 330）；聊天表格闭合 `.5px` 发丝外框 + 浅底表头 + 等宽数字；代码块浅色下是白底、深色下 `#1a1a19` 暖黑；思考提示改柔和呼吸微光；消息操作栏悬停显现；滚动渐隐遮罩 |
+ | **代码块默认换行** | `white-space: pre-wrap` + 隐藏 `aria-pressed` 按钮 | 所有代码块（含工具卡片里的 diff / 文件行）**默认自动换行**，并**移除**宿主右上角的「自动换行」开关——主题不再提供「不换行」这个状态。diff/read 的每一行是独立的行元素而不是 `<pre>`，所以单独有一条 `[data-code-wrap] [class*="_line_"]` 规则，并把 diff 的 `max-content` 网格列钉成 `minmax(0, 1fr)`，否则行内文字会溢出卡片被裁掉 |
+diff --git a/plugins/cds-theme/client/client.js b/plugins/cds-theme/client/client.js
+index 4a4c7a4..cda9b96 100644
+--- a/plugins/cds-theme/client/client.js
++++ b/plugins/cds-theme/client/client.js
+@@ -5015,9 +5015,11 @@ window.__ModuleLoader__.load({
+         // `[data-conversation-content]` is the host's own marker for the message
+         // column (docs/host-hooks.md §1.4), and the selector is repeated on its
+         // descendants because the host sets `font` (a shorthand, family included) on
+-        // markdown elements further in.
++        // markdown elements further in. KaTeX roots and all their descendants keep
++        // renderer-owned fonts: its glyph positions assume KaTeX's font metrics,
++        // so forcing the prose family here makes sums and subscripts overlap.
+         "[data-conversation-content],",
+-        "[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {",
++        "[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {",
+         "  font-family: var(--dsw-font-family) !important;",
+         "}"
+       ].join("\n");
+diff --git a/plugins/cds-theme/client/src/styles.js b/plugins/cds-theme/client/src/styles.js
+index 1a37090..070e7b5 100644
+--- a/plugins/cds-theme/client/src/styles.js
++++ b/plugins/cds-theme/client/src/styles.js
+@@ -499,9 +499,11 @@ function uiFontRules() {
+     // `[data-conversation-content]` is the host's own marker for the message
+     // column (docs/host-hooks.md §1.4), and the selector is repeated on its
+     // descendants because the host sets `font` (a shorthand, family included) on
+-    // markdown elements further in.
++    // markdown elements further in. KaTeX roots and all their descendants keep
++    // renderer-owned fonts: its glyph positions assume KaTeX's font metrics,
++    // so forcing the prose family here makes sums and subscripts overlap.
+     '[data-conversation-content],',
+-    '[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {',
++    '[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {',
+     '  font-family: var(--dsw-font-family) !important;',
+     '}',
+   ].join('\n')
+diff --git a/plugins/cds-theme/test/css.test.mjs b/plugins/cds-theme/test/css.test.mjs
+index 134b657..5bc7ac0 100644
+--- a/plugins/cds-theme/test/css.test.mjs
++++ b/plugins/cds-theme/test/css.test.mjs
+@@ -1259,7 +1259,7 @@ test('the three motion curves are tokens: unconditional and exact', function ()
+
+ test('the UI font role is unconditional, master-switched and excludes code', function () {
+   const ui = 'body {\n  font-family: var(--dsw-font-family-ui) !important;\n}'
+-  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {\n  font-family: var(--dsw-font-family) !important;\n}'
++  const text = '[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {\n  font-family: var(--dsw-font-family) !important;\n}'
+   for (const state of [{}, { refine: false }]) {
+     const sheet = buildCssFor(sanitize(state))
+     assert.ok(sheet.includes(ui), 'chrome must take the UI family: ' + JSON.stringify(state))
+@@ -1272,6 +1272,16 @@ test('the UI font role is unconditional, master-switched and excludes code', fun
+     'code, pre, kbd and samp must be excluded from the text-role rule')
+ })
+
++test('conversation font overrides leave KaTeX roots and glyph descendants to the renderer', function () {
++  for (const state of [{}, { refine: false }]) {
++    const sheet = buildCssFor(sanitize(state))
++    const rule = sheet.match(/\[data-conversation-content\],\n([^\n]+) \{\n  font-family: var\(--dsw-font-family\) !important;\n\}/)
++    assert.ok(rule, 'the text font role must still reach ordinary conversation prose')
++    assert.ok(rule[1].includes(':not(.katex)'), 'KaTeX roots need their own main font')
++    assert.ok(rule[1].includes(':not(.katex *)'), 'nested KaTeX glyphs need their own math and size fonts')
++  }
++})
++
+ test('the button-spring rules only reach controls this plugin owns', function () {
+   const block = cleanBlock(A_TIER_RULES.buttonSpring)
+   const selectors = block.split('\n')
+diff --git a/plugins/cds-theme/test/rule-baseline.mjs b/plugins/cds-theme/test/rule-baseline.mjs
+index b2184b8..cd0187f 100644
+--- a/plugins/cds-theme/test/rule-baseline.mjs
++++ b/plugins/cds-theme/test/rule-baseline.mjs
+@@ -22,7 +22,7 @@ export const MARKDOWN_BODY_RULE_COUNT = 10
+ export const A_TIER_RULES = {
+   footnotes: "/* ---- footnotes: 12/15, tertiary, half-pixel rule above ------------- */\n[data-footnotes] {\n  font-size: 12px;\n  line-height: 15px;\n  color: var(--dsw-alias-label-tertiary);\n  border-top: .5px solid var(--dsw-alias-border-l2);\n  padding-top: 10px;\n}\n[data-chat-flow] sup {\n  font-family: var(--ds-font-family-code);\n  font-variant-numeric: tabular-nums;\n  line-height: 0;\n}\n\n",
+   buttonSpring: "/* ---- button spring: press movement on this plugin's own controls ---- */\n.dct-swatch, .dct-toggle, .dct-mode-cube {\n  transition: transform 260ms var(--cds-btn-spring), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1), background-color 120ms cubic-bezier(0.16, 1, 0.3, 1);\n}\n.dct-swatch:active, .dct-toggle:active, .dct-mode-cube:active {\n  transform: scale(.96);\n}",
+-  motionTokens: "/* ---- motion tokens: the reference spring + the two unused curves ---- */\n:root {\n  --cds-btn-spring: linear(0, .2459, .6526, .9468, 1.0764, 1.0915, 1.0585, 1.0219, .9993, .9914, .9921, .9957, .9988, 1.0004, 1);\n  --cds-ease-rise: cubic-bezier(.3, .7, .4, 1);\n  --cds-ease-fall: cubic-bezier(0, 0, .2, 1);\n}\n\nbody {\n  font-family: var(--dsw-font-family-ui) !important;\n}\n[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp) {\n  font-family: var(--dsw-font-family) !important;\n}\n\nbody :focus-visible:not(:read-write) {\n  outline-color: transparent !important;\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color), 0 0 6px 1px var(--dsw-focus-ring-glow) !important;\n}\nbody[data-ds-dark-theme] :focus-visible:not(:read-write) {\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color), 0 0 8px 2px var(--dsw-focus-ring-glow) !important;\n}\nhtml[data-input-modality='pointer'] body :focus-visible:not(:read-write) {\n  box-shadow: none !important;\n}\nbody :focus-visible:read-write {\n  outline-color: var(--dsw-focus-ring-color) !important;\n}\n\n",
++  motionTokens: "/* ---- motion tokens: the reference spring + the two unused curves ---- */\n:root {\n  --cds-btn-spring: linear(0, .2459, .6526, .9468, 1.0764, 1.0915, 1.0585, 1.0219, .9993, .9914, .9921, .9957, .9988, 1.0004, 1);\n  --cds-ease-rise: cubic-bezier(.3, .7, .4, 1);\n  --cds-ease-fall: cubic-bezier(0, 0, .2, 1);\n}\n\nbody {\n  font-family: var(--dsw-font-family-ui) !important;\n}\n[data-conversation-content],\n[data-conversation-content] :not(code):not(pre):not(kbd):not(samp):not(.katex):not(.katex *) {\n  font-family: var(--dsw-font-family) !important;\n}\n\nbody :focus-visible:not(:read-write) {\n  outline-color: transparent !important;\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color), 0 0 6px 1px var(--dsw-focus-ring-glow) !important;\n}\nbody[data-ds-dark-theme] :focus-visible:not(:read-write) {\n  box-shadow: inset 0 0 0 1px var(--dsw-alias-bg-base), 0 0 0 1.5px var(--dsw-focus-ring-color), 0 0 8px 2px var(--dsw-focus-ring-glow) !important;\n}\nhtml[data-input-modality='pointer'] body :focus-visible:not(:read-write) {\n  box-shadow: none !important;\n}\nbody :focus-visible:read-write {\n  outline-color: var(--dsw-focus-ring-color) !important;\n}\n\n",
+ }
+
+ // ---- the B-tier batch: one block per item switch, captured with every switch

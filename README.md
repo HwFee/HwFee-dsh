@@ -117,7 +117,7 @@ Settings, timing table and data flow: [`plugins/predict/README.md`](plugins/pred
 From a terminal:
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@0.1.8 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.9 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.4 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org
