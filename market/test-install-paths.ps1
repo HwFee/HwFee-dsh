@@ -11,19 +11,13 @@
       activates and the plugin silently disappears;
     - an artifact registering a stale module id: the entire web boot dies with
       `duplicate factory registration`;
-    - a stale mirror serving the old placeholder tarball: install fails with
-      `ERR_PNPM_TARBALL_EXTRACT` after a minute of retries.
+    - an unpinned install resolving an older version than the one just published.
 
-  The last one only appears when you actually install, and only through the
-  mirror — which is the default registry on this machine, so it is exactly what
-  a Chinese user gets.
-
-  ONE RESULT THAT IS NOT A FAILURE. An unpinned install can land one version
-  behind npm's `latest` for up to a day: pnpm's minimumReleaseAge policy keeps
-  versions younger than its cutoff out of range resolution. The matrix notes it
-  per package. Pinned installs and Release tarballs are unaffected — but a
-  held-back version is whatever was newest before the cutoff, so read the
-  Installed column rather than assuming it equals `latest`.
+  The last one is measured, not guessed: `pnpm view dsh-cds-theme version` answers
+  0.1.10 while `pnpm add dsh-cds-theme --registry=https://registry.npmjs.org/`
+  installs 0.1.8, and the same add fails outright against a dead registry. pnpm
+  resolves `latest` from local state. `market/install-all.ps1` therefore reads the
+  version from npm and installs `name@version`; pinned installs are unaffected.
 
   WHAT IT DOES. For every package in the repository it reads the LIVE version from
   npm (never a hardcoded number — a stale version here would test the wrong thing
@@ -45,7 +39,6 @@ param(
   [string]$ProfilePrefix = '_mx',
   [string]$ReportPath,
   [string]$Registry = 'https://registry.npmjs.org',
-  [switch]$SkipMirror,
   [switch]$KeepProfiles,
   # A release ships ONE package at a time; without this the matrix would also
   # exercise packages that are unpublished or mid-change, and fail for reasons
@@ -333,35 +326,10 @@ $null = $results.Add([pscustomobject]@{
 })
 Remove-TestProfile $profile
 
-# (i) mirror registry. The machine's default `~/.npmrc` points at
-# registry.npmmirror.com, so this is the path a Chinese user actually takes - and
-# the one that served a broken placeholder tarball for 30 minutes after a publish.
-if (-not $SkipMirror) {
-  $suffix++
-  $profile = New-TestProfile "x$suffix"
-  $out = & dsh plugin --profile $profile add dsh-cds-theme --registry=https://registry.npmmirror.com 2>&1 | Out-String
-  $dir = Join-Path $env:USERPROFILE ".dsh\profiles\$profile"
-  $pkgDir = Join-Path $dir 'node_modules\dsh-cds-theme'
-  $hasPatch = Test-Path (Join-Path $pkgDir 'cordis.patch.yml')
-  $installedVersion = ''
-  if (Test-Path (Join-Path $pkgDir 'package.json')) {
-    try { $installedVersion = (Get-Content (Join-Path $pkgDir 'package.json') -Raw | ConvertFrom-Json).version } catch { }
-  }
-  $verdict = if ($hasPatch) { 'PASS' } else { 'FAIL' }
-  $mirrorErr = ($out -split "`r?`n" | Where-Object { $_ -match 'ERR_|error' } | Select-Object -First 1)
-  Write-Host ("    {0,-22} {1}  (installed version '{2}')" -f 'mirror-install', $verdict, $installedVersion) `
-    -ForegroundColor $(if ($hasPatch) { 'Green' } else { 'Red' })
-  if ($mirrorErr) { Write-Host "      $($mirrorErr.Trim())" -ForegroundColor DarkGray }
-  $null = $results.Add([pscustomobject]@{
-    Case = 'mirror-install'; Package = 'dsh-cds-theme'; Spec = 'default registry (npmmirror)'
-    Version = $installedVersion; Patch = $hasPatch; Bundle = $hasPatch; Verdict = $verdict
-    Error = if ($mirrorErr) { $mirrorErr.Trim() } else { '' }
-  })
-  if (-not $hasPatch) {
-    $null = $notes.Add("Mirror has not caught up for dsh-cds-theme: install failed or landed '$installedVersion'. Wait, or tell users to pass --config.registry=https://registry.npmjs.org.")
-  }
-  Remove-TestProfile $profile
-}
+# (i) mirror registry — RETIRED. The repository supports exactly two install
+# channels now: the official npm registry and GitHub Release tarballs. The mirror
+# is not a channel we maintain, so the matrix does not exercise it; a stale
+# mirror copy is a mirror problem, not a release defect.
 
 # ------------------------------------------------------------- 4. the report
 

@@ -139,7 +139,7 @@ Release notes 里要写清这次发布用户能感知到什么。特别地，`ds
 pwsh market/test-install-paths.ps1
 ```
 
-脚本自己从 npm 读实际版本（不写死），对每个包跑：npm 名、`包名@版本`、Release URL、本地 tarball、`link:`，外加 git 子目录（预期失败）、重复安装、卸载无残留、镜像安装。判据是**成为 profile 层**：`cordis.patch.yml` 存在 **且** 包名在 `dsh.profile.bundles` 里。
+脚本自己从 npm 读实际版本（不写死），对每个包跑：npm 名、`包名@版本`、Release URL、本地 tarball、`link:`，外加 git 子目录（预期失败）、重复安装、卸载无残留。镜像站不是渠道，矩阵不再测它。判据是**成为 profile 层**：`cordis.patch.yml` 存在 **且** 包名在 `dsh.profile.bundles` 里。
 
 **验收**：报告写入 `market/install-matrix.md`；除 `git-subdir` 这一条预期失败外，不得有 FAIL。
 

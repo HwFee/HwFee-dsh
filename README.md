@@ -114,7 +114,15 @@ Settings, timing table and data flow: [`plugins/predict/README.md`](plugins/pred
 
 ## Install
 
-From a terminal:
+All six at once, with the version resolved from the official registry:
+
+```powershell
+pwsh market/install-all.ps1 -Profile desktop
+```
+
+Step-by-step tutorial (verification, upgrades, uninstall, troubleshooting): [`docs/install-plugins.md`](docs/install-plugins.md).
+
+Or from a terminal, one command per plugin:
 
 ```bash
 dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
@@ -162,13 +170,19 @@ dsh plugin --profile desktop add link:.
 
 ### If a version is missing
 
-The default registry on many machines is `registry.npmmirror.com`, a read-only mirror that syncs late. When a version is missing or an install fails with `Unexpected end of TAR archive`, pin the version and use the official registry:
+Only the official npm registry and GitHub Release tarballs are supported install channels; a mirror is not maintained here. Make sure your registry points at the official one:
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@<version> --config.registry=https://registry.npmjs.org
+npm config set registry https://registry.npmjs.org
 ```
 
-An unpinned install can still land on the previous version — we measured this on a machine with no `minimumReleaseAge` configured, so the cause is not identified. Pin the version, or use a Release asset, when you need the new build.
+Then install with the version pinned:
+
+```bash
+dsh plugin --profile desktop add dsh-cds-theme@<version> --registry=https://registry.npmjs.org
+```
+
+An unpinned `dsh plugin add <name>` can still land on the previous version: pnpm resolves the `latest` tag from local state, and we measured `pnpm view` reporting 0.1.10 while `pnpm add` installed 0.1.8 against the same official registry. `market/install-all.ps1` avoids that step by asking npm for the version and installing `name@version`.
 
 One consequence is worth knowing before you upgrade. Once a plugin is an npm/Release package rather than a `link:`, the profile no longer points at the workspace, so editing sources and rebuilding the bundle there has no effect until you install it with `link:` again; and a materialized install first clears the contents the `link:` pointed at, so doing this while the sources are not committed and pushed deletes workspace files.
 

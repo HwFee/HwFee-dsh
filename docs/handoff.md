@@ -25,7 +25,7 @@
 - `@hwfee/dsh-genui` 在 npm 上 **404**（从未发布过）。
 - `@hwfee/dsh-git-bash`、`@hwfee/dsh-predict` 同样从未发布。
 - 已有版本：`dsh-cds-theme@0.1.4`、`@hwfee/dsh-usage-stats@0.1.2`、`dsh-system-fonts@0.1.1`。
-- 本地 `~/.npmrc` 的默认 registry 是 `registry.npmmirror.com`（只读镜像）。`//registry.npmjs.org/:_authToken` 已配置，`npm whoami --registry=https://registry.npmjs.org` 返回 `hwfee`，token 可用。
+- 本机 `~/.npmrc` 的 registry 已改为官方源 `https://registry.npmjs.org`；镜像站不再是安装渠道。`//registry.npmjs.org/:_authToken` 已配置，`npm whoami --registry=https://registry.npmjs.org` 返回 `hwfee`，token 可用。
 
 ### 1.2 安装矩阵
 

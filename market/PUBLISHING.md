@@ -109,7 +109,7 @@ npm pack --dry-run
 "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
 ```
 
-**这一条很关键**：本机 `~/.npmrc` 默认 registry 是 `registry.npmmirror.com`（只读镜像，没有上传接口）。没有这个字段，`npm publish` 会往镜像站发，然后失败在一个看起来像权限问题的报错上。
+**这一条很关键**：`publishConfig.registry` 是唯一不依赖调用环境的真相。没有这个字段，`npm publish` 会用调用者当前的 registry 配置；发布渠道只支持官方 npm，字段写死之后换机器、换 shell 都不会发错地方。
 
 ### 2.4 名字与版本
 
@@ -181,12 +181,12 @@ foreach ($m in $map) {
 
 （表里是 2026-10-22 那批的实测值，全部 200。下一次发布请改版本号后重跑。）
 
-### 4.2 镜像站不用管，但要会解释
+### 4.2 渠道只有两个：官方 npm 与 GitHub Release
 
-- `registry.npmmirror.com` 是**单向只读镜像**，从官方 npm 同步，没有发布接口。
-- 包进了官方 npm 后，镜像会在几小时内自动收录。2026-10-22 实测镜像上 `dsh-cds-theme` 与 `dsh-system-fonts` 已经是 `0.1.5` / `0.1.2`。
-- 镜像慢一步时的症状是 `Unexpected end of TAR archive` 或「找不到版本」。加官方源再装：`--config.registry=https://registry.npmjs.org`。
-- **`minimumReleaseAge` 会让不锁版本的安装落后一版。** 这不是发布失败；`add <name>@<version>` 不受影响。但如果回落到的旧版本本身有缺陷，用户装到的就是坏的。
+镜像站（如 `registry.npmmirror.com`）**不是**本仓库维护的渠道：安装文档与矩阵都不再引用它，本机 `~/.npmrc` 也已指向官方源。需要解释用户侧现象时只有两条：
+
+- 包在官方 npm 上可见（`npm view` 有版本、tarball 200）之后，任何第三方镜像的滞后都是镜像自身的问题，不影响发布是否成立；
+- **不锁版本的安装会落到上一版**：pnpm 从本地状态解析 `latest`，实测同一条官方源，`pnpm view` 报 `0.1.10` 而 `pnpm add` 装出 `0.1.8`。可靠的做法是写死版本、用 `market/install-all.ps1`（先问 npm 再装 `包名@版本`），或直接用 Release 资产。
 
 ---
 

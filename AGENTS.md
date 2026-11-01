@@ -461,9 +461,10 @@ curl -sI https://registry.npmjs.org/<name>/-/<name>-<version>.tgz  # 200，不�
 
 ### 已知环境限制
 
-- 本机 `~/.npmrc` 默认 registry 是 `registry.npmmirror.com`，**只读镜像，不能发布**。所以每个包的 `package.json` 里必须有 `publishConfig.registry`。
+- **安装渠道只有两个：官方 npm 与 GitHub Release 资产**（市场只负责发现插件）。镜像站不作为渠道维护，也不在安装文档里出现；本机 `~/.npmrc` 已指向官方源。
+- 每个包的 `package.json` 里仍必须保留 `publishConfig.registry`：发布命令可能在别的 registry 配置下被调用，字段是唯一不依赖环境的真相。
 - 发布需要 `bypass 2fa` 的 granular token；普通 token 会得到 `E403 ... 2FA ... required`。
-- 镜像站同步有延迟：刚发布的包在镜像上可能还指向旧版本，`dsh plugin add` 因此可能装到错的版本甚至失败（`ERR_PNPM_TARBALL_EXTRACT`）。等一会儿或临时指定官方源。
+- **不锁版本的安装不可靠**：pnpm 会从本地状态解析 `latest`。实测同一条官方源，`pnpm view dsh-cds-theme version` 报 `0.1.10`，`pnpm add dsh-cds-theme --registry=https://registry.npmjs.org/` 却装出 `0.1.8`（换成死地址则直接报错，说明它不是在问网络）。所以安装一律写死版本，或用 `market/install-all.ps1`——它先用 `npm view` 取版本，再装 `包名@版本`。
 
 ### 发布凭据：只从环境变量读，不写进 npmrc
 
@@ -525,9 +526,9 @@ git add market/install-matrix.md && git commit -m "Record install matrix for <ve
 |---|---|---|
 | patch 的 `name` 指向不存在的包 | 一行 YAML，毫无异常 | 行永不激活，插件**无声消失** |
 | 产物用旧模块 id 注册 | 产物是构建出来的，源码干净 | **整个 web boot 挂掉**，应用无法启动 |
-| 镜像站还在发旧的占位包 | 完全无关 | 安装报 `ERR_PNPM_TARBALL_EXTRACT`，重试一分钟后失败 |
+| 不锁版本的安装装到旧版 | 完全无关 | 拿到的是上一版；实测 `pnpm add` 从本地状态解析 `latest`，官方源也不管用 |
 
-第三类只在国内镜像（本机默认 registry）下出现——**那正是中国用户走的路**。
+第三类只在不写死版本的安装里出现——**那是文档默认给出的命令形式**，所以安装说明一律钉版本，或用 `market/install-all.ps1`。
 
 **脚本怎么判定成功。** 它不只看命令有没有报错，而是检查包是否真的变成了 profile **层**：`cordis.patch.yml` 存在 **且** 名字出现在 `dsh.profile.bundles` 里。只有 `dependencies` 一条不算——那正是 pnpm 成功、插件却不挂载的半安装状态。
 
@@ -547,7 +548,7 @@ pwsh market/verify-mount.ps1        # 逐包：row name 能解析到包、bundle
 
 `market/prove-mount-guard.ps1` 就是这套判据的自检：它故意把已安装副本的 name 改坏，确认检查会失败，再还原确认通过。改动验证逻辑后跑它。
 
-**每条路径都要覆盖**，每个包各一遍：npm 包名、包名@版本、Release tarball URL、本地 tarball、`link:` 路径；外加跨用例：git 子目录（应当失败）、重复安装、卸载后无残留、镜像站安装。
+**每条路径都要覆盖**，每个包各一遍：npm 包名、包名@版本、Release tarball URL、本地 tarball、`link:` 路径；外加跨用例：git 子目录（应当失败）、重复安装、卸载后无残留。镜像站不是渠道，矩阵不再测它。
 
 **版本号必须从 npm 实时读取，不能写死。** 写死的话，发布失败时脚本会拿旧版本去测，然后通过——它测的根本不是你要发的东西。
 
@@ -595,7 +596,7 @@ https://github.com/HwFee/HwFee-dsh/tree/<sha>/plugins/xxx
 - `market/test-install-paths.ps1` 生成的 `market/install-matrix.md` 与 `market/verify-mount.ps1` 的结果，必须随本次改动一起提交进仓库；
 - 完成后把版本、PR 链接记进 `market/SUBMISSION.md` 的状态表。
 
-文件里还记着两个容易被误判的现状：**未锁定**安装可能落到上一版（实测：显式指定官方源、不带版本号，装到的仍是前一版；**成因未定位**——该机 `npm config get minimum-release-age` 与 `pnpm config get minimumReleaseAge` 都是 `undefined`，profile 的 `pnpm-workspace.yaml` 也没有该键，所以不要沿用「pnpm 的 minimumReleaseAge 导致」这个旧归因；发布后可靠的只有锁定版本与 Release 资产），以及市场条目描述必须与代码一致——`system-fonts` 曾因写了「plus weight」被维护者核对后改正，而插件从不写 `font-weight`。
+文件里还记着两个容易被误判的现状：**未锁定**安装会落到上一版——pnpm 从本地状态解析 `latest`，官方源也挡不住（实测 `pnpm view` 报 `0.1.10`，`pnpm add --registry=https://registry.npmjs.org/` 装出 `0.1.8`；换成死地址则报错，可见它不是在问网络），所以可靠的只有锁定版本、`market/install-all.ps1` 与 Release 资产；以及市场条目描述必须与代码一致——`system-fonts` 曾因写了「plus weight」被维护者核对后改正，而插件从不写 `font-weight`。
 
 违反会怎样：npm 显示成功但 tarball 404、安装成功但行永不激活、条目描述与代码不符被打回——这三种都发生在「命令看起来成功」之后，只有按顺序走到矩阵、挂载验证和条目核对才会暴露。
 

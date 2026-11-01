@@ -114,12 +114,20 @@ shell 解析与沙箱判定表：[`plugins/git-bash/README.md`](plugins/git-bash
 
 ## 安装
 
-命令行：
+六个插件一条命令装齐（版本向官方 npm 现查，不用手写）：
+
+```powershell
+pwsh market/install-all.ps1 -Profile desktop
+```
+
+分步教程（验证、升级、卸载、排错）：[`docs/install-plugins.md`](docs/install-plugins.md)。
+
+也可以逐条安装：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@0.1.8 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add dsh-cds-theme@0.1.10 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add dsh-system-fonts@0.1.3 --registry=https://registry.npmjs.org
-dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.4 --registry=https://registry.npmjs.org
+dsh plugin --profile desktop add @hwfee/dsh-usage-stats@0.1.5 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-genui@0.1.2 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-predict@0.1.2 --registry=https://registry.npmjs.org
 dsh plugin --profile desktop add @hwfee/dsh-git-bash@0.1.2 --registry=https://registry.npmjs.org
@@ -162,13 +170,19 @@ dsh plugin --profile desktop add link:.
 
 ### 版本装不上时
 
-很多机器的默认 registry 是 `registry.npmmirror.com`，只读镜像、同步晚一步。版本找不到或报 `Unexpected end of TAR archive` 时，锁版本并走官方源：
+安装渠道只有官方 npm 与 GitHub Release 资产，本仓库不维护镜像。先把 registry 指到官方源：
 
 ```bash
-dsh plugin --profile desktop add dsh-cds-theme@<版本> --config.registry=https://registry.npmjs.org
+npm config set registry https://registry.npmjs.org
 ```
 
-不锁版本的安装仍可能落到上一版；我们在一台并未配置 `minimumReleaseAge` 的机器上复现了这一点，成因未定位。需要新版时请锁版本或直接用 Release 资产。
+然后锁版本安装：
+
+```bash
+dsh plugin --profile desktop add dsh-cds-theme@<版本> --registry=https://registry.npmjs.org
+```
+
+不锁版本的 `dsh plugin add <包名>` 仍可能落到上一版：pnpm 会从本地状态解析 `latest`。实测同一条官方源，`pnpm view` 报 0.1.10，`pnpm add` 却装出 0.1.8。`market/install-all.ps1` 绕开这一步——先用 npm 问版本，再装 `包名@版本`。
 
 另外提醒一件事：插件从 `link:` 变成 npm/Release 实体后，profile 就不再指向工作区，此后在工作区改源码、重建 bundle 都不会生效，除非重新用 `link:` 安装一次。而实体化安装会先清掉 `link:` 指向目录的内容——源码还没 commit + push 时这么做，工作区文件会被删除。
 
