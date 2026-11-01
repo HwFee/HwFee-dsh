@@ -6,6 +6,10 @@
 
 ---
 
+## 子代理模型选择
+
+启动子代理前，用 `list_subagent_models` 查询当前允许的模型，并验证拆分后的 `provider`、`model` 与推理强度；调用 `subagent` 时显式填写这些参数。当前可用路由是 `provider: magpie`、`model: commandcode-plan/deepseek/deepseek-v4.1-flash`。用户要求子代理不得使用 `codex/gpt-6.1-sol`，也不要用继承该模型的 `subagent_fork`；违反会导致委派被停止，任务没有结果。模型可用性以当次查询为准。
+
 ## 一、动手之前先知道的三件事
 
 **1. 这个仓库的产物是提交进 git 的。** `client/client.js` 不是构建缓存，是发布物。`link:` 安装让 profile 直接读工作区，DSH 启动时不构建。所以你改了 `client/src/` 却忘记 `npm run build`，用户拿到的是**旧代码**，而 `npm test` 会红——它的第一项就是新鲜度检查。
