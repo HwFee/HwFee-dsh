@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -46,7 +46,9 @@ test('the conversation package is declared as a client dependency', () => {
 })
 
 test('the host half exports name and apply', async () => {
-  const host = await import(join(ROOT, 'lib/index.js'))
+  // A bare absolute path is not a URL: the ESM loader rejects `c:\…` with
+  // ERR_UNSUPPORTED_ESM_URL_SCHEME on Windows, so the path must be converted.
+  const host = await import(pathToFileURL(join(ROOT, 'lib/index.js')).href)
   assert.equal(host.name, manifest.name)
   assert.equal(typeof host.apply, 'function')
 })
